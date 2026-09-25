@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id           String @id
+  name         String
+  planId       String
+  applications Application[]
+  entitlements TenantEntitlement?
+}
+
+model Application {
+  id       String @id
+  tenantId String
+  name     String
+  runtime  String
+  status   String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model TenantEntitlement {
+  tenantId           String @id
+  limitApplications  Int    @default(3)
+  usageApplications  Int    @default(0)
+  limitAiRequests    Int    @default(2)
+  usageAiRequests    Int    @default(0)
+  totalAiTokens      Int    @default(0)
+  currentMemoryMb    Float  @default(0.0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model DomainEventRecord {
+  id            Int      @id @default(autoincrement())
+  tenantId      String
+  applicationId String?
+  eventName     String
+  payload       Json?
+  createdAt     DateTime @default(now())
+}
+
+model WebhookEvent {
+  id              Int      @id @default(autoincrement())
+  provider        String
+  providerEventId String   @unique
+  tenantId        String
+  planId          String
+  status          String
+  createdAt       DateTime @default(now())
+}
