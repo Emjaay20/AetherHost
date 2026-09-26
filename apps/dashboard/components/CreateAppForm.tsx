@@ -1,0 +1,159 @@
+'use client'
+
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Server, Box, Hexagon, Component, Plus, X, Loader2, GitBranch, LayoutTemplate } from 'lucide-react'
+import { createApplication } from '../app/actions'
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+const runtimes = [
+  { id: 'nodejs', name: 'Node.js', icon: Hexagon, color: 'text-green-500' },
+  { id: 'python', name: 'Python', icon: Server, color: 'text-blue-500' },
+  { id: 'go', name: 'Go', icon: Box, color: 'text-cyan-500' },
+  { id: 'docker', name: 'Docker', icon: Component, color: 'text-blue-400' },
+  { id: 'github', name: 'GitHub Repo', icon: GitBranch, color: 'text-white' },
+  { id: 'wordpress', name: 'WordPress', icon: LayoutTemplate, color: 'text-blue-300' },
+]
+
+export default function CreateAppForm({ limitReached }: { limitReached: boolean }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selectedRuntime, setSelectedRuntime] = useState('node18')
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    const formData = new FormData(e.currentTarget)
+    formData.set('runtime', selectedRuntime)
+    
+    const res = await createApplication(formData)
+    setLoading(false)
+    if (res.error) {
+      setError(res.error)
+    } else {
+      setIsOpen(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        disabled={limitReached}
+        className={cn(
+          "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 shadow-sm shadow-black/50 border border-primary/20",
+          limitReached 
+            ? "bg-muted text-muted-foreground cursor-not-allowed border-muted/50" 
+            : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-primary/25 hover:border-primary/40"
+        )}
+      >
+        <Plus className="w-4 h-4" />
+        New Application
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOpen(false)}
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-lg bg-[#09090b] border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-border/50 flex items-center justify-between bg-gradient-to-br from-muted/30 to-transparent">
+                <h2 className="text-xl font-semibold tracking-tight">Deploy Application</h2>
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <label htmlFor="name" className="text-sm font-medium text-foreground/80">Application Name</label>
+                  <input
+                    id="name"
+                    name="name"
+                    required
+                    placeholder="e.g. api-gateway-prod"
+                    className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50 text-foreground shadow-inner"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-foreground/80">Runtime Environment</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {runtimes.map((rt) => (
+                      <button
+                        type="button"
+                        key={rt.id}
+                        onClick={() => setSelectedRuntime(rt.id)}
+                        className={cn(
+                          "flex items-center gap-3 p-4 rounded-xl border text-left transition-all duration-200",
+                          selectedRuntime === rt.id
+                            ? "border-primary bg-primary/10 shadow-[0_0_15px_rgba(59,130,246,0.15)] ring-1 ring-primary/20"
+                            : "border-border/60 bg-muted/10 hover:bg-muted/30 hover:border-border"
+                        )}
+                      >
+                        <rt.icon className={cn("w-5 h-5", selectedRuntime === rt.id ? rt.color : "text-muted-foreground")} />
+                        <span className={cn("font-medium text-sm", selectedRuntime === rt.id ? "text-foreground" : "text-muted-foreground")}>
+                          {rt.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {error && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    {error}
+                  </motion.div>
+                )}
+
+                <div className="pt-4 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsOpen(false)}
+                    className="px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-muted text-muted-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100 shadow-lg shadow-primary/25"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Deploy Now
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
