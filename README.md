@@ -5,6 +5,8 @@ A multi-runtime hosting platform control plane, built for digital agencies that 
 ## The Problem
 Agencies often string together disparate services for hosting, billing, and internal AI tools. AetherHost provides a unified control plane where commercial entitlements are the source of truth for both physical compute (provisioning apps) and digital API usage (AI requests), ensuring that tenants can never exceed their purchased plan limits.
 
+📖 **Read the full architectural [Case Study](docs/CASE_STUDY.md)**
+
 ## The Constraints
 - **Solo/Cheap:** Built to run locally and be easily deployed without a massive Kubernetes footprint.
 - **Honesty:** Stubbing out physical clusters (like AWS/K8s) and actual payment cards, but building the *exact control paths* (idempotent webhooks, atomic quotas, proxy adapters) that would talk to them in production.
@@ -96,4 +98,4 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 4. **Eventual Consistency**: Provisioning failures (when real) will not roll back the commercial transaction; the app simply remains `PENDING` for a retry.
 
 ---
-> *"I would not claim this is Automattic-scale hosting. I would claim the control plane is honest: entitlements own commercial truth, workers are replaceable, AI is proxied, payments are idempotent. The next increment is infrastructure-as-code and SLOs, not another feature."*
+> *"I would not claim this is Automattic-scale hosting. I would claim the control plane is honest: entitlements own commercial truth, workers are replaceable, AI is proxied, payments are idempotent. Probes exist; managed Postgres + ACK/ECS is the next apply. The next increment is infrastructure-as-code and SLOs, not another feature."*
