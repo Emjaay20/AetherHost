@@ -1,8 +1,25 @@
-version: '3.9'
-
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: aetherhost-postgres
+    environment:
+      POSTGRES_USER: aether
+      POSTGRES_PASSWORD: aether
+      POSTGRES_DB: aetherhost
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aether -d aetherhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - aetherhost-net
+
   traefik:
-    image: traefik:v2.10
+    image: traefik:latest
     container_name: aetherhost-traefik
     command:
       - "--api.insecure=true"
@@ -12,7 +29,7 @@ services:
       - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
-      - "8080:8080" # Traefik Dashboard
+      - "8080:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     networks:
@@ -20,4 +37,7 @@ services:
 
 networks:
   aetherhost-net:
-    external: true
+    name: aetherhost-net
+
+volumes:
+  pgdata:

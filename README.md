@@ -59,7 +59,7 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 | **Control Plane API** | **Real** | Full NestJS domain, transactions, atomic locking, endpoints. |
 | **Persistence** | **Real** | Postgres via Prisma. Survives restarts. |
 | **Quotas & Entitlements** | **Real** | Strict enforcement using atomic SQL statements. |
-| **Payment Webhooks** | **Real** | Idempotency engine prevents replay attacks; simulation endpoint tests the exact production path. |
+| **Payment Webhooks** | **Real** | HMAC verification (Stripe / Paystack / Bachs). Unique `providerEventId` is the replay lock. `/simulate` is off unless `BILLING_ALLOW_SIMULATE=true`. |
 | **Go Agent Worker** | **Real** | Polling worker built in Go that interacts with the API via HTTP. |
 | **Actual Hosting (Servers)** | **Stubbed** | Emits successful `ApplicationStatusChanged` events instead of running Terraform/SSH. |
 | **AI LLM Gateway** | **Stubbed** | Fully functional model factory, defaults to a zero-cost local string stub unless OpenAI keys are provided. |
@@ -69,7 +69,8 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 
 1. **Start the Database**
    ```bash
-   docker-compose up -d
+    docker compose up -d
+    cd apps/api && pnpm prisma migrate deploy
    ```
 2. **Start the Control Plane API**
    ```bash
@@ -83,12 +84,13 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
    pnpm install
    pnpm dev -p 3002
    ```
-4. **Simulate a Plan Upgrade (Growth Plan)**
-   ```bash
-   curl -s -X POST http://127.0.0.1:3000/v1/billing/simulate \
-     -H "Content-Type: application/json" \
-     -d '{"tenantId":"demo-agency","planId":"growth","provider":"paystack","providerEventId":"evt_test_1"}'
-   ```
+4. **Simulate a Plan Upgrade (local only)**  
+    Requires `BILLING_ALLOW_SIMULATE=true` in the API env.
+    ```bash
+    curl -s -X POST http://127.0.0.1:3000/v1/billing/simulate \
+      -H "Content-Type: application/json" \
+      -d '{"tenantId":"YOUR_CLERK_USER_ID","planId":"growth","provider":"paystack","providerEventId":"evt_test_1"}'
+    ```
 
 ## Failure Modes Handled
 

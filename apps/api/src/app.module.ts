@@ -6,6 +6,7 @@ import { TelemetryController } from './telemetry.controller';
 import { HealthModule } from './health/health.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { EntitlementsModule } from './entitlements/entitlements.module';
+import { AdminModule } from './admin/admin.module';
 import { DomainEventsModule } from './events/domain-events.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProvisioningModule } from './provisioning/provisioning.module';
@@ -19,7 +20,8 @@ import { AuthModule } from './auth/auth.module';
     PrismaModule, 
     HealthModule, 
     DomainEventsModule, 
-    EntitlementsModule, 
+    EntitlementsModule,
+    AdminModule, 
     ApplicationsModule, 
     ProvisioningModule, 
     AiProxyModule, 

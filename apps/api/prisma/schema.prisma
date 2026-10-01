@@ -16,13 +16,22 @@ model Tenant {
 }
 
 model Application {
-  id       String @id
-  tenantId String
-  name     String
-  runtime  String
-  status   String
+  id            String  @id
+  tenantId      String
+  name          String
+  runtime       String
+  status        String
+  githubRepo    String?
+  githubRepoName        String?
+  githubRepoDescription String?
+  dockerCompose String?
+  aiFiles       Json?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([tenantId, status])
 }
 
 model TenantEntitlement {
@@ -44,6 +53,8 @@ model DomainEventRecord {
   eventName     String
   payload       Json?
   createdAt     DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 model WebhookEvent {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,21 +8,32 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"bytes"
+	
 	"time"
+	"path/filepath"
 )
 
+type File struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 type Application struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Runtime string `json:"runtime"`
-	Status  string `json:"status"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Runtime       string `json:"runtime"`
+	Status        string `json:"status"`
+	DockerCompose string `json:"dockerCompose"`
+	GithubRepo    string `json:"githubRepo"`
+	GithubToken   string `json:"githubToken"`
+	GithubRepoName        string `json:"githubRepoName"`
+	GithubRepoDescription string `json:"githubRepoDescription"`
+	AiFiles       []File `json:"aiFiles"`
 }
 
 func getDockerArgsForRuntime(rawName, runtime string) (string, []string) {
-	// Sanitize name for docker and traefik
 	safeName := strings.ReplaceAll(strings.ToLower(rawName), " ", "-")
-	
-	// Create network if it doesn't exist
 	exec.Command("docker", "network", "create", "aetherhost-net").Run()
 
 	labelRouter := fmt.Sprintf("traefik.http.routers.%s.rule=Host(`%s.localhost`)", safeName, safeName)
@@ -31,17 +41,10 @@ func getDockerArgsForRuntime(rawName, runtime string) (string, []string) {
 
 	switch runtime {
 	case "wordpress":
-		// Create a network if it doesn't exist
 		exec.Command("docker", "network", "create", "aetherhost-net").Run()
-		
-		// Spin up a MySQL database for this WP instance
 		dbName := "aetherhost-db-" + safeName
 		exec.Command("docker", "run", "-d", "--name", dbName, "--network", "aetherhost-net", "-e", "MYSQL_ROOT_PASSWORD=aetherpass", "-e", "MYSQL_DATABASE=wordpress", "mysql:8.0").Run()
-		
-		// Wait a few seconds for MySQL to initialize before starting WP
 		time.Sleep(5 * time.Second)
-
-		// Append network and env vars to WordPress container
 		wpArgs := append(baseArgs, "-e", "WORDPRESS_DB_HOST="+dbName, "-e", "WORDPRESS_DB_USER=root", "-e", "WORDPRESS_DB_PASSWORD=aetherpass", "wordpress:latest")
 		return "wordpress:latest", wpArgs
 	case "nodejs":
@@ -68,7 +71,6 @@ func main() {
 	go startTelemetryReporter(controlPlaneURL)
 
 	for {
-		// 1. List all pending apps
 		url := fmt.Sprintf("%s/v1/applications?status=pending", controlPlaneURL)
 		resp, err := func() (*http.Response, error) { req, _ := http.NewRequest("GET", url, nil); req.Header.Set("x-agent-key", "aether-secret"); return http.DefaultClient.Do(req) }()
 		
@@ -98,40 +100,120 @@ func main() {
 			fmt.Printf("Found %d pending applications\n", len(apps))
 		}
 
-		// 2. Provision each app via Docker CLI
 		for _, app := range apps {
 			fmt.Printf("Provisioning app: %s (Runtime: %s)\n", app.Name, app.Runtime)
 			
-			_, args := getDockerArgsForRuntime(app.Name, app.Runtime)
-
-			fmt.Printf("-> Executing: docker %v\n", args)
-			cmd := exec.Command("docker", args...)
+			safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
 			
-			output, err := cmd.CombinedOutput()
-			if err != nil {
-				fmt.Printf("-> Failed to create container: %v\nOutput: %s\n", err, string(output))
-				continue
+			if app.DockerCompose != "" {
+			    appDir := fmt.Sprintf("./deployments/%s", safeName)
+			    os.MkdirAll(appDir, 0755)
+			    for _, f := range app.AiFiles {
+			        os.MkdirAll(filepath.Dir(fmt.Sprintf("%s/%s", appDir, f.Path)), 0755)
+			        os.WriteFile(fmt.Sprintf("%s/%s", appDir, f.Path), []byte(f.Content), 0644)
+			    }
+			    
+			    ideConfig := fmt.Sprintf(`
+  code-server:
+    image: codercom/code-server:latest
+    command: --auth none
+    volumes:
+      - .:/home/coder/project
+    labels:
+      - "traefik.enable=true"\n      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.%s-ide.rule=Host(%s-ide.localhost%s)"
+      - "traefik.http.services.%s-ide.loadbalancer.server.port=8080"
+`, safeName, "`"+safeName, "`", safeName)
+
+				modifiedCompose := app.DockerCompose
+				if !strings.Contains(modifiedCompose, "code-server:") {
+					modifiedCompose += ideConfig
+				}
+				os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(modifiedCompose), 0644)
+				
+				if app.GithubToken != "" {
+					fmt.Println("-> GitHub Token detected! Creating repo and pushing code...")
+					repoNameToUse := app.GithubRepoName
+					if repoNameToUse == "" {
+						repoNameToUse = fmt.Sprintf("aetherhost-%s", safeName)
+					}
+					repoDescToUse := app.GithubRepoDescription
+					
+					repoDataBytes, _ := json.Marshal(map[string]interface{}{
+						"name": repoNameToUse,
+						"private": false,
+						"description": repoDescToUse,
+					})
+					req, _ := http.NewRequest("POST", "https://api.github.com/user/repos", bytes.NewReader(repoDataBytes))
+					req.Header.Set("Authorization", "Bearer "+app.GithubToken)
+					req.Header.Set("Accept", "application/vnd.github.v3+json")
+					resp, err := http.DefaultClient.Do(req)
+					if err == nil {
+						var resData map[string]interface{}
+						json.NewDecoder(resp.Body).Decode(&resData)
+						resp.Body.Close()
+						
+						cloneUrl, ok := resData["clone_url"].(string)
+						if ok {
+							authUrl := strings.Replace(cloneUrl, "https://", fmt.Sprintf("https://oauth2:%s@", app.GithubToken), 1)
+							exec.Command("git", "-C", appDir, "init").Run()
+							exec.Command("git", "-C", appDir, "add", ".").Run()
+							exec.Command("git", "-C", appDir, "commit", "-m", "Initial commit from AetherHost AI").Run()
+							exec.Command("git", "-C", appDir, "branch", "-M", "main").Run()
+							exec.Command("git", "-C", appDir, "remote", "add", "origin", authUrl).Run()
+							exec.Command("git", "-C", appDir, "push", "-u", "origin", "main").Run()
+							fmt.Println("-> Successfully pushed AI code to GitHub!")
+						} else {
+							fmt.Println("-> Failed to create GitHub repo:", resData)
+						}
+					}
+				}
+				
+				fmt.Printf("-> Executing docker compose for %s\n", app.Name)
+				exec.Command("docker", "network", "create", "aetherhost-net").Run()
+				cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d", "--build")
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					fmt.Printf("-> Failed to run docker compose: %v\nOutput: %s\n", err, string(output))
+					statusData := `{"status":"errored"}`
+					req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("x-agent-key", "aether-secret")
+					http.DefaultClient.Do(req)
+					continue
+				}
+				exec.Command("docker", "network", "connect", "aetherhost-net", fmt.Sprintf("aetherhost-%s-code-server-1", safeName)).Run()
+				exec.Command("docker", "network", "connect", "aetherhost-net", fmt.Sprintf("aetherhost-%s-app-1", safeName)).Run()
+			} else {
+				_, args := getDockerArgsForRuntime(app.Name, app.Runtime)
+				fmt.Printf("-> Executing: docker %v\n", args)
+				cmd := exec.Command("docker", args...)
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					fmt.Printf("-> Failed to create container: %v\nOutput: %s\n", err, string(output))
+					statusData := `{"status":"errored"}`
+					req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("x-agent-key", "aether-secret")
+					http.DefaultClient.Do(req)
+					continue
+				}
+				fmt.Printf("-> Container %s started successfully!\n", app.Name)
 			}
 
-			fmt.Printf("-> Container %s started successfully!\n", app.Name)
-
-			// 3. Mark as active in NestJS control plane
-			provUrl := fmt.Sprintf("%s/v1/provisioning/%s", controlPlaneURL, app.ID)
-			provReq, _ := http.NewRequest("POST", provUrl, bytes.NewBuffer([]byte{}))
-			
-			provResp, err := http.DefaultClient.Do(provReq)
-			if err != nil {
-				fmt.Printf("-> Failed to notify control plane: %v\n", err)
-				continue
-			}
-			provResp.Body.Close()
-
+			// Update control plane status
+			statusData := `{"status":"running"}`
+			req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("x-agent-key", "aether-secret")
+			http.DefaultClient.Do(req)
 			fmt.Printf("-> Control plane updated successfully!\n\n")
 		}
 
-		// 4. Handle Terminating Apps
 		termUrl := fmt.Sprintf("%s/v1/applications?status=terminating", controlPlaneURL)
-		termResp, err := http.Get(termUrl)
+		req, _ := http.NewRequest("GET", termUrl, nil)
+		req.Header.Set("x-agent-key", "aether-secret")
+		termResp, err := http.DefaultClient.Do(req)
 		if err == nil {
 			termBody, _ := io.ReadAll(termResp.Body)
 			termResp.Body.Close()
@@ -140,15 +222,18 @@ func main() {
 				fmt.Printf("Found %d terminating applications\n", len(termApps))
 				for _, app := range termApps {
 					safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
-					containerName := "aetherhost-" + safeName
-					
-					fmt.Printf("-> Stopping and removing container: %s\n", containerName)
-					exec.Command("docker", "rm", "-f", containerName).Run()
-					
-					fmt.Printf("-> Container removed. Hard deleting from database...\n")
+					fmt.Printf("-> Stopping and removing container: aetherhost-%s\n", safeName)
+					exec.Command("docker", "rm", "-f", "aetherhost-"+safeName).Run()
+					exec.Command("docker", "compose", "-f", fmt.Sprintf("./deployments/%s/docker-compose.yml", safeName), "-p", "aetherhost-"+safeName, "down").Run()
+					os.RemoveAll(fmt.Sprintf("./deployments/%s", safeName))
 					
 					delReq, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/applications/%s/hard", controlPlaneURL, app.ID), nil)
-					func() (*http.Response, error) { delReq.Header.Set("x-agent-key", "aether-secret"); return http.DefaultClient.Do(delReq) }()
+					delReq.Header.Set("x-agent-key", "aether-secret")
+					delResp, err := http.DefaultClient.Do(delReq)
+					if err == nil {
+						delResp.Body.Close()
+					}
+					fmt.Printf("-> Hard delete completed.\n")
 				}
 			}
 		}

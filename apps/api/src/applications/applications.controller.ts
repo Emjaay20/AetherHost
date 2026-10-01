@@ -1,35 +1,70 @@
-import { Controller, Get, Post, Delete, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Patch,
+  Param,
+  Body,
+  Query,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ApplicationsService } from './applications.service';
-import { Runtime } from '@aetherhost/domain';
-import { ClerkAuthGuard } from '../auth/clerk-auth.guard';
+import { CreateApplicationDto } from './dto/create-application.dto';
+import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 
 @Controller('v1/applications')
-@UseGuards(ClerkAuthGuard)
 export class ApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
 
   @Post()
-  create(@Body() body: { tenantId: string; name: string; runtime: Runtime }) {
-    return this.applicationsService.create(body.tenantId, body.name, body.runtime);
+  create(@TenantId() tenantId: string, @Body() body: CreateApplicationDto) {
+    if (tenantId === SYSTEM_TENANT_ID) {
+      throw new ForbiddenException('Agent cannot create applications');
+    }
+    return this.applicationsService.create(tenantId, body.name, body.runtime, body.githubRepo, body.dockerCompose, body.aiFiles);
   }
 
   @Get()
-  findAll(@Request() req: any, @Query('status') status?: string, @Query('runtime') runtime?: string) {
-    // The Go agent might not send a token, but the frontend will.
-    // If we want the Go agent to work, we need to bypass auth for internal requests or issue an admin token.
-    // Let's assume the Go agent uses a special token or IP, but for now we'll allow it if auth is missing?
-    // Wait, ClerkAuthGuard will block it if missing.
-    // The Go agent fetches `GET /v1/applications?status=pending` WITHOUT a token!
-    return this.applicationsService.findAll(status, runtime, req.tenantId);
+  findAll(
+    @TenantId() tenantId: string,
+    @Query('status') status?: string,
+    @Query('runtime') runtime?: string,
+  ) {
+    return this.applicationsService.findAll(status, runtime, tenantId);
   }
 
   @Delete(':id/hard')
-  hardDelete(@Param('id') id: string) {
-    return this.applicationsService.hardDelete(id);
+  hardDelete(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.hardDelete(id, tenantId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.applicationsService.remove(id);
+  remove(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.remove(id, tenantId);
+  }
+
+  @Post(':id/status') // Using POST instead of PATCH to match express standard fallback or PATCH if configured
+  updateStatus(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    if (tenantId !== SYSTEM_TENANT_ID) {
+      throw new ForbiddenException('Only system agent can update status directly');
+    }
+    return this.applicationsService.updateStatus(id, body.status);
+  }
+
+  @Patch(':id/status')
+  updateStatusPatch(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { status: string },
+  ) {
+    if (tenantId !== SYSTEM_TENANT_ID) {
+      throw new ForbiddenException('Only system agent can update status directly');
+    }
+    return this.applicationsService.updateStatus(id, body.status);
   }
 }

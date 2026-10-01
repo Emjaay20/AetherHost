@@ -1,103 +1,202 @@
-import { Controller, Post, Get, Body, BadRequestException, HttpCode, HttpStatus, Headers, UnauthorizedException, Req } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  BadRequestException,
+  HttpCode,
+  HttpStatus,
+  Headers,
+  UnauthorizedException,
+  ForbiddenException,
+  Req,
+} from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
 import { BillingService } from './billing.service';
-import * as crypto from 'crypto';
+import { Public } from '../auth/public.decorator';
+import { TenantId } from '../auth/tenant.decorator';
+import {
+  verifyBachsSignature,
+  verifyPaystackSignature,
+  verifyStripeSignature,
+} from './webhook-signature';
+import { IsIn, IsString } from 'class-validator';
+
+class CheckoutDto {
+  @IsString()
+  planId: string;
+
+  @IsIn(['stripe', 'paystack', 'bachs'])
+  provider: 'stripe' | 'paystack' | 'bachs';
+}
+
+class SimulateDto {
+  @IsString()
+  tenantId: string;
+
+  @IsString()
+  planId: string;
+
+  @IsString()
+  provider: string;
+
+  @IsString()
+  providerEventId: string;
+}
 
 @Controller('v1/billing')
 export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
+  @Public()
   @Get('plans')
   getPlans() {
     return this.billing.getPlans();
   }
 
   @Post('checkout')
-  createCheckoutSession(@Body() body: { tenantId: string; planId: string; provider: 'stripe' | 'paystack' | 'bachs' }) {
-    // In the future this would return a Stripe/Paystack/Bachs checkout URL.
+  createCheckoutSession(
+    @TenantId() tenantId: string,
+    @Body() body: CheckoutDto,
+  ) {
     return {
       message: 'Checkout initialized',
       checkoutUrl: `https://${body.provider}.com/checkout/stub`,
-      tenantId: body.tenantId,
+      tenantId,
       planId: body.planId,
     };
   }
 
+  @Public()
   @Post('webhooks/bachs')
   @HttpCode(HttpStatus.OK)
   async handleBachsWebhook(
     @Req() req: RawBodyRequest<Request>,
     @Headers('x-bachs-signature') signature: string,
-    @Headers('x-bachs-timestamp') timestamp: string
+    @Headers('x-bachs-timestamp') timestamp: string,
   ) {
     const secret = process.env.BACHS_WEBHOOK_SECRET;
-    
+    const payloadBuffer = this.requireRawBody(req);
     if (!secret) {
-      throw new UnauthorizedException('Webhook secret not configured on server');
+      throw new UnauthorizedException(
+        'Webhook secret not configured on server',
+      );
     }
-    if (!signature || !timestamp) {
-      throw new UnauthorizedException('Missing x-bachs-signature or x-bachs-timestamp header');
-    }
-
-    const payloadBuffer = req.rawBody;
-    if (!payloadBuffer) {
-      throw new BadRequestException('Raw body is missing');
-    }
-    
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(timestamp + '.' + payloadBuffer.toString('utf8'))
-      .digest('hex');
-      
-    if (signature !== expectedSignature) {
+    if (!verifyBachsSignature(payloadBuffer, signature, timestamp, secret)) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     const body = req.body;
-    const providerEventId = body.id || `bachs_test_${Date.now()}`;
-    // Fallback to the user's Clerk ID if it's missing from metadata for the demo
-    const tenantId = body.metadata?.tenantId || 'user_3K1xGX0gzLatvTSieLxpmbyZCH3'; 
-    const planId = body.metadata?.planId || 'growth';
+    const providerEventId = body.id;
+    const tenantId = body.metadata?.tenantId;
+    const planId = body.metadata?.planId;
+    this.requireWebhookFields(providerEventId, tenantId, planId);
 
-    return this.billing.processWebhook('bachs', providerEventId, tenantId, planId);
+    return this.billing.processWebhook(
+      'bachs',
+      providerEventId,
+      tenantId,
+      planId,
+    );
   }
 
+  @Public()
   @Post('webhooks/stripe')
   @HttpCode(HttpStatus.OK)
-  async handleStripeWebhook(@Body() body: any) {
-    // 1. Verify signature (stubbed for now)
-    // 2. Extract event
-    const providerEventId = body.id || `stripe_test_${Date.now()}`;
-    const tenantId = body.metadata?.tenantId || 'demo-agency';
-    const planId = body.metadata?.planId || 'growth';
-    
-    return this.billing.processWebhook('stripe', providerEventId, tenantId, planId);
+  async handleStripeWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('stripe-signature') signature: string,
+  ) {
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    const payloadBuffer = this.requireRawBody(req);
+    if (!secret) {
+      throw new UnauthorizedException(
+        'Webhook secret not configured on server',
+      );
+    }
+    if (!verifyStripeSignature(payloadBuffer, signature, secret)) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
+
+    const body = req.body;
+    const providerEventId = body.id;
+    const tenantId =
+      body.data?.object?.metadata?.tenantId || body.metadata?.tenantId;
+    const planId = body.data?.object?.metadata?.planId || body.metadata?.planId;
+    this.requireWebhookFields(providerEventId, tenantId, planId);
+
+    return this.billing.processWebhook(
+      'stripe',
+      providerEventId,
+      tenantId,
+      planId,
+    );
   }
 
+  @Public()
   @Post('webhooks/paystack')
   @HttpCode(HttpStatus.OK)
-  async handlePaystackWebhook(@Body() body: any) {
-    // 1. Verify signature
-    // 2. Extract event
-    const providerEventId = body.data?.id || `paystack_test_${Date.now()}`;
-    const tenantId = body.data?.metadata?.tenantId || 'demo-agency';
-    const planId = body.data?.metadata?.planId || 'growth';
+  async handlePaystackWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Headers('x-paystack-signature') signature: string,
+  ) {
+    const secret = process.env.PAYSTACK_WEBHOOK_SECRET;
+    const payloadBuffer = this.requireRawBody(req);
+    if (!secret) {
+      throw new UnauthorizedException(
+        'Webhook secret not configured on server',
+      );
+    }
+    if (!verifyPaystackSignature(payloadBuffer, signature, secret)) {
+      throw new UnauthorizedException('Invalid webhook signature');
+    }
 
-    return this.billing.processWebhook('paystack', providerEventId, tenantId, planId);
+    const body = req.body;
+    const providerEventId = String(body.data?.id ?? '');
+    const tenantId = body.data?.metadata?.tenantId;
+    const planId = body.data?.metadata?.planId;
+    this.requireWebhookFields(providerEventId, tenantId, planId);
+
+    return this.billing.processWebhook(
+      'paystack',
+      providerEventId,
+      tenantId,
+      planId,
+    );
   }
 
+  @Public()
   @Post('simulate')
-  async simulateWebhook(@Body() body: { tenantId: string; planId: string; provider: string; providerEventId: string }) {
+  async simulateWebhook(@Body() body: SimulateDto) {
     if (process.env.BILLING_ALLOW_SIMULATE !== 'true') {
-      // Allow simulation by default for demo purposes if not explicitly disabled
+      throw new ForbiddenException('Billing simulation is disabled');
     }
-    
+
     return this.billing.processWebhook(
       body.provider,
       body.providerEventId,
       body.tenantId,
-      body.planId
+      body.planId,
     );
+  }
+
+  private requireRawBody(req: RawBodyRequest<Request>): Buffer {
+    if (!req.rawBody) {
+      throw new BadRequestException('Raw body is missing');
+    }
+    return req.rawBody;
+  }
+
+  private requireWebhookFields(
+    providerEventId?: string,
+    tenantId?: string,
+    planId?: string,
+  ) {
+    if (!providerEventId || !tenantId || !planId) {
+      throw new BadRequestException(
+        'Webhook payload missing providerEventId, tenantId, or planId',
+      );
+    }
   }
 }

@@ -1,0 +1,19 @@
+version: '3'
+services:
+  app:
+    image: rust:latest
+    working_dir: /app
+    volumes:
+      - ./src:/app
+    command: cargo run
+    expose:
+      - "80"
+
+  code-server:
+    image: codercom/code-server:latest
+    volumes:
+      - .:/home/coder/project
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rust-gaming-backend-ide.rule=Host(`rust-gaming-backend-ide.localhost)"
+      - "traefik.http.services.rust-gaming-backend-ide.loadbalancer.server.port=8080"

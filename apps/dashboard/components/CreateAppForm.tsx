@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Server, Box, Hexagon, Component, Plus, X, Loader2, GitBranch, LayoutTemplate } from 'lucide-react'
+import { Server, Box, Hexagon, Plus, X, Loader2, LayoutTemplate, GitBranch, Component } from 'lucide-react'
 import { createApplication } from '../app/actions'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -16,7 +16,7 @@ const runtimes = [
   { id: 'python', name: 'Python', icon: Server, color: 'text-blue-500' },
   { id: 'go', name: 'Go', icon: Box, color: 'text-cyan-500' },
   { id: 'docker', name: 'Docker', icon: Component, color: 'text-blue-400' },
-  { id: 'github', name: 'GitHub Repo', icon: GitBranch, color: 'text-white' },
+  { id: 'github', name: 'GitHub Repo', icon: GitBranch, color: 'text-zinc-200' },
   { id: 'wordpress', name: 'WordPress', icon: LayoutTemplate, color: 'text-blue-300' },
 ]
 
@@ -24,7 +24,7 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
   const [isOpen, setIsOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedRuntime, setSelectedRuntime] = useState('node18')
+  const [selectedRuntime, setSelectedRuntime] = useState('nodejs')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -120,6 +120,19 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
                     ))}
                   </div>
                 </div>
+                
+                {selectedRuntime === 'github' && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2">
+                    <label htmlFor="githubRepo" className="text-sm font-medium text-foreground/80">GitHub Repository URL</label>
+                    <input
+                      id="githubRepo"
+                      name="githubRepo"
+                      required
+                      placeholder="https://github.com/user/repo"
+                      className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50 text-foreground shadow-inner"
+                    />
+                  </motion.div>
+                )}
 
                 {error && (
                   <motion.div 

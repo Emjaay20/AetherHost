@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { auth } from '@clerk/nextjs/server'
 
-const API_URL = 'http://localhost:3000'
+const API_URL = process.env.API_URL ?? process.env.CONTROL_PLANE_URL ?? 'http://127.0.0.1:3000'
 
 export async function getEntitlements() {
   const { userId, getToken } = await auth();
@@ -11,7 +11,7 @@ export async function getEntitlements() {
   const token = await getToken();
 
   try {
-    const res = await fetch(`${API_URL}/v1/entitlements/${userId}`, { 
+    const res = await fetch(`${API_URL}/v1/entitlements`, { 
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store' 
     })
@@ -57,7 +57,7 @@ export async function createApplication(formData: FormData) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ tenantId: userId, name, runtime })
+      body: JSON.stringify({ name, runtime })
     })
 
     if (!res.ok) {
@@ -79,7 +79,7 @@ export async function getEvents() {
 
   try {
     const res = await fetch(
-      `${API_URL}/v1/events?tenantId=${userId}`,
+      `${API_URL}/v1/events`,
       { 
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store' 
@@ -119,7 +119,7 @@ export async function generateOpsInsight() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ tenantId: userId })
+      body: JSON.stringify({})
     });
     
     if (!res.ok) {
@@ -138,7 +138,11 @@ export async function promptApplication(formData: FormData) {
   if (!userId) return { error: 'Unauthorized' };
   const token = await getToken();
 
+
   const prompt = formData.get('prompt') as string;
+  const repositoryName = formData.get('repositoryName') as string | null;
+  const repositoryDescription = formData.get('repositoryDescription') as string | null;
+  const generateDescription = formData.get('generateDescriptionValue') === 'true';
 
   try {
     const res = await fetch(`${API_URL}/v1/ai/provision`, {
@@ -147,8 +151,9 @@ export async function promptApplication(formData: FormData) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ tenantId: userId, prompt })
+      body: JSON.stringify({ prompt, repositoryName, repositoryDescription, generateDescription })
     });
+
 
     if (!res.ok) {
       const error = await res.json();
