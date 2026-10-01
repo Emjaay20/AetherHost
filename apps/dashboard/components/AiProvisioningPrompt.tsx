@@ -5,8 +5,12 @@ import { promptApplication } from '../app/actions'
 import { Sparkles, AlertCircle, Loader2 } from 'lucide-react'
 
 export default function AiProvisioningPrompt() {
+  
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [generateDescription, setGenerateDescription] = useState(true)
+
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()

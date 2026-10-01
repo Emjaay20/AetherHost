@@ -19,6 +19,8 @@ export class OpenAICompatibleAdapter implements ModelAdapter {
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: request.prompt }],
+        max_tokens: 4000,
+        temperature: 0.2,
       })
     });
 

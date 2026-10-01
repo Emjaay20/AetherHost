@@ -19,7 +19,7 @@ export default async function SettingsPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold">Settings</h1>
             <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">demo-agency</span>
+            <span className="text-muted-foreground">workspace</span>
           </div>
           <div className="flex items-center gap-4">
             <UserButton />

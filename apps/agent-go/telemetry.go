@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -88,7 +89,9 @@ func startTelemetryReporter(controlPlaneURL string) {
 			url := fmt.Sprintf("%s/v1/telemetry", controlPlaneURL)
 			req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("x-agent-key", "aether-secret")
+			if key := os.Getenv("AGENT_SECRET_KEY"); key != "" {
+				req.Header.Set("x-agent-key", key)
+			}
 			
 			client := &http.Client{Timeout: 5 * time.Second}
 			client.Do(req)

@@ -1,0 +1,23 @@
+version: '3'
+services:
+  rust-game-backend:
+    image: rust:latest
+    working_dir: /app
+    volumes:
+      - ./src:/app
+    expose:
+      - "8080"
+    command: cargo run --quiet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rust-game-backend.rule=Host(`rust-game-backend.localhost`)"
+      - "traefik.http.services.rust-game-backend.loadbalancer.server.port=8080"
+
+  code-server:
+    image: codercom/code-server:latest
+    volumes:
+      - .:/home/coder/project
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rust-game-backend-ide.rule=Host(`rust-game-backend-ide.localhost`)"
+      - "traefik.http.services.rust-game-backend-ide.loadbalancer.server.port=8080"

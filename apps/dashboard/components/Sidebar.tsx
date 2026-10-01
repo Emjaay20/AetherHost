@@ -1,4 +1,4 @@
-import { LayoutGrid, Settings, Server } from 'lucide-react'
+import { LayoutGrid, Settings, Server, Shield } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Sidebar({ usage, limit, activePath }: { usage: number, limit: number, activePath: string }) {
@@ -26,6 +26,12 @@ export default function Sidebar({ usage, limit, activePath }: { usage: number, l
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${activePath === '/settings' ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
         >
           <Settings className="w-4 h-4" /> Settings
+        </Link>
+        <Link 
+          href="/admin" 
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${activePath === '/admin' ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
+        >
+          <Shield className="w-4 h-4" /> Admin Console
         </Link>
       </nav>
       

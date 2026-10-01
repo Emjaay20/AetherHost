@@ -18,45 +18,62 @@ export class BillingService {
     return Object.values(PLANS);
   }
 
-  async processWebhook(provider: string, providerEventId: string, tenantId: string, planId: string, status: string = 'succeeded') {
+  async processWebhook(
+    provider: string,
+    providerEventId: string,
+    tenantId: string,
+    planId: string,
+    status: string = 'succeeded',
+  ) {
     const plan = PLANS[planId];
     if (!plan) {
       throw new BadRequestException(`Unknown plan: ${planId}`);
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Idempotency Check
-      const existing = await tx.webhookEvent.findUnique({
-        where: { providerEventId },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.webhookEvent.create({
+          data: {
+            provider,
+            providerEventId,
+            tenantId,
+            planId,
+            status,
+          },
+        });
 
-      if (existing) {
+        await this.entitlements.applyPlan(tenantId, plan, tx);
+
+        await this.events.publish(
+          new PaymentSucceeded(tenantId, {
+            provider,
+            providerEventId,
+            planId,
+            status,
+          }),
+          tx,
+        );
+
+        this.logger.log(
+          `Successfully processed webhook ${providerEventId} and applied plan ${planId} to ${tenantId}`,
+        );
+        return { message: 'Plan applied successfully' };
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
         this.logger.log(`Webhook already processed: ${providerEventId}`);
         return { message: 'Already processed' };
       }
-
-      // 2. Insert WebhookEvent
-      await tx.webhookEvent.create({
-        data: {
-          provider,
-          providerEventId,
-          tenantId,
-          planId,
-          status,
-        },
-      });
-
-      // 3. Apply Plan
-      await this.entitlements.applyPlan(tenantId, plan, tx);
-
-      // 4. Emit Domain Event
-      await this.events.publish(
-        new PaymentSucceeded(tenantId, { provider, providerEventId, planId, status }),
-        tx
-      );
-
-      this.logger.log(`Successfully processed webhook ${providerEventId} and applied plan ${planId} to ${tenantId}`);
-      return { message: 'Plan applied successfully' };
-    });
+      throw error;
+    }
   }
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code: string }).code === 'P2002'
+  );
 }

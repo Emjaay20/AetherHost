@@ -3,8 +3,9 @@ import CreateAppForm from '../components/CreateAppForm'
 import EventsPanel from '../components/EventsPanel'
 import OpsInsightPanel from '../components/OpsInsightPanel'
 import AiProvisioningPrompt from '../components/AiProvisioningPrompt'
+import AutoRefresh from '../components/AutoRefresh'
 import Sidebar from '../components/Sidebar'
-import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box } from 'lucide-react'
+import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box, Terminal } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 
 export default async function Dashboard() {
@@ -19,6 +20,7 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-screen flex w-full">
+      <AutoRefresh interval={3000} />
       <Sidebar usage={usage} limit={limit} activePath="/" />
 
       {/* Main Content */}
@@ -27,7 +29,7 @@ export default async function Dashboard() {
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-semibold">Overview</h1>
             <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">demo-agency</span>
+            <span className="text-muted-foreground">workspace</span>
           </div>
           <div className="flex items-center gap-4">
             <form action={runProvisioner}>
@@ -150,6 +152,17 @@ export default async function Dashboard() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {(app.runtime === 'docker' || app.aiFiles) && (
+                            <a 
+                              href={`http://${app.name.toLowerCase().replace(/ /g, '-')}-ide.localhost`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-3 py-1.5 rounded-lg border border-cyan-500/30 hover:bg-cyan-500/10 flex items-center gap-1"
+                            >
+                              <Terminal className="w-3 h-3" />
+                              IDE
+                            </a>
+                          )}
                           <a 
                             href={`http://${app.name.toLowerCase().replace(/ /g, '-')}.localhost`}
                             target="_blank"
