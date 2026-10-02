@@ -5,3 +5,8 @@ dist
 .env
 .env.*
 .DS_Store
+
+# Go / Rust binaries and build directories
+apps/agent-go/agent-go
+deployments/
+target/

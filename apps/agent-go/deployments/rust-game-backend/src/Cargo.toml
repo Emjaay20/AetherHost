@@ -1,8 +1,0 @@
-[package]
-name = "rust-game-backend"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-tiny_http = "0.8"
-rusqlite = "0.29"
