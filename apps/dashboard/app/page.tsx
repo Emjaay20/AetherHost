@@ -5,8 +5,9 @@ import OpsInsightPanel from '../components/OpsInsightPanel'
 import AiProvisioningPrompt from '../components/AiProvisioningPrompt'
 import AutoRefresh from '../components/AutoRefresh'
 import Sidebar from '../components/Sidebar'
-import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box, Terminal } from 'lucide-react'
+import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box, Terminal, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
+import Link from 'next/link';
 
 export default async function Dashboard() {
   const apps = await getApplications()
@@ -17,6 +18,12 @@ export default async function Dashboard() {
   const limit = entitlements?.limits?.applications || 3
   const limitReached = usage >= limit
   const percentUsed = Math.min((usage / limit) * 100, 100)
+  
+  const storageUsage = entitlements?.usage?.storageMb || 0
+  const storageLimit = entitlements?.limits?.storageMb || 512
+  const storagePercent = Math.min((storageUsage / storageLimit) * 100, 100)
+
+  const planId = entitlements?.planId || 'starter'
 
   return (
     <div className="min-h-screen flex w-full">
@@ -32,6 +39,12 @@ export default async function Dashboard() {
             <span className="text-muted-foreground">workspace</span>
           </div>
           <div className="flex items-center gap-4">
+            <Link 
+              href="/billing"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+            >
+              Current Plan: {planId.toUpperCase()}
+            </Link>
             <form action={runProvisioner}>
               <button
                 type="submit"
@@ -55,20 +68,35 @@ export default async function Dashboard() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-5xl mx-auto space-y-8">
+          <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
             
-            {/* Stats Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              
               <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
                 <div className="flex items-center gap-3 text-muted-foreground mb-4">
-                  <Activity className="w-4 h-4" />
+                  <Server className="w-4 h-4" />
                   <h3 className="text-sm font-medium">Active Deployments</h3>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{apps.length}</span>
-                  <div className="flex items-center text-xs text-green-500 font-medium bg-green-500/10 px-2 py-1 rounded-full">
-                    <ArrowUpRight className="w-3 h-3 mr-1" /> 100%
+                  <span className="text-3xl font-bold">{apps.length} <span className="text-lg font-medium text-muted-foreground">/ {limit}</span></span>
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
+                <div className="flex items-center gap-3 text-muted-foreground mb-4">
+                  <HardDrive className="w-4 h-4" />
+                  <h3 className="text-sm font-medium">Storage Usage</h3>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl font-bold">{storageUsage}<span className="text-lg text-muted-foreground font-normal ml-1">MB</span></span>
+                    <span className="text-sm text-muted-foreground">/ {storageLimit} MB</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${storagePercent > 90 ? 'bg-red-500' : 'bg-orange-500'}`} style={{ width: `${storagePercent}%` }} />
                   </div>
                 </div>
               </div>
@@ -76,11 +104,17 @@ export default async function Dashboard() {
               <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
                 <div className="flex items-center gap-3 text-muted-foreground mb-4">
-                  <Cpu className="w-4 h-4" />
-                  <h3 className="text-sm font-medium">Live Memory (Docker)</h3>
+                  <Activity className="w-4 h-4" />
+                  <h3 className="text-sm font-medium">Bandwidth (30d)</h3>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{entitlements?.metrics?.currentMemoryMb?.toFixed(1) || '0.0'}<span className="text-lg text-muted-foreground font-normal ml-1">MB</span></span>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl font-bold">{(entitlements?.usage?.bandwidthMb || 0).toFixed(1)}<span className="text-lg text-muted-foreground font-normal ml-1">MB</span></span>
+                    <span className="text-sm text-muted-foreground">/ {(entitlements?.limits?.bandwidthMb || 10240) / 1024} GB</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${((entitlements?.usage?.bandwidthMb || 0) / (entitlements?.limits?.bandwidthMb || 10240)) * 100 > 90 ? 'bg-red-500' : 'bg-cyan-500'}`} style={{ width: `${Math.min(((entitlements?.usage?.bandwidthMb || 0) / (entitlements?.limits?.bandwidthMb || 10240)) * 100, 100)}%` }} />
+                  </div>
                 </div>
               </div>
 
@@ -88,10 +122,10 @@ export default async function Dashboard() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
                 <div className="flex items-center gap-3 text-muted-foreground mb-4">
                   <Box className="w-4 h-4" />
-                  <h3 className="text-sm font-medium">AI Orchestration Tokens</h3>
+                  <h3 className="text-sm font-medium">AI Orchestration</h3>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{entitlements?.metrics?.totalAiTokens || '0'}</span>
+                  <span className="text-3xl font-bold">{entitlements?.usage?.aiRequests || '0'} <span className="text-lg font-medium text-muted-foreground">/ {entitlements?.limits?.aiRequests || '0'} reqs</span></span>
                 </div>
               </div>
             </div>

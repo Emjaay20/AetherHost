@@ -100,4 +100,15 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 4. **Eventual Consistency**: Provisioning failures (when real) will not roll back the commercial transaction; the app simply remains `PENDING` for a retry.
 
 ---
-> *"I would not claim this is Automattic-scale hosting. I would claim the control plane is honest: entitlements own commercial truth, workers are replaceable, AI is proxied, payments are idempotent. Probes exist; managed Postgres + ACK/ECS is the next apply. The next increment is infrastructure-as-code and SLOs, not another feature."*
+> *"The control plane is honest: entitlements own commercial truth, workers are replaceable, AI is proxied, payments are idempotent. Probes exist; managed Postgres + container orchestration is the next apply."*
+
+### Recent Architectural Hardening
+- **Message Queues (BullMQ + Redis):** Webhooks are completely decoupled from HTTP ingestion. Stripe/Paystack/Bachs webhooks are dropped onto a Redis-backed BullMQ queue, ensuring zero data loss during high load or database contention.
+- **Accurate Token Metering:** The AI gateway now uses the official `js-tiktoken` (cl100k_base BPE) to accurately meter streaming LLM responses down to the byte-pair, replacing naive length-based estimations.
+- **SRE Orchestration (Go Agent):** The Go provisioning agent has been refactored to use the official Docker Go SDK (`github.com/docker/docker/client`) and generates strictly-isolated Compose definitions, completely stripping execution of untrusted tenant payloads.
+- **Graceful Shutdowns:** The Go agent leverages native OS signal handlers and `context.Context` to safely finish active provisioning jobs before shutting down, preventing zombie containers during deployments.
+
+### What's Next
+- Infrastructure-as-code (Terraform) for managed Postgres + container orchestration
+- SLO targets and observability dashboards once deployed to a real environment
+- WordPress fleet provisioning via multi-container Compose stacks

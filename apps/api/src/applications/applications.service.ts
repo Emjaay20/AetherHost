@@ -14,6 +14,9 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
+import { clerkClient } from '@clerk/clerk-sdk-node';
+
+export type ApplicationWithToken = Application & { githubToken: string | null };
 
 @Injectable()
 export class ApplicationsService {
@@ -70,7 +73,7 @@ export class ApplicationsService {
     status?: string,
     runtime?: string,
     tenantId?: string,
-  ): Promise<any[]> {
+  ): Promise<Application[] | ApplicationWithToken[]> {
     const where: Record<string, string> = {};
     if (status) where.status = status;
     if (runtime) where.runtime = runtime;
@@ -80,43 +83,32 @@ export class ApplicationsService {
     
     // If the system agent is pulling pending apps, inject their GitHub tokens securely
     if (tenantId === SYSTEM_TENANT_ID && status === 'pending') {
-      const clerkClient = require('@clerk/clerk-sdk-node').clerkClient;
-      
       const appsWithTokens = await Promise.all(apps.map(async (app) => {
         let githubToken = null;
         try {
-          // Fetch the user's OAuth token from Clerk!
           const tokenResponse = await clerkClient.users.getUserOauthAccessToken(app.tenantId, 'oauth_github');
-          
-          // Clerk returns a paginated response object: { data: [...], totalCount: 1 }
-          // Or in older versions it might return an array directly. Handle both:
           const tokensArray = Array.isArray(tokenResponse) ? tokenResponse : (tokenResponse.data || []);
-          
           if (tokensArray && tokensArray.length > 0) {
             githubToken = tokensArray[0].token;
           }
         } catch (err) {
           console.error("Clerk OAuth Token Fetch Error:", err);
-          // User might not have GitHub connected, ignore
         }
         
         return {
           ...app,
-          githubToken, // The Go agent will read this!
-        };
+          githubToken,
+        } as ApplicationWithToken;
       }));
       return appsWithTokens;
     }
     
-    return apps;
+    return apps as unknown as Application[];
   }
 
   async remove(id: string, tenantId: string): Promise<void> {
     await this.assertOwned(id, tenantId);
-    await this.prisma.application.update({
-      where: { id },
-      data: { status: 'terminating' },
-    });
+    await this.updateStatus(id, 'terminating');
   }
 
   async hardDelete(id: string, tenantId: string): Promise<void> {
@@ -129,10 +121,22 @@ export class ApplicationsService {
   }
 
   async updateStatus(id: string, status: string): Promise<void> {
-    await this.prisma.application.update({
-      where: { id },
-      data: { status },
-    });
+    const app = await this.prisma.application.findUnique({ where: { id } });
+    if (!app) throw new NotFoundException('App not found');
+
+    // If transitioning from running/pending to failed or terminated, release the slot.
+    if ((app.status !== 'failed' && app.status !== 'terminated') && 
+        (status === 'failed' || status === 'terminated')) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.application.update({ where: { id }, data: { status } });
+        await this.entitlementsService.releaseApplicationSlot(app.tenantId, tx);
+      });
+    } else {
+      await this.prisma.application.update({
+        where: { id },
+        data: { status },
+      });
+    }
   }
 
   private async assertOwned(id: string, tenantId: string) {

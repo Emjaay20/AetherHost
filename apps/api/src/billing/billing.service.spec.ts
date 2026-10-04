@@ -33,6 +33,8 @@ describe('BillingService', () => {
     prisma.$transaction.mockImplementation(async (fn) =>
       fn({
         webhookEvent: { create: jest.fn().mockResolvedValue({}) },
+        invoice: { upsert: jest.fn().mockResolvedValue({}) },
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
       }),
     );
 

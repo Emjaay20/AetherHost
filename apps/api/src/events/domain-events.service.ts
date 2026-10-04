@@ -2,11 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
+export interface DomainEvent {
+  tenantId: string;
+  applicationId?: string | null;
+  eventName: string;
+  payload?: any;
+}
+
 @Injectable()
 export class DomainEventsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async publish(event: any, tx?: Prisma.TransactionClient) {
+  async publish(event: DomainEvent, tx?: Prisma.TransactionClient) {
     const prismaClient = tx || this.prisma;
     await prismaClient.domainEventRecord.create({
       data: {

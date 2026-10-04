@@ -1,13 +1,18 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
-import { PrismaModule } from '../prisma/prisma.module';
 import { EntitlementsModule } from '../entitlements/entitlements.module';
-import { DomainEventsModule } from '../events/domain-events.module';
+import { WebhookProcessor } from './webhook.processor';
 
 @Module({
-  imports: [PrismaModule, EntitlementsModule, DomainEventsModule],
+  imports: [
+    EntitlementsModule,
+    BullModule.registerQueue({
+      name: 'webhooks',
+    }),
+  ],
   controllers: [BillingController],
-  providers: [BillingService],
+  providers: [BillingService, WebhookProcessor],
 })
 export class BillingModule {}

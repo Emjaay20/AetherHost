@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        
+    - name: Install pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9.15.1
+        
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+      
+    - name: Run Prisma Generate
+      run: pnpm --filter @aetherhost/api exec prisma generate
+        
+    - name: Run Linter
+      run: pnpm -r lint --if-present
+      
+    - name: Run Unit Tests (API)
+      run: pnpm --filter @aetherhost/api test
+      
+    - name: Build API
+      run: pnpm --filter @aetherhost/api build
+      
+    - name: Build Dashboard
+      run: pnpm --filter dashboard build

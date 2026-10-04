@@ -1,57 +1,97 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import { Counter } from 'prom-client';
 import {
   TenantEntitlements,
   STARTER_ENTITLEMENTS,
-  CatalogPlan,
 } from '@aetherhost/domain';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class EntitlementsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    @InjectMetric('aetherhost_applications_provisioned_total') public appCounter: Counter<string>,
+    @InjectMetric('aetherhost_ai_requests_total') public aiCounter: Counter<string>
+  ) {}
 
   async getForTenant(
     tenantId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<TenantEntitlements> {
+  ): Promise<any> {
     const prismaClient = tx || this.prisma;
-    let record = await prismaClient.tenantEntitlement.findUnique({
-      where: { tenantId },
-    });
-
-    if (!record) {
-      // Create if it doesn't exist
-      record = await prismaClient.tenantEntitlement.create({
-        data: {
-          tenant: {
-            connectOrCreate: {
-              where: { id: tenantId },
-              create: { id: tenantId, name: tenantId, planId: 'starter' },
-            },
-          },
-          limitApplications: STARTER_ENTITLEMENTS.limits.applications,
-          usageApplications: STARTER_ENTITLEMENTS.usage.applications,
-          limitAiRequests: STARTER_ENTITLEMENTS.limits.aiRequests,
-          usageAiRequests: STARTER_ENTITLEMENTS.usage.aiRequests,
-        },
-      });
+    
+    const cacheKey = `entitlements:${tenantId}`;
+    if (!tx) {
+      const cached = await this.cacheManager.get(cacheKey);
+      if (cached) return cached;
     }
 
-    return {
+    let tenant = await prismaClient.tenant.findUnique({
+      where: { id: tenantId },
+      include: { entitlements: true }
+    });
+
+    if (!tenant) {
+      tenant = await prismaClient.tenant.create({
+        data: {
+          id: tenantId, 
+          name: tenantId, 
+          planId: 'starter',
+          entitlements: {
+            create: {
+              limitApplications: STARTER_ENTITLEMENTS.limits.applications,
+              limitAiRequests: STARTER_ENTITLEMENTS.limits.aiRequests,
+              limitStorageMb: 512,
+            }
+          }
+        },
+        include: { entitlements: true }
+      });
+    } else if (!tenant.entitlements) {
+      const entitlements = await prismaClient.tenantEntitlement.create({
+        data: {
+          tenantId,
+          limitApplications: STARTER_ENTITLEMENTS.limits.applications,
+          limitAiRequests: STARTER_ENTITLEMENTS.limits.aiRequests,
+          limitStorageMb: 512,
+        }
+      });
+      tenant.entitlements = entitlements;
+    }
+
+    const record = tenant.entitlements!;
+
+    const result = {
+      planId: tenant.planId,
+      subscriptionStatus: tenant.subscriptionStatus,
       limits: {
         applications: record.limitApplications,
         aiRequests: record.limitAiRequests,
+        storageMb: record.limitStorageMb || 512,
+        bandwidthMb: tenant.planId === 'growth' ? 102400 : 10240, // 100 GB vs 10 GB
       },
       usage: {
         applications: record.usageApplications,
         aiRequests: record.usageAiRequests,
+        storageMb: record.usageStorageMb || 0,
+        bandwidthMb: record.usageBandwidthMb || 0,
       },
       metrics: {
         totalAiTokens: record.totalAiTokens,
         currentMemoryMb: record.currentMemoryMb,
       },
-    } as any;
+    };
+
+    if (!tx) {
+      await this.cacheManager.set(cacheKey, result, 60000);
+    }
+
+    return result;
   }
 
   async consumeApplicationSlot(
@@ -68,6 +108,11 @@ export class EntitlementsService {
         AND "usageApplications" < "limitApplications"
     `;
 
+    if (updated === 1) {
+      this.appCounter.inc({ tenant_id: tenantId });
+      await this.cacheManager.del(`entitlements:${tenantId}`);
+    }
+
     return updated === 1;
   }
 
@@ -83,6 +128,10 @@ export class EntitlementsService {
       WHERE "tenantId" = ${tenantId}
         AND "usageApplications" > 0
     `;
+
+    if (updated === 1) {
+      await this.cacheManager.del(`entitlements:${tenantId}`);
+    }
 
     return updated === 1;
   }
@@ -103,6 +152,11 @@ export class EntitlementsService {
         AND "usageAiRequests" < "limitAiRequests"
     `;
 
+    if (updated === 1) {
+      this.aiCounter.inc({ tenant_id: tenantId, model: 'proxy' });
+      await this.cacheManager.del(`entitlements:${tenantId}`);
+    }
+
     return updated === 1;
   }
 
@@ -111,16 +165,34 @@ export class EntitlementsService {
     tx?: Prisma.TransactionClient,
   ): Promise<{ allowed: boolean }> {
     const prismaClient = tx || this.prisma;
-    const entitlements = await this.getForTenant(tenantId, prismaClient);
+    const record = await prismaClient.tenantEntitlement.findUnique({
+      where: { tenantId },
+      select: { usageAiRequests: true, limitAiRequests: true }
+    });
+    
+    if (!record) return { allowed: false };
 
     return {
-      allowed: entitlements.usage.aiRequests < entitlements.limits.aiRequests,
+      allowed: record.usageAiRequests < record.limitAiRequests,
     };
+  }
+
+  async recordAiTokenUsage(
+    tenantId: string,
+    tokensUsed: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const prismaClient = tx || this.prisma;
+    await prismaClient.$executeRaw`
+      UPDATE "TenantEntitlement"
+      SET "totalAiTokens" = "totalAiTokens" + ${tokensUsed}
+      WHERE "tenantId" = ${tenantId}
+    `;
   }
 
   async applyPlan(
     tenantId: string,
-    plan: CatalogPlan,
+    plan: any,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const prismaClient = tx || this.prisma;
@@ -129,8 +201,9 @@ export class EntitlementsService {
     await prismaClient.$executeRaw`
       UPDATE "TenantEntitlement"
       SET
-        "limitApplications" = ${plan.limits.applications},
-        "limitAiRequests" = ${plan.limits.aiRequests}
+        "limitApplications" = ${plan.entitlements.limits.applications},
+        "limitAiRequests" = ${plan.entitlements.limits.aiRequests},
+        "limitStorageMb" = ${plan.entitlements.limits.storageMb || 512}
       WHERE "tenantId" = ${tenantId}
     `;
 
@@ -138,5 +211,6 @@ export class EntitlementsService {
       where: { id: tenantId },
       data: { planId: plan.id },
     });
+    await this.cacheManager.del(`entitlements:${tenantId}`);
   }
 }

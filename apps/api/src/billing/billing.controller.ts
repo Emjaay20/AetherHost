@@ -2,7 +2,7 @@ import {
   Controller,
   Post,
   Get,
-  Body,
+  Body, Query,
   BadRequestException,
   HttpCode,
   HttpStatus,
@@ -22,6 +22,8 @@ import {
   verifyStripeSignature,
 } from './webhook-signature';
 import { IsIn, IsString } from 'class-validator';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 class CheckoutDto {
   @IsString()
@@ -47,7 +49,10 @@ class SimulateDto {
 
 @Controller('v1/billing')
 export class BillingController {
-  constructor(private readonly billing: BillingService) {}
+  constructor(
+    private readonly billing: BillingService,
+    @InjectQueue('webhooks') private readonly webhooksQueue: Queue
+  ) {}
 
   @Public()
   @Get('plans')
@@ -55,17 +60,68 @@ export class BillingController {
     return this.billing.getPlans();
   }
 
+  @Get('invoices')
+  getInvoices(
+    @TenantId() tenantId: string,
+    @Query('skip') skip?: string,
+    @Query('take') take?: string,
+  ) {
+    return this.billing.getInvoices(
+      tenantId,
+      skip ? parseInt(skip, 10) : 0,
+      take ? parseInt(take, 10) : 10,
+    );
+  }
+
   @Post('checkout')
-  createCheckoutSession(
+  async createCheckoutSession(
     @TenantId() tenantId: string,
     @Body() body: CheckoutDto,
   ) {
+    if (body.provider !== 'bachs') {
+      throw new BadRequestException('Only Bachs.io is supported for checkout');
+    }
+
+    const res = await fetch('https://api.bachs.io/v1/checkout-sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`
+      },
+      body: JSON.stringify({
+        amountCent: body.planId === 'growth' ? 4900 : 0,
+        currency: 'USD',
+        productName: `AetherHost ${body.planId.toUpperCase()} Plan`,
+        successUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true`,
+        cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?canceled=true`,
+        metadata: { tenantId, planId: body.planId }
+      })
+    });
+
+    if (!res.ok) {
+      throw new BadRequestException('Failed to generate Bachs invoice');
+    }
+
+    const data = await res.json();
     return {
       message: 'Checkout initialized',
-      checkoutUrl: `https://${body.provider}.com/checkout/stub`,
+      checkoutUrl: data.checkoutUrl,
       tenantId,
       planId: body.planId,
     };
+  }
+
+  private async queueWebhook(provider: string, providerEventId: string, tenantId: string, planId: string, action: string = action, status: string = 'succeeded') {
+    await this.webhooksQueue.add(
+      action,
+      { provider, providerEventId, tenantId, planId, status },
+      { 
+        jobId: providerEventId, // BullMQ native deduplication
+        attempts: 3, 
+        backoff: { type: 'exponential', delay: 1000 } 
+      }
+    );
+    return { message: 'Webhook queued successfully' };
   }
 
   @Public()
@@ -78,27 +134,28 @@ export class BillingController {
   ) {
     const secret = process.env.BACHS_WEBHOOK_SECRET;
     const payloadBuffer = this.requireRawBody(req);
-    if (!secret) {
-      throw new UnauthorizedException(
-        'Webhook secret not configured on server',
-      );
-    }
+    if (!secret) throw new UnauthorizedException('Webhook secret not configured on server');
     if (!verifyBachsSignature(payloadBuffer, signature, timestamp, secret)) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     const body = req.body;
+    let action = 'process';
+    let status = 'succeeded';
+    
+    if (body.type === 'subscription.canceled') {
+      action = 'cancel';
+      status = 'canceled';
+    } else if (body.type !== 'checkout.session.completed') {
+      return { message: 'Ignored non-success event' };
+    }
+    
     const providerEventId = body.id;
     const tenantId = body.metadata?.tenantId;
-    const planId = body.metadata?.planId;
+    const planId = body.metadata?.planId || 'starter'; // Default to starter if undefined (e.g. for cancellations)
     this.requireWebhookFields(providerEventId, tenantId, planId);
 
-    return this.billing.processWebhook(
-      'bachs',
-      providerEventId,
-      tenantId,
-      planId,
-    );
+    return this.queueWebhook('bachs', providerEventId, tenantId, planId, action, status);
   }
 
   @Public()
@@ -110,28 +167,21 @@ export class BillingController {
   ) {
     const secret = process.env.STRIPE_WEBHOOK_SECRET;
     const payloadBuffer = this.requireRawBody(req);
-    if (!secret) {
-      throw new UnauthorizedException(
-        'Webhook secret not configured on server',
-      );
-    }
+    if (!secret) throw new UnauthorizedException('Webhook secret not configured on server');
     if (!verifyStripeSignature(payloadBuffer, signature, secret)) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     const body = req.body;
+    if (body.type !== 'checkout.session.completed' && body.type !== 'invoice.payment_succeeded') {
+      return { message: 'Ignored non-success event' };
+    }
     const providerEventId = body.id;
-    const tenantId =
-      body.data?.object?.metadata?.tenantId || body.metadata?.tenantId;
+    const tenantId = body.data?.object?.metadata?.tenantId || body.metadata?.tenantId;
     const planId = body.data?.object?.metadata?.planId || body.metadata?.planId;
     this.requireWebhookFields(providerEventId, tenantId, planId);
 
-    return this.billing.processWebhook(
-      'stripe',
-      providerEventId,
-      tenantId,
-      planId,
-    );
+    return this.queueWebhook('stripe', providerEventId, tenantId, planId);
   }
 
   @Public()
@@ -143,27 +193,19 @@ export class BillingController {
   ) {
     const secret = process.env.PAYSTACK_WEBHOOK_SECRET;
     const payloadBuffer = this.requireRawBody(req);
-    if (!secret) {
-      throw new UnauthorizedException(
-        'Webhook secret not configured on server',
-      );
-    }
+    if (!secret) throw new UnauthorizedException('Webhook secret not configured on server');
     if (!verifyPaystackSignature(payloadBuffer, signature, secret)) {
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
     const body = req.body;
+    if (body.event !== 'charge.success') return { message: 'Ignored non-success event' };
     const providerEventId = String(body.data?.id ?? '');
     const tenantId = body.data?.metadata?.tenantId;
     const planId = body.data?.metadata?.planId;
     this.requireWebhookFields(providerEventId, tenantId, planId);
 
-    return this.billing.processWebhook(
-      'paystack',
-      providerEventId,
-      tenantId,
-      planId,
-    );
+    return this.queueWebhook('paystack', providerEventId, tenantId, planId);
   }
 
   @Public()
@@ -173,7 +215,7 @@ export class BillingController {
       throw new ForbiddenException('Billing simulation is disabled');
     }
 
-    return this.billing.processWebhook(
+    return this.queueWebhook(
       body.provider,
       body.providerEventId,
       body.tenantId,

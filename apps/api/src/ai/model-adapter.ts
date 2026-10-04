@@ -5,4 +5,5 @@ export interface ModelAdapter {
     promptTokens: number;
     completionTokens: number;
   }>;
+  completeStream?(request: { prompt: string; purpose: string; tenantId: string }): AsyncGenerator<string, void, unknown>;
 }

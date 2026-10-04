@@ -8,26 +8,31 @@ datasource db {
 }
 
 model Tenant {
-  id           String @id
-  name         String
-  planId       String
-  applications Application[]
-  entitlements TenantEntitlement?
+  id                 String             @id
+  name               String
+  planId             String
+  subscriptionStatus String             @default("active") // active, past_due, cancelled, trialing
+  subscriptionId     String? // External provider subscription ID
+  createdAt          DateTime           @default(now())
+  applications       Application[]
+  entitlements       TenantEntitlement?
+  invoices           Invoice[]
+  auditLogs          AuditLog[]
 }
 
 model Application {
-  id            String  @id
-  tenantId      String
-  name          String
-  runtime       String
-  status        String
-  githubRepo    String?
+  id                    String   @id
+  tenantId              String
+  name                  String
+  runtime               String
+  status                String
+  githubRepo            String?
   githubRepoName        String?
   githubRepoDescription String?
-  dockerCompose String?
-  aiFiles       Json?
-
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  dockerCompose         String?
+  aiFiles               Json?
+  createdAt             DateTime @default(now())
+  tenant                Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([status])
@@ -35,15 +40,48 @@ model Application {
 }
 
 model TenantEntitlement {
-  tenantId           String @id
-  limitApplications  Int    @default(3)
-  usageApplications  Int    @default(0)
-  limitAiRequests    Int    @default(2)
-  usageAiRequests    Int    @default(0)
-  totalAiTokens      Int    @default(0)
-  currentMemoryMb    Float  @default(0.0)
+  tenantId          String @id
+  limitApplications Int    @default(3)
+  usageApplications Int    @default(0)
+  limitAiRequests   Int    @default(2)
+  usageAiRequests   Int    @default(0)
+  totalAiTokens     Int    @default(0)
+  currentMemoryMb   Float  @default(0.0)
+  limitStorageMb    Int    @default(512)
+  usageStorageMb    Float  @default(0.0)
+  usageBandwidthMb  Float  @default(0.0)
+  limitBandwidthGb  Int    @default(10)
+  usageBandwidthGb  Float  @default(0.0)
+  tenant            Tenant @relation(fields: [tenantId], references: [id])
+}
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+model Invoice {
+  id          String    @id @default(uuid())
+  tenantId    String
+  provider    String // e.g. "stripe", "bachs"
+  invoiceId   String    @unique // External ID
+  amountCent  Int // Amount in cents
+  currency    String    @default("USD")
+  status      String // paid, open, uncollectible, void
+  periodStart DateTime?
+  periodEnd   DateTime?
+  createdAt   DateTime  @default(now())
+  paidAt      DateTime?
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String
+  action     String // e.g. "PLAN_UPGRADED", "APP_CREATED", "QUOTA_EXCEEDED"
+  resourceId String? // The ID of the thing being acted upon
+  metadata   Json? // Detailed changes
+  createdAt  DateTime @default(now())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model DomainEventRecord {
@@ -52,6 +90,7 @@ model DomainEventRecord {
   applicationId String?
   eventName     String
   payload       Json?
+  version       Int      @default(1) // Event schema versioning
   createdAt     DateTime @default(now())
 
   @@index([tenantId])

@@ -1,12 +1,12 @@
 'use client'
 
-import { Shield, Users, Server, Zap, Database, Activity, Search } from 'lucide-react'
+import { Shield, Users, Server, Zap, Database, Activity, Search, BarChart3, TrendingUp, DollarSign } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { upgradeTenantPlan } from './actions'
 import { useRouter } from 'next/navigation'
 
-export default function AdminDashboard({ tenants }: { tenants: any[] }) {
+export default function AdminDashboard({ tenants, analytics }: { tenants: any[], analytics: any }) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -15,6 +15,9 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
     t.name.toLowerCase().includes(search.toLowerCase()) || 
     t.id.toLowerCase().includes(search.toLowerCase())
   )
+
+  const currentMrr = analytics?.mrr?.[0]?.mrr || 0;
+  const growthTenants = analytics?.cohorts?.[0]?.growth_tenants || 0;
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -36,10 +39,17 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
       <div className="grid grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm">
           <div className="flex items-center gap-3 text-muted-foreground mb-3">
-            <Users className="w-5 h-5" />
-            <h3 className="font-medium text-sm">Total Tenants</h3>
+            <DollarSign className="w-5 h-5 text-green-500" />
+            <h3 className="font-medium text-sm">Monthly Revenue</h3>
           </div>
-          <p className="text-3xl font-bold">{tenants.length}</p>
+          <p className="text-3xl font-bold">${currentMrr.toFixed(2)}</p>
+        </div>
+        <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm">
+          <div className="flex items-center gap-3 text-muted-foreground mb-3">
+            <TrendingUp className="w-5 h-5 text-blue-500" />
+            <h3 className="font-medium text-sm">Growth Tier Users</h3>
+          </div>
+          <p className="text-3xl font-bold">{growthTenants}</p>
         </div>
         <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm">
           <div className="flex items-center gap-3 text-muted-foreground mb-3">
@@ -57,15 +67,6 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
           </div>
           <p className="text-3xl font-bold">
             {tenants.reduce((acc, t) => acc + (t.entitlements?.totalAiTokens || 0), 0).toLocaleString()}
-          </p>
-        </div>
-        <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm">
-          <div className="flex items-center gap-3 text-muted-foreground mb-3">
-            <Database className="w-5 h-5" />
-            <h3 className="font-medium text-sm">Platform Memory</h3>
-          </div>
-          <p className="text-3xl font-bold">
-            {tenants.reduce((acc, t) => acc + (t.entitlements?.currentMemoryMb || 0), 0).toFixed(1)} <span className="text-lg text-muted-foreground font-medium">MB</span>
           </p>
         </div>
       </div>
@@ -90,6 +91,7 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
             <thead>
               <tr className="border-b border-border/50 text-sm text-muted-foreground">
                 <th className="p-4 font-medium">Tenant</th>
+                <th className="p-4 font-medium">Status</th>
                 <th className="p-4 font-medium">Plan</th>
                 <th className="p-4 font-medium">Apps (Used/Limit)</th>
                 <th className="p-4 font-medium">AI Requests</th>
@@ -105,7 +107,14 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
                   </td>
                   <td className="p-4">
                     <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                      t.planId === 'pro' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' : 
+                      t.subscriptionStatus === 'active' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                    }`}>
+                      {t.subscriptionStatus?.toUpperCase() || 'ACTIVE'}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
+                      t.planId === 'growth' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' : 
                       'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
                     }`}>
                       {t.planId.toUpperCase()}
@@ -131,14 +140,18 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
                     <button 
                       onClick={async () => {
                         setLoading(true);
-                        await upgradeTenantPlan(t.id, t.planId === 'pro' ? 'starter' : 'pro');
-                        router.refresh();
-                        setLoading(false);
+                        const result = await upgradeTenantPlan(t.id, t.planId === 'growth' ? 'starter' : 'growth');
+                        if (result?.checkoutUrl) {
+                          window.location.href = result.checkoutUrl;
+                        } else {
+                          router.refresh();
+                          setLoading(false);
+                        }
                       }}
                       disabled={loading}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-500 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
                     >
-                      {t.planId === 'pro' ? 'Downgrade Plan' : 'Generate Bachs Invoice'}
+                      {t.planId === 'growth' ? 'Downgrade Plan' : 'Generate Bachs Invoice'}
                     </button>
                   </td>
                 </tr>
@@ -146,7 +159,7 @@ export default function AdminDashboard({ tenants }: { tenants: any[] }) {
               
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="p-8 text-center text-muted-foreground">
                     No tenants found.
                   </td>
                 </tr>
