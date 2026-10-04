@@ -9,6 +9,28 @@ import {
 } from '@aetherhost/domain';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { PLANS, CatalogPlan } from '@aetherhost/domain';
+
+export interface TenantEntitlementsView {
+  planId: string;
+  subscriptionStatus: string;
+  limits: {
+    applications: number;
+    aiRequests: number;
+    storageMb: number;
+    bandwidthMb: number;
+  };
+  usage: {
+    applications: number;
+    aiRequests: number;
+    storageMb: number;
+    bandwidthMb: number;
+  };
+  metrics: {
+    totalAiTokens: number;
+    currentMemoryMb: number;
+  };
+}
 
 @Injectable()
 export class EntitlementsService {
@@ -22,7 +44,7 @@ export class EntitlementsService {
   async getForTenant(
     tenantId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<any> {
+  ): Promise<TenantEntitlementsView> {
     const prismaClient = tx || this.prisma;
     
     const cacheKey = `entitlements:${tenantId}`;
@@ -192,7 +214,7 @@ export class EntitlementsService {
 
   async applyPlan(
     tenantId: string,
-    plan: any,
+    plan: CatalogPlan,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const prismaClient = tx || this.prisma;
