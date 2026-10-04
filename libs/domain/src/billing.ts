@@ -11,7 +11,7 @@ export interface Entitlements {
   };
 }
 
-export interface Plan {
+export interface CatalogPlan {
   id: string;
   name: string;
   monthlyPriceCent: number;
@@ -44,7 +44,7 @@ export const GROWTH_ENTITLEMENTS: Entitlements = {
   },
 };
 
-export const PLANS: Record<string, Plan> = {
+export const PLANS: Record<string, CatalogPlan> = {
   starter: {
     id: 'starter',
     name: 'Starter',

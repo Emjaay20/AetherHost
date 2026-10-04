@@ -73,37 +73,13 @@ export class ApplicationsService {
     status?: string,
     runtime?: string,
     tenantId?: string,
-  ): Promise<Application[] | ApplicationWithToken[]> {
+  ): Promise<Application[]> {
     const where: Record<string, string> = {};
     if (status) where.status = status;
     if (runtime) where.runtime = runtime;
     if (tenantId && tenantId !== SYSTEM_TENANT_ID) where.tenantId = tenantId;
 
-    const apps = await this.prisma.application.findMany({ where });
-    
-    // If the system agent is pulling pending apps, inject their GitHub tokens securely
-    if (tenantId === SYSTEM_TENANT_ID && status === 'pending') {
-      const appsWithTokens = await Promise.all(apps.map(async (app) => {
-        let githubToken = null;
-        try {
-          const tokenResponse = await clerkClient.users.getUserOauthAccessToken(app.tenantId, 'oauth_github');
-          const tokensArray = Array.isArray(tokenResponse) ? tokenResponse : (tokenResponse.data || []);
-          if (tokensArray && tokensArray.length > 0) {
-            githubToken = tokensArray[0].token;
-          }
-        } catch (err) {
-          console.error("Clerk OAuth Token Fetch Error:", err);
-        }
-        
-        return {
-          ...app,
-          githubToken,
-        } as ApplicationWithToken;
-      }));
-      return appsWithTokens;
-    }
-    
-    return apps as unknown as Application[];
+    return this.prisma.application.findMany({ where }) as unknown as Promise<Application[]>;
   }
 
   async remove(id: string, tenantId: string): Promise<void> {

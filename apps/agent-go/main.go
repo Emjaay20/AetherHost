@@ -78,7 +78,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	go startTelemetryReporter(controlPlaneURL)
+	
 
 	for {
 		select {
