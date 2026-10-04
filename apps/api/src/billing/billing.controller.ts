@@ -14,6 +14,7 @@ import {
 import type { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
 import { BillingService } from './billing.service';
+import { PLANS } from '@aetherhost/domain';
 import { Public } from '../auth/public.decorator';
 import { TenantId } from '../auth/tenant.decorator';
 import {
@@ -89,7 +90,7 @@ export class BillingController {
         'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`
       },
       body: JSON.stringify({
-        amountCent: body.planId === 'growth' ? 4900 : 0,
+        amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
         currency: 'USD',
         productName: `AetherHost ${body.planId.toUpperCase()} Plan`,
         successUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true`,
@@ -111,7 +112,7 @@ export class BillingController {
     };
   }
 
-  private async queueWebhook(provider: string, providerEventId: string, tenantId: string, planId: string, action: string = action, status: string = 'succeeded') {
+  private async queueWebhook(provider: string, providerEventId: string, tenantId: string, planId: string, action: string = 'process', status: string = 'succeeded') {
     await this.webhooksQueue.add(
       action,
       { provider, providerEventId, tenantId, planId, status },

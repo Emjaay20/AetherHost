@@ -9,7 +9,7 @@ export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   private checkAdmin(tenantId: string) {
-    const admins = (process.env.ADMIN_TENANT_IDS || '').split(',');
+    const admins = (process.env.ADMIN_TENANT_IDS || '').split(',').map(id => id.trim()).filter(id => id.length > 0);
     if (!admins.includes(tenantId)) {
       throw new UnauthorizedException('Admin access restricted');
     }
