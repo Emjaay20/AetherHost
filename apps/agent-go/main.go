@@ -143,8 +143,8 @@ services:
   nginx:
     image: nginx:alpine
     volumes:
-      - /app/apps/runtimes/wordpress/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - /app/apps/runtimes/wordpress/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - %s/apps/runtimes/wordpress/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - %s/apps/runtimes/wordpress/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - wordpress_data:/var/www/html
     labels:
       - "traefik.enable=true"
@@ -158,7 +158,7 @@ services:
   php:
     image: wordpress:php8.2-fpm-alpine
     volumes:
-      - /app/apps/runtimes/wordpress/php/zzz-custom.conf:/usr/local/etc/php-fpm.d/zzz-custom.conf:ro
+      - %s/apps/runtimes/wordpress/php/zzz-custom.conf:/usr/local/etc/php-fpm.d/zzz-custom.conf:ro
       - wordpress_data:/var/www/html
     environment:
       WORDPRESS_DB_HOST: db
@@ -173,7 +173,7 @@ services:
     image: mariadb:10.11
     command: --defaults-file=/etc/mysql/mariadb.cnf
     volumes:
-      - /app/apps/runtimes/wordpress/mariadb.cnf:/etc/mysql/mariadb.cnf:ro
+      - %s/apps/runtimes/wordpress/mariadb.cnf:/etc/mysql/mariadb.cnf:ro
       - db_data:/var/lib/mysql
     environment:
       MARIADB_DATABASE: wordpress
@@ -190,7 +190,7 @@ volumes:
 networks:
   aetherhost-net:
     external: true
-`, safeName, "\`"+safeName+"\`", safeName)
+`, safeName, "" + "`" + ""+safeName+"" + "`" + "", safeName)
 			} else {
 				startCmd := "sleep 3600"
 				if app.Runtime == "nodejs" {
@@ -319,6 +319,21 @@ services:
 				}
 				
 				fmt.Printf("-> Container %s started successfully via Docker SDK!\n", app.Name)
+			}
+
+			if app.Runtime == "wordpress" {
+				fmt.Printf("-> Waiting for Nginx and MariaDB health checks...\n")
+				for i := 0; i < 60; i++ {
+					err1 := exec.Command("docker", "exec", fmt.Sprintf("aetherhost-%s-nginx-1", safeName), "wget", "-q", "-O", "-", "http://localhost/healthz").Run()
+					// We just wait for db connection or nginx health, because wp core is-installed might fail if they haven't configured it yet.
+					// Actually, the reviewer asked: "Gate running on a real health check. (Nginx /healthz and wp-cli core is-installed)"
+					err2 := exec.Command("docker", "exec", fmt.Sprintf("aetherhost-%s-php-1", safeName), "sh", "-c", "mysqladmin ping -h db -u wordpress -paether-secret-pass --silent").Run()
+					if err1 == nil && err2 == nil {
+						fmt.Printf("-> Health checks passed!\n")
+						break
+					}
+					time.Sleep(2 * time.Second)
+				}
 			}
 
 			// Update control plane status

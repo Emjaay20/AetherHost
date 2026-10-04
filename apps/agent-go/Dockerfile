@@ -1,11 +1,13 @@
 FROM golang:1.21-alpine AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY apps/agent-go/go.mod apps/agent-go/go.sum ./
 RUN go mod download
-COPY . .
+COPY apps/agent-go/ ./
 RUN go build -o agent main.go
 
 FROM docker:dind
 WORKDIR /app
 COPY --from=builder /app/agent /app/agent
+# Copy runtimes into the agent image
+COPY apps/runtimes /app/runtimes
 ENTRYPOINT ["/app/agent"]

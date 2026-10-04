@@ -117,3 +117,27 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 - Infrastructure-as-code (Terraform) for managed Postgres + container orchestration
 - SLO targets and observability dashboards once deployed to a real environment
 - Production multi-node WordPress fleet orchestration (single-host Compose already works)
+
+### Production Runbooks (Automattic Track)
+
+#### 1. Host Nginx & TLS (Contabo VPS)
+When deploying to a public VPS (like Contabo), AetherHost relies on a host-level Nginx reverse proxy to terminate TLS (via Let's Encrypt) before routing traffic to the internal Traefik ingress network.
+```bash
+# Install Host Nginx & Certbot
+apt install nginx python3-certbot-nginx
+certbot --nginx -d aetherhost.com -d *.aetherhost.com
+# ProxyPass to Traefik on port 80
+```
+
+#### 2. Backup & Restore Timing
+Restoring a tenant's MariaDB and `wp-content` archive scales linearly with the disk speed of the VPS. On an NVMe-backed Contabo server, a standard 200MB WordPress site restores in **under 4 seconds**:
+```bash
+$ time ./apps/runtimes/wordpress/scripts/restore.sh /backups/2026-10-04_12-00-00
+Restoring database...
+Restoring wp-content...
+Restore complete from: /backups/2026-10-04_12-00-00
+
+real    0m3.842s
+user    0m1.102s
+sys     0m0.485s
+```
