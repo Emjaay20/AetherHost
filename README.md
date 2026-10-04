@@ -38,19 +38,19 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 | ADR | Decision |
 |---|---|
 | `001` | **Modular Monolith First**: Keep domains separate in NestJS to allow future service extraction. |
-| `002` | **Dashboard as Agency Control Plane**: Next.js UI is strictly for agency owners to view apps and events. |
-| `003` | **Strict Application Entitlements**: Quota checks gate the creation of any new application. |
+| `003` | **Entitlements as Gatekeeper**: Quota checks gate the creation of any new application. |
 | `004` | **Postgres & Prisma Persistence**: Reliable relational storage for core state and event logs. |
-| `005` | **Domain Events over Direct Calls**: Decouple provisioning from quota by publishing internal events. |
+| `005` | **Prisma Version Pinning**: Pin Prisma to v5.21 to avoid migration-breaking upgrades. |
 | `006` | **Atomic Entitlement Consume**: Prevent overselling by utilizing a single SQL `UPDATE ... WHERE usage < limit`. |
-| `007` | **Separate Provisioning from Create**: App creation is fast; provisioning is asynchronous. |
+| `007` | **Events are the Provisioning Contract**: Decouple provisioning from quota by publishing domain events. |
 | `008` | **Provisioner Stub Before Agents**: Verify architecture synchronously before writing out-of-process workers. |
 | `009` | **Runtime Provisioner Strategy**: Factory pattern abstracting the differences between Node, WP, and Python. |
-| `010` | **Go Agent Worker**: Out-of-process worker polling for pending tasks; proving language agnosticism. |
-| `011` | **Governed AI Proxy**: All AI features must route through an internal proxy to enforce usage quota. |
+| `010` | **Go Agent Polls Control Plane**: Out-of-process worker polling for pending tasks; proving language agnosticism. |
+| `011` | **LLM Proxy First**: All AI features must route through an internal proxy to enforce usage quota. |
 | `012` | **Ops Insight Uses Proxy**: A product feature that summarizes operational state, governed exactly like compute. |
 | `013` | **Swappable Model Adapters**: Safely swap a zero-cost local stub for real LLM providers (e.g. OpenAI). |
 | `014` | **Payments Apply Plans**: Webhooks idempotently upgrade catalog plans without coupling to core logic. |
+| `015` | **Liveness vs. Readiness Probes**: Separate health endpoints for orchestrators; IaC skeleton for future deploys. |
 
 ## Real vs. Stub
 
@@ -60,29 +60,34 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 | **Persistence** | **Real** | Postgres via Prisma. Survives restarts. |
 | **Quotas & Entitlements** | **Real** | Strict enforcement using atomic SQL statements. |
 | **Payment Webhooks** | **Real** | HMAC verification (Stripe / Paystack / Bachs). Unique `providerEventId` is the replay lock. `/simulate` is off unless `BILLING_ALLOW_SIMULATE=true`. |
+| **Invoicing** | **Real** | `Invoice` records created on plan upgrades with accurate `amountCent` from catalog. |
+| **Bandwidth Metering** | **Real** | Per-tenant `usageBandwidthMb` / `limitBandwidthGb` tracked in entitlements. |
+| **Authentication (Clerk)** | **Real** | Clerk JWT verification on API guards + Next.js middleware. |
+| **Dashboard (Next.js)** | **Real** | Agency control plane with app management, billing, admin panel, and event log. |
 | **Go Agent Worker** | **Real** | Polling worker built in Go that interacts with the API via HTTP. |
+| **CI Pipeline** | **Real** | GitHub Actions workflow for build + test on push. |
 | **Actual Hosting (Servers)** | **Stubbed** | Emits successful `ApplicationStatusChanged` events instead of running Terraform/SSH. |
 | **AI LLM Gateway** | **Stubbed** | Fully functional model factory, defaults to a zero-cost local string stub unless OpenAI keys are provided. |
 | **Stripe/Paystack Dashboard** | **Stubbed** | Skips the redirect to Stripe Checkout, allowing API simulation of the webhook payload instead. |
 
 ## How to Run
 
-1. **Start the Database**
+1. **Install dependencies**
    ```bash
-    docker compose up -d
-    cd apps/api && pnpm prisma migrate deploy
-   ```
-2. **Start the Control Plane API**
-   ```bash
-   cd apps/api
    pnpm install
-   pnpm start:dev
    ```
-3. **Start the Dashboard**
+2. **Start the Database**
    ```bash
-   cd apps/dashboard
-   pnpm install
-   pnpm dev -p 3002
+   docker compose up -d
+   pnpm -F @aetherhost/api prisma migrate deploy
+   ```
+3. **Start the Control Plane API**
+   ```bash
+   pnpm -F @aetherhost/api start:dev
+   ```
+4. **Start the Dashboard**
+   ```bash
+   pnpm -F dashboard dev
    ```
 4. **Simulate a Plan Upgrade (local only)**  
     Requires `BILLING_ALLOW_SIMULATE=true` in the API env.
@@ -111,4 +116,4 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 ### What's Next
 - Infrastructure-as-code (Terraform) for managed Postgres + container orchestration
 - SLO targets and observability dashboards once deployed to a real environment
-- WordPress fleet provisioning via multi-container Compose stacks
+- Production multi-node WordPress fleet orchestration (single-host Compose already works)
