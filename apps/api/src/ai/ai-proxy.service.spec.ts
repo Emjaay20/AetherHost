@@ -10,6 +10,7 @@ describe('AiProxyService', () => {
   let entitlements: {
     canAiRequest: jest.Mock;
     consumeAiRequestSlot: jest.Mock;
+    recordAiTokenUsage: jest.Mock;
   };
   let models: { get: jest.Mock };
   let events: { publish: jest.Mock };
@@ -19,6 +20,7 @@ describe('AiProxyService', () => {
     entitlements = {
       canAiRequest: jest.fn(),
       consumeAiRequestSlot: jest.fn(),
+      recordAiTokenUsage: jest.fn(),
     };
     models = {
       get: jest.fn(),
@@ -36,7 +38,7 @@ describe('AiProxyService', () => {
   });
 
   it('does not call the model when quota is exhausted', async () => {
-    entitlements.canAiRequest.mockResolvedValue({ allowed: false });
+    entitlements.consumeAiRequestSlot.mockResolvedValue(false);
     const complete = jest.fn();
     models.get.mockReturnValue({ complete });
 
@@ -44,11 +46,11 @@ describe('AiProxyService', () => {
       service.complete('t1', 'hello', 'ops_insight'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(complete).not.toHaveBeenCalled();
-    expect(entitlements.consumeAiRequestSlot).not.toHaveBeenCalled();
+    expect(entitlements.recordAiTokenUsage).not.toHaveBeenCalled();
   });
 
   it('does not meter when the model adapter fails', async () => {
-    entitlements.canAiRequest.mockResolvedValue({ allowed: true });
+    entitlements.consumeAiRequestSlot.mockResolvedValue(true);
     models.get.mockReturnValue({
       complete: jest.fn().mockRejectedValue(new Error('provider 500')),
     });
@@ -56,12 +58,11 @@ describe('AiProxyService', () => {
     await expect(
       service.complete('t1', 'hello', 'ops_insight'),
     ).rejects.toThrow('provider 500');
-    expect(entitlements.consumeAiRequestSlot).not.toHaveBeenCalled();
+    expect(entitlements.recordAiTokenUsage).not.toHaveBeenCalled();
     expect(events.publish).not.toHaveBeenCalled();
   });
 
   it('meters only after a successful completion', async () => {
-    entitlements.canAiRequest.mockResolvedValue({ allowed: true });
     entitlements.consumeAiRequestSlot.mockResolvedValue(true);
     models.get.mockReturnValue({
       complete: jest.fn().mockResolvedValue({
@@ -74,11 +75,8 @@ describe('AiProxyService', () => {
 
     const result = await service.complete('t1', 'hello', 'ops_insight');
     expect(result.output).toBe('ok');
-    expect(entitlements.consumeAiRequestSlot).toHaveBeenCalledWith(
-      't1',
-      10,
-      {},
-    );
+    expect(entitlements.consumeAiRequestSlot).toHaveBeenCalledWith('t1', 0);
+    expect(entitlements.recordAiTokenUsage).toHaveBeenCalledWith('t1', 10, {});
     expect(events.publish).toHaveBeenCalledTimes(1);
   });
 });

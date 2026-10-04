@@ -18,6 +18,28 @@ export class BillingService {
     return Object.values(PLANS);
   }
 
+  async getInvoices(tenantId: string, skip: number = 0, take: number = 10) {
+    const [invoices, total] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take,
+      }),
+      this.prisma.invoice.count({ where: { tenantId } })
+    ]);
+
+    return {
+      data: invoices,
+      meta: {
+        total,
+        skip,
+        take,
+        hasMore: skip + take < total
+      }
+    };
+  }
+
   async processWebhook(
     provider: string,
     providerEventId: string,
@@ -40,6 +62,55 @@ export class BillingService {
             planId,
             status,
           },
+        });
+
+        if (status === 'canceled') {
+          // Downgrade to starter
+          const starterPlan = PLANS['starter'];
+          await this.entitlements.applyPlan(tenantId, starterPlan, tx);
+          
+          // Suspend apps exceeding the new limit
+          const apps = await tx.application.findMany({
+            where: { tenantId },
+            orderBy: { createdAt: 'asc' }
+          });
+          
+          if (apps.length > starterPlan.entitlements.limits.applications) {
+            const appsToSuspend = apps.slice(starterPlan.entitlements.limits.applications);
+            await tx.application.updateMany({
+              where: { id: { in: appsToSuspend.map(a => a.id) } },
+              data: { status: 'suspended' }
+            });
+          }
+          
+          this.logger.log(`Downgraded ${tenantId} to starter due to cancellation`);
+          return { message: 'Downgraded successfully' };
+        }
+
+        // 1. Create Invoice Record
+        const invoiceAmount = plan.monthlyPriceCent || 0;
+        if (invoiceAmount > 0) {
+          await tx.invoice.upsert({
+            where: { invoiceId: providerEventId },
+            update: { status: 'paid', paidAt: new Date() },
+            create: {
+              tenantId,
+              provider,
+              invoiceId: providerEventId,
+              amountCent: invoiceAmount,
+              status: 'paid',
+              paidAt: new Date(),
+            }
+          });
+        }
+
+        // 2. Audit Log
+        await tx.auditLog.create({
+          data: {
+            tenantId,
+            action: 'PLAN_UPGRADED',
+            metadata: { planId, provider, providerEventId }
+          }
         });
 
         await this.entitlements.applyPlan(tenantId, plan, tx);

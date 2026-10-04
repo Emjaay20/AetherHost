@@ -15,6 +15,7 @@ import (
 type TelemetryMetric struct {
 	ApplicationName string  `json:"applicationName"`
 	MemoryMb        float64 `json:"memoryMb"`
+	StorageMb       float64 `json:"storageMb"`
 }
 
 type TelemetryPayload struct {
@@ -52,10 +53,6 @@ func startTelemetryReporter(controlPlaneURL string) {
 				continue
 			}
 			
-			// aetherhost-my-wp -> my wp (Wait, actual app name has spaces, but we only know safeName here)
-			// Actually, finding the safeName in DB might fail if we search by original name.
-			// Let's pass the containerName, and NestJS will search `WHERE id = ...` or we'll just modify NestJS to handle it.
-			// Wait! We can just pass the `safeName` string!
 			safeName := strings.TrimPrefix(containerName, "aetherhost-")
 			
 			memStr := parts[1]
@@ -75,10 +72,22 @@ func startTelemetryReporter(controlPlaneURL string) {
 			} else if strings.HasSuffix(memStr, "B") {
 				memVal = 0 // Negligible
 			}
+
+			// Get Storage Size (SizeRw from docker inspect -s)
+			var storageMb float64 = 0
+			sizeCmd := exec.Command("docker", "inspect", "-s", "--format", "{{.SizeRw}}", containerName)
+			sizeOutput, err := sizeCmd.Output()
+			if err == nil {
+				sizeStr := strings.TrimSpace(string(sizeOutput))
+				if bytes, err := strconv.ParseFloat(sizeStr, 64); err == nil {
+					storageMb = bytes / (1024 * 1024)
+				}
+			}
 			
 			metrics = append(metrics, TelemetryMetric{
 				ApplicationName: safeName,
 				MemoryMb:        memVal,
+				StorageMb:       storageMb,
 			})
 		}
 		

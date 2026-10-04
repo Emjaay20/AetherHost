@@ -1,4 +1,5 @@
-import { Controller, Post, Body, ForbiddenException } from '@nestjs/common';
+import { Controller, Post, Body, ForbiddenException, Sse } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { AiProxyService } from './ai-proxy.service';
 import { OpsInsightService } from './ops-insight.service';
 import { AiProvisioningService } from './ai-provisioning.service';
@@ -18,6 +19,17 @@ export class AiProxyController {
   complete(@TenantId() tenantId: string, @Body() body: CompleteAiDto) {
     this.assertTenant(tenantId);
     return this.aiProxyService.complete(
+      tenantId,
+      body.prompt,
+      body.purpose,
+      body.applicationId,
+    );
+  }
+
+  @Sse('complete/stream')
+  streamComplete(@TenantId() tenantId: string, @Body() body: CompleteAiDto): Observable<MessageEvent> {
+    this.assertTenant(tenantId);
+    return this.aiProxyService.completeStream(
       tenantId,
       body.prompt,
       body.purpose,

@@ -7,6 +7,7 @@ import {
   Param,
   Body,
   Query,
+  Header,
   ForbiddenException,
 } from '@nestjs/common';
 import { ApplicationsService } from './applications.service';
@@ -26,6 +27,7 @@ export class ApplicationsController {
   }
 
   @Get()
+  @Header('Cache-Control', 'no-store') // Crucial: prevents GitHub OAuth tokens injected for the system agent from being cached
   findAll(
     @TenantId() tenantId: string,
     @Query('status') status?: string,
@@ -42,18 +44,6 @@ export class ApplicationsController {
   @Delete(':id')
   remove(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.applicationsService.remove(id, tenantId);
-  }
-
-  @Post(':id/status') // Using POST instead of PATCH to match express standard fallback or PATCH if configured
-  updateStatus(
-    @TenantId() tenantId: string,
-    @Param('id') id: string,
-    @Body() body: { status: string },
-  ) {
-    if (tenantId !== SYSTEM_TENANT_ID) {
-      throw new ForbiddenException('Only system agent can update status directly');
-    }
-    return this.applicationsService.updateStatus(id, body.status);
   }
 
   @Patch(':id/status')

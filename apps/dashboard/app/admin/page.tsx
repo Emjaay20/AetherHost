@@ -4,16 +4,17 @@ import AdminDashboard from './AdminDashboard'
 
 const API_URL = process.env.API_URL ?? 'http://127.0.0.1:3000'
 
-async function getTenants(token: string) {
-  const res = await fetch(`${API_URL}/v1/admin/tenants`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store'
-  })
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) return { error: 'Unauthorized' }
-    return { error: 'Failed to fetch tenants' }
+async function getAdminData(token: string) {
+  const [tenantsRes, analyticsRes] = await Promise.all([
+    fetch(`${API_URL}/v1/admin/tenants`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+    fetch(`${API_URL}/v1/admin/analytics`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+  ]);
+  
+  if (!tenantsRes.ok) return { error: 'Unauthorized' }
+  return { 
+    tenants: await tenantsRes.json(),
+    analytics: analyticsRes.ok ? await analyticsRes.json() : null
   }
-  return { tenants: await res.json() }
 }
 
 export default async function AdminPage() {
@@ -21,7 +22,7 @@ export default async function AdminPage() {
   if (!userId) redirect('/login');
   
   const token = await getToken();
-  const { tenants, error } = await getTenants(token!);
+  const { tenants, analytics, error } = await getAdminData(token!);
 
   if (error) {
     return (
@@ -32,5 +33,5 @@ export default async function AdminPage() {
     )
   }
 
-  return <AdminDashboard tenants={tenants} />
+  return <AdminDashboard tenants={tenants} analytics={analytics} />
 }

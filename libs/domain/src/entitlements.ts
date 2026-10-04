@@ -11,13 +11,3 @@ export interface TenantEntitlements {
   };
 }
 
-export const STARTER_ENTITLEMENTS: TenantEntitlements = {
-  limits: {
-    applications: 3,
-    aiRequests: 2,
-  },
-  usage: {
-    applications: 0,
-    aiRequests: 0,
-  },
-};

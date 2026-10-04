@@ -5,30 +5,40 @@ import { auth } from '@clerk/nextjs/server'
 const API_URL = process.env.API_URL ?? 'http://127.0.0.1:3000'
 
 export async function upgradeTenantPlan(tenantId: string, planId: string) {
-  const { userId, getToken } = await auth();
+  const { userId } = await auth();
   if (!userId) return { error: 'Unauthorized' };
 
-  // Generate a mock Bachs transaction ID
-  const eventId = `bachs_inv_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+  // Create a checkout session on the Bachs API
+  try {
+    const res = await fetch('https://api.bachs.io/v1/checkout-sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        customer: { email: `${tenantId}@test.com`, name: tenantId },
+        product_cart: [{ product_id: planId }], // e.g. "growth"
+        payment_method_types: ['USD_CARD'],
+        metadata: {
+          tenantId: tenantId,
+          planId: planId
+        },
+        success_url: 'http://localhost:3002/admin',
+        cancel_url: 'http://localhost:3002/admin'
+      })
+    });
 
-  // Hit the simulate endpoint directly since Bachs is our mock provider
-  const res = await fetch(`${API_URL}/v1/billing/simulate`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      tenantId,
-      planId,
-      provider: 'bachs',
-      providerEventId: eventId
-    }),
-    cache: 'no-store'
-  });
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('Failed to create Bachs checkout session:', errorText);
+      return { error: 'Failed to connect to Bachs.io API' };
+    }
 
-  if (!res.ok) {
-    return { error: 'Failed to generate Bachs invoice and upgrade plan.' }
+    const data = await res.json();
+    return { checkoutUrl: data.url }; // Return the URL so the dashboard can redirect
+  } catch (error) {
+    console.error('Error contacting Bachs.io:', error);
+    return { error: 'Network error connecting to Bachs.io' };
   }
-
-  return { success: true }
 }

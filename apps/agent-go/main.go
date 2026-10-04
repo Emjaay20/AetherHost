@@ -1,62 +1,54 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
-	"strings"
-	"bytes"
-	
-	"time"
 	"path/filepath"
+	"strings"
+	"time"
+	"os/signal"
+	"syscall"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/client"
 )
 
-type File struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
-
 type Application struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Runtime       string `json:"runtime"`
-	Status        string `json:"status"`
-	DockerCompose string `json:"dockerCompose"`
-	GithubRepo    string `json:"githubRepo"`
-	GithubToken   string `json:"githubToken"`
+	ID                    string `json:"id"`
+	Name                  string `json:"name"`
+	Runtime               string `json:"runtime"`
+	Status                string `json:"status"`
+	GithubRepo            string `json:"githubRepo"`
 	GithubRepoName        string `json:"githubRepoName"`
 	GithubRepoDescription string `json:"githubRepoDescription"`
-	AiFiles       []File `json:"aiFiles"`
+	GithubToken           string `json:"githubToken"`
+	DockerCompose         string `json:"dockerCompose"`
+	AiFiles               []struct {
+		Path    string `json:"path"`
+		Content string `json:"content"`
+	} `json:"aiFiles"`
 }
 
-func getDockerArgsForRuntime(rawName, runtime string) (string, []string) {
-	safeName := strings.ReplaceAll(strings.ToLower(rawName), " ", "-")
-	exec.Command("docker", "network", "create", "aetherhost-net").Run()
 
-	labelRouter := fmt.Sprintf("traefik.http.routers.%s.rule=Host(`%s.localhost`)", safeName, safeName)
-	baseArgs := []string{"run", "-d", "--name", "aetherhost-" + safeName, "--network", "aetherhost-net", "--label", "traefik.enable=true", "--label", labelRouter}
-
+func getDockerImageAndCmdForRuntime(runtime string) (string, []string) {
 	switch runtime {
-	case "wordpress":
-		exec.Command("docker", "network", "create", "aetherhost-net").Run()
-		dbName := "aetherhost-db-" + safeName
-		exec.Command("docker", "run", "-d", "--name", dbName, "--network", "aetherhost-net", "-e", "MYSQL_ROOT_PASSWORD=aetherpass", "-e", "MYSQL_DATABASE=wordpress", "mysql:8.0").Run()
-		time.Sleep(5 * time.Second)
-		wpArgs := append(baseArgs, "-e", "WORDPRESS_DB_HOST="+dbName, "-e", "WORDPRESS_DB_USER=root", "-e", "WORDPRESS_DB_PASSWORD=aetherpass", "wordpress:latest")
-		return "wordpress:latest", wpArgs
 	case "nodejs":
-		return "node:20-alpine", append(baseArgs, "node:20-alpine", "sh", "-c", "echo \"const http = require('http'); http.createServer((q,r) => r.end('Hello from AetherHost Node Server!')).listen(8080);\" > server.js && node server.js")
+		return "node:18-alpine", []string{"sh", "-c", "echo 'console.log(\"Hello from Node.js on AetherHost\"); setInterval(() => {}, 1000);' > index.js && node index.js"}
 	case "python":
-		return "python:3.11-alpine", append(baseArgs, "python:3.11-alpine", "sh", "-c", "echo 'Hello from AetherHost Python Server!' > index.html && python -m http.server 8080")
+		return "python:3.11-slim", []string{"sh", "-c", "echo 'import time\\nprint(\"Hello from Python on AetherHost\")\\nwhile True: time.sleep(3600)' > main.py && python main.py"}
 	case "rust":
-		return "rust:slim", append(baseArgs, "rust:slim", "sh", "-c", "cargo new app --bin && cd app && echo 'fn main() { println!(\"Hello from Rust on AetherHost\"); loop { std::thread::sleep(std::time::Duration::from_secs(3600)); } }' > src/main.rs && cargo run")
+		return "rust:slim", []string{"sh", "-c", "cargo new app --bin && cd app && echo 'fn main() { println!(\"Hello from Rust on AetherHost\"); loop { std::thread::sleep(std::time::Duration::from_secs(3600)); } }' > src/main.rs && cargo run"}
 	case "go":
-		return "golang:1.21-alpine", append(baseArgs, "golang:1.21-alpine", "sleep", "3600")
+		return "golang:1.21-alpine", []string{"sleep", "3600"}
 	default:
-		return "alpine:latest", append(baseArgs, "alpine:latest", "sleep", "3600")
+		return "alpine:latest", []string{"sleep", "3600"}
 	}
 }
 
@@ -66,17 +58,40 @@ func main() {
 		controlPlaneURL = "http://127.0.0.1:3000"
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		fmt.Println("Termination signal received. Shutting down gracefully...")
+		cancel()
+	}()
+
 	fmt.Printf("Starting AetherHost Docker Provisioner... Polling %s\n", controlPlaneURL)
+
+	dockerCli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		fmt.Printf("Fatal: Could not connect to Docker Engine: %v\n", err)
+		os.Exit(1)
+	}
 
 	go startTelemetryReporter(controlPlaneURL)
 
 	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Worker loop exited cleanly.")
+			return
+		default:
+		}
 		url := fmt.Sprintf("%s/v1/applications?status=pending", controlPlaneURL)
-		resp, err := func() (*http.Response, error) { req, _ := http.NewRequest("GET", url, nil); req.Header.Set("x-agent-key", "aether-secret"); return http.DefaultClient.Do(req) }()
+		resp, err := func() (*http.Response, error) { req, _ := http.NewRequest("GET", url, nil); req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY")); return http.DefaultClient.Do(req) }()
 		
 		if err != nil {
-			fmt.Printf("Error polling control plane: %v\n", err)
-			time.Sleep(5 * time.Second)
+			select { case <-ctx.Done(): return; case <-time.After(5 * time.Second): }
 			continue
 		}
 
@@ -84,20 +99,14 @@ func main() {
 		resp.Body.Close()
 
 		if err != nil {
-			fmt.Printf("Error reading response: %v\n", err)
-			time.Sleep(5 * time.Second)
+			select { case <-ctx.Done(): return; case <-time.After(5 * time.Second): }
 			continue
 		}
 
 		var apps []Application
 		if err := json.Unmarshal(body, &apps); err != nil {
-			fmt.Printf("Error parsing JSON: %v\n", err)
-			time.Sleep(5 * time.Second)
+			select { case <-ctx.Done(): return; case <-time.After(5 * time.Second): }
 			continue
-		}
-
-		if len(apps) > 0 {
-			fmt.Printf("Found %d pending applications\n", len(apps))
 		}
 
 		for _, app := range apps {
@@ -106,30 +115,98 @@ func main() {
 			safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
 			
 			if app.DockerCompose != "" {
+			    if strings.Contains(app.DockerCompose, "privileged:") || strings.Contains(app.DockerCompose, "/var/run/docker.sock") {
+			        fmt.Printf("-> Security check failed: unsafe compose file\n")
+			        continue
+			    }
+
 			    appDir := fmt.Sprintf("./deployments/%s", safeName)
 			    os.MkdirAll(appDir, 0755)
 			    for _, f := range app.AiFiles {
+			        if strings.Contains(f.Path, "..") || strings.HasPrefix(f.Path, "/") {
+			            fmt.Printf("-> Security check failed: unsafe file path\n")
+			            continue
+			        }
+
 			        os.MkdirAll(filepath.Dir(fmt.Sprintf("%s/%s", appDir, f.Path)), 0755)
 			        os.WriteFile(fmt.Sprintf("%s/%s", appDir, f.Path), []byte(f.Content), 0644)
 			    }
 			    
-			    ideConfig := fmt.Sprintf(`
+			// We MUST NOT execute tenant-provided docker-compose strings (security risk: host mounts, privileged, etc)
+			// Instead, we generate a strictly controlled, isolated Compose file based on the selected runtime.
+			appImage, _ := getDockerImageAndCmdForRuntime(app.Runtime)
+			
+			var safeCompose string
+			if app.Runtime == "wordpress" {
+				safeCompose = fmt.Sprintf(`
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordpress
+    volumes:
+      - db_data:/var/lib/mysql
+  app:
+    image: wordpress:latest
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: root
+      WORDPRESS_DB_PASSWORD: root
+      WORDPRESS_DB_NAME: wordpress
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.%s-app.rule=Host(%s.localhost)"
+      - "traefik.http.services.%s-app.loadbalancer.server.port=80"
   code-server:
     image: codercom/code-server:latest
     command: --auth none
     volumes:
       - .:/home/coder/project
     labels:
-      - "traefik.enable=true"\n      - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.%s-ide.rule=Host(%s-ide.localhost%s)"
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.%s-ide.rule=Host(%s-ide.localhost)"
       - "traefik.http.services.%s-ide.loadbalancer.server.port=8080"
-`, safeName, "`"+safeName, "`", safeName)
-
-				modifiedCompose := app.DockerCompose
-				if !strings.Contains(modifiedCompose, "code-server:") {
-					modifiedCompose += ideConfig
+volumes:
+  db_data:
+`, safeName, "`"+safeName+"`", safeName, safeName, "`"+safeName+"`", safeName)
+			} else {
+				startCmd := "sleep 3600"
+				if app.Runtime == "nodejs" {
+					startCmd = "npm install --no-fund && npm start"
+				} else if app.Runtime == "python" {
+					startCmd = "pip install -r requirements.txt && python main.py"
 				}
-				os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(modifiedCompose), 0644)
+				
+				safeCompose = fmt.Sprintf(`
+services:
+  app:
+    image: %s
+    command: sh -c "%s"
+    volumes:
+      - .:/app
+    working_dir: /app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.%s-app.rule=Host(%s.localhost)"
+      - "traefik.http.services.%s-app.loadbalancer.server.port=3000"
+  code-server:
+    image: codercom/code-server:latest
+    command: --auth none
+    volumes:
+      - .:/home/coder/project
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.%s-ide.rule=Host(%s-ide.localhost)"
+      - "traefik.http.services.%s-ide.loadbalancer.server.port=8080"
+`, appImage, startCmd, safeName, "`"+safeName+"`", safeName, safeName, "`"+safeName+"`", safeName)
+			}
+
+			os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
 				
 				if app.GithubToken != "" {
 					fmt.Println("-> GitHub Token detected! Creating repo and pushing code...")
@@ -163,72 +240,100 @@ func main() {
 							exec.Command("git", "-C", appDir, "remote", "add", "origin", authUrl).Run()
 							exec.Command("git", "-C", appDir, "push", "-u", "origin", "main").Run()
 							fmt.Println("-> Successfully pushed AI code to GitHub!")
-						} else {
-							fmt.Println("-> Failed to create GitHub repo:", resData)
 						}
 					}
 				}
 				
-				fmt.Printf("-> Executing docker compose for %s\n", app.Name)
 				exec.Command("docker", "network", "create", "aetherhost-net").Run()
 				cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d", "--build")
 				output, err := cmd.CombinedOutput()
 				if err != nil {
 					fmt.Printf("-> Failed to run docker compose: %v\nOutput: %s\n", err, string(output))
-					statusData := `{"status":"errored"}`
-					req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+					statusData := `{"status":"failed"}`
+					req, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
 					req.Header.Set("Content-Type", "application/json")
-					req.Header.Set("x-agent-key", "aether-secret")
+					req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
 					http.DefaultClient.Do(req)
 					continue
 				}
 				exec.Command("docker", "network", "connect", "aetherhost-net", fmt.Sprintf("aetherhost-%s-code-server-1", safeName)).Run()
 				exec.Command("docker", "network", "connect", "aetherhost-net", fmt.Sprintf("aetherhost-%s-app-1", safeName)).Run()
 			} else {
-				_, args := getDockerArgsForRuntime(app.Name, app.Runtime)
-				fmt.Printf("-> Executing: docker %v\n", args)
-				cmd := exec.Command("docker", args...)
-				output, err := cmd.CombinedOutput()
+				// SRE Track: Use official Docker SDK instead of exec.Command
+				ctx := context.Background()
+				imageName, cmd := getDockerImageAndCmdForRuntime(app.Runtime)
+				
+				fmt.Printf("-> Pulling image %s via Docker SDK...\n", imageName)
+				reader, err := dockerCli.ImagePull(ctx, imageName, image.PullOptions{})
 				if err != nil {
-					fmt.Printf("-> Failed to create container: %v\nOutput: %s\n", err, string(output))
-					statusData := `{"status":"errored"}`
-					req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+					fmt.Printf("-> Failed to pull image: %v\n", err)
+				} else {
+					io.Copy(os.Stdout, reader)
+					reader.Close()
+				}
+
+				fmt.Printf("-> Creating container via Docker SDK...\n")
+				resp, err := dockerCli.ContainerCreate(ctx, &container.Config{
+					Image: imageName,
+					Cmd:   cmd,
+					Labels: map[string]string{
+						"traefik.enable": "true",
+						"traefik.http.routers." + safeName + ".rule": "Host(`" + safeName + ".localhost`)",
+					},
+				}, &container.HostConfig{
+					AutoRemove: true,
+				}, nil, nil, "aetherhost-" + safeName)
+				
+				if err != nil {
+					fmt.Printf("-> SDK ContainerCreate failed: %v\n", err)
+					statusData := `{"status":"failed"}`
+					req, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
 					req.Header.Set("Content-Type", "application/json")
-					req.Header.Set("x-agent-key", "aether-secret")
+					req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
 					http.DefaultClient.Do(req)
 					continue
 				}
-				fmt.Printf("-> Container %s started successfully!\n", app.Name)
+
+				if err := dockerCli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+					fmt.Printf("-> SDK ContainerStart failed: %v\n", err)
+					continue
+				}
+				
+				fmt.Printf("-> Container %s started successfully via Docker SDK!\n", app.Name)
 			}
 
 			// Update control plane status
 			statusData := `{"status":"running"}`
-			req, _ := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+			req, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
 			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("x-agent-key", "aether-secret")
+			req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
 			http.DefaultClient.Do(req)
 			fmt.Printf("-> Control plane updated successfully!\n\n")
 		}
 
 		termUrl := fmt.Sprintf("%s/v1/applications?status=terminating", controlPlaneURL)
 		req, _ := http.NewRequest("GET", termUrl, nil)
-		req.Header.Set("x-agent-key", "aether-secret")
+		req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
 		termResp, err := http.DefaultClient.Do(req)
 		if err == nil {
 			termBody, _ := io.ReadAll(termResp.Body)
 			termResp.Body.Close()
 			var termApps []Application
 			if json.Unmarshal(termBody, &termApps) == nil && len(termApps) > 0 {
-				fmt.Printf("Found %d terminating applications\n", len(termApps))
 				for _, app := range termApps {
 					safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
 					fmt.Printf("-> Stopping and removing container: aetherhost-%s\n", safeName)
-					exec.Command("docker", "rm", "-f", "aetherhost-"+safeName).Run()
-					exec.Command("docker", "compose", "-f", fmt.Sprintf("./deployments/%s/docker-compose.yml", safeName), "-p", "aetherhost-"+safeName, "down").Run()
+					
+					// Use SDK to remove container if it exists
+					ctx := context.Background()
+					if err := dockerCli.ContainerRemove(ctx, "aetherhost-"+safeName, container.RemoveOptions{Force: true}); err != nil {
+					    // Fallback to exec for compose projects
+					    exec.Command("docker", "compose", "-f", fmt.Sprintf("./deployments/%s/docker-compose.yml", safeName), "-p", "aetherhost-"+safeName, "down").Run()
+					}
 					os.RemoveAll(fmt.Sprintf("./deployments/%s", safeName))
 					
 					delReq, _ := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/applications/%s/hard", controlPlaneURL, app.ID), nil)
-					delReq.Header.Set("x-agent-key", "aether-secret")
+					delReq.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
 					delResp, err := http.DefaultClient.Do(delReq)
 					if err == nil {
 						delResp.Body.Close()
@@ -238,6 +343,6 @@ func main() {
 			}
 		}
 
-		time.Sleep(5 * time.Second)
+		select { case <-ctx.Done(): return; case <-time.After(5 * time.Second): }
 	}
 }

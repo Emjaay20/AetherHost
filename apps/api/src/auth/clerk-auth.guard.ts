@@ -7,8 +7,17 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { clerkClient } from '@clerk/clerk-sdk-node';
+import { timingSafeEqual } from 'crypto';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { SYSTEM_TENANT_ID } from './tenant.decorator';
+
+function safeCompare(a: string, b: string): boolean {
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
@@ -30,7 +39,7 @@ export class ClerkAuthGuard implements CanActivate {
     const agentKey = request.headers['x-agent-key'] as string | undefined;
     const expectedAgentKey = process.env.AGENT_SECRET_KEY;
 
-    if (agentKey && expectedAgentKey && agentKey === expectedAgentKey) {
+    if (agentKey && expectedAgentKey && safeCompare(agentKey, expectedAgentKey)) {
       request.tenantId = SYSTEM_TENANT_ID;
       return true;
     }
@@ -49,8 +58,8 @@ export class ClerkAuthGuard implements CanActivate {
       });
       request.tenantId = decoded.sub;
       return true;
-    } catch (error) {
-      this.logger.error(`Clerk auth failed: ${(error as Error).message}`);
+    } catch (error: any) {
+      this.logger.error(`Clerk auth failed: ${error.message}`);
       throw new UnauthorizedException('Invalid or expired token');
     }
   }

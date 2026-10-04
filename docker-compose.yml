@@ -18,6 +18,14 @@ services:
     networks:
       - aetherhost-net
 
+  redis:
+    image: redis:7-alpine
+    container_name: aetherhost-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - aetherhost-net
+
   traefik:
     image: traefik:latest
     container_name: aetherhost-traefik
@@ -27,11 +35,34 @@ services:
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=aetherhost-net"
       - "--entrypoints.web.address=:80"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.addEntryPointsLabels=true"
+      - "--metrics.prometheus.addRoutersLabels=true"
+      - "--metrics.prometheus.addServicesLabels=true"
+      - "--entrypoints.metrics.address=:8082"
     ports:
       - "80:80"
       - "8080:8080"
+      - "8082:8082"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - aetherhost-net
+
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - aetherhost-net
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    ports:
+      - "3003:3000"
     networks:
       - aetherhost-net
 
