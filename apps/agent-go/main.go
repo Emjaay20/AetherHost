@@ -137,41 +137,60 @@ func main() {
 			appImage, _ := getDockerImageAndCmdForRuntime(app.Runtime)
 			
 			var safeCompose string
-			if app.Runtime == "wordpress" {
-				safeCompose = fmt.Sprintf(`
+				if app.Runtime == "wordpress" {
+					safeCompose = fmt.Sprintf(`
 services:
-  db:
-    image: mysql:8.0
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: wordpress
+  nginx:
+    image: nginx:alpine
     volumes:
-      - db_data:/var/lib/mysql
-  app:
-    image: wordpress:latest
-    environment:
-      WORDPRESS_DB_HOST: db:3306
-      WORDPRESS_DB_USER: root
-      WORDPRESS_DB_PASSWORD: root
-      WORDPRESS_DB_NAME: wordpress
+      - /app/apps/runtimes/wordpress/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /app/apps/runtimes/wordpress/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - wordpress_data:/var/www/html
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=aetherhost-net"
       - "traefik.http.routers.%s-app.rule=Host(%s.localhost)"
       - "traefik.http.services.%s-app.loadbalancer.server.port=80"
-  code-server:
-    image: codercom/code-server:latest
-    command: --auth none
-    volumes:
-      - .:/home/coder/project
-    labels:
-      - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.%s-ide.rule=Host(%s-ide.localhost)"
-      - "traefik.http.services.%s-ide.loadbalancer.server.port=8080"
+    networks:
+      - aetherhost-net
+    depends_on:
+      - php
+  php:
+    image: wordpress:php8.2-fpm-alpine
+    volumes:
+      - /app/apps/runtimes/wordpress/php/zzz-custom.conf:/usr/local/etc/php-fpm.d/zzz-custom.conf:ro
+      - wordpress_data:/var/www/html
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: aether-secret-pass
+      WORDPRESS_DB_NAME: wordpress
+    networks:
+      - aetherhost-net
+    depends_on:
+      - db
+  db:
+    image: mariadb:10.11
+    command: --defaults-file=/etc/mysql/mariadb.cnf
+    volumes:
+      - /app/apps/runtimes/wordpress/mariadb.cnf:/etc/mysql/mariadb.cnf:ro
+      - db_data:/var/lib/mysql
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: aether-secret-pass
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    networks:
+      - aetherhost-net
+
 volumes:
+  wordpress_data:
   db_data:
-`, safeName, "`"+safeName+"`", safeName, safeName, "`"+safeName+"`", safeName)
+
+networks:
+  aetherhost-net:
+    external: true
+`, safeName, "\`"+safeName+"\`", safeName)
 			} else {
 				startCmd := "sleep 3600"
 				if app.Runtime == "nodejs" {
