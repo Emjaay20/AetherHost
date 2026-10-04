@@ -63,8 +63,58 @@ services:
     image: grafana/grafana:10.4.0
     ports:
       - "3003:3000"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/provisioning/dashboards:/var/lib/grafana/dashboards
     networks:
       - aetherhost-net
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: aetherhost-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://aether:aether@postgres:5432/aetherhost?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=3000
+    ports:
+      - "3000:3000"
+    networks:
+      - aetherhost-net
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: aetherhost-dashboard
+    ports:
+      - "3002:3000"
+    networks:
+      - aetherhost-net
+
+  agent:
+    build:
+      context: apps/agent-go
+      dockerfile: Dockerfile
+    container_name: aetherhost-agent
+    environment:
+      - CONTROL_PLANE_URL=http://api:3000
+      - AGENT_SECRET_KEY=aether-secret
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./deployments:/app/deployments
+    networks:
+      - aetherhost-net
+    depends_on:
+      - api
 
 networks:
   aetherhost-net:
