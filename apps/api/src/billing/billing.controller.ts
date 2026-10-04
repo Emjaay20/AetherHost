@@ -147,6 +147,9 @@ export class BillingController {
     if (body.type === 'subscription.canceled') {
       action = 'cancel';
       status = 'canceled';
+    } else if (body.type === 'invoice.payment_failed') {
+      action = 'fail';
+      status = 'payment_failed';
     } else if (body.type !== 'checkout.session.completed') {
       return { message: 'Ignored non-success event' };
     }
@@ -174,15 +177,23 @@ export class BillingController {
     }
 
     const body = req.body;
-    if (body.type !== 'checkout.session.completed' && body.type !== 'invoice.payment_succeeded') {
+    let action = 'process';
+    let status = 'succeeded';
+    if (body.type === 'customer.subscription.deleted') {
+      action = 'cancel';
+      status = 'canceled';
+    } else if (body.type === 'invoice.payment_failed') {
+      action = 'fail';
+      status = 'payment_failed';
+    } else if (body.type !== 'checkout.session.completed' && body.type !== 'invoice.payment_succeeded') {
       return { message: 'Ignored non-success event' };
     }
     const providerEventId = body.id;
     const tenantId = body.data?.object?.metadata?.tenantId || body.metadata?.tenantId;
-    const planId = body.data?.object?.metadata?.planId || body.metadata?.planId;
+    const planId = body.data?.object?.metadata?.planId || body.metadata?.planId || 'starter';
     this.requireWebhookFields(providerEventId, tenantId, planId);
 
-    return this.queueWebhook('stripe', providerEventId, tenantId, planId);
+    return this.queueWebhook('stripe', providerEventId, tenantId, planId, action, status);
   }
 
   @Public()
@@ -200,13 +211,24 @@ export class BillingController {
     }
 
     const body = req.body;
-    if (body.event !== 'charge.success') return { message: 'Ignored non-success event' };
+    let action = 'process';
+    let status = 'succeeded';
+    
+    if (body.event === 'subscription.disable') {
+      action = 'cancel';
+      status = 'canceled';
+    } else if (body.event === 'invoice.payment_failed' || body.event === 'charge.failed') {
+      action = 'fail';
+      status = 'payment_failed';
+    } else if (body.event !== 'charge.success') {
+       return { message: 'Ignored non-success event' };
+    }
     const providerEventId = String(body.data?.id ?? '');
     const tenantId = body.data?.metadata?.tenantId;
-    const planId = body.data?.metadata?.planId;
+    const planId = body.data?.metadata?.planId || 'starter';
     this.requireWebhookFields(providerEventId, tenantId, planId);
 
-    return this.queueWebhook('paystack', providerEventId, tenantId, planId);
+    return this.queueWebhook('paystack', providerEventId, tenantId, planId, action, status);
   }
 
   @Public()

@@ -87,6 +87,46 @@ export class BillingService {
           return { message: 'Downgraded successfully' };
         }
 
+        if (status === 'payment_failed') {
+          // 1. Record unpaid invoice
+          const invoiceAmount = plan.monthlyPriceCent || 0;
+          if (invoiceAmount > 0) {
+            await tx.invoice.upsert({
+              where: { invoiceId: providerEventId },
+              update: { status: 'failed' },
+              create: {
+                tenantId,
+                provider,
+                invoiceId: providerEventId,
+                amountCent: invoiceAmount,
+                status: 'failed',
+              }
+            });
+          }
+
+          // 2. Audit Log
+          await tx.auditLog.create({
+            data: {
+              tenantId,
+              action: 'PAYMENT_FAILED',
+              metadata: { planId, provider, providerEventId }
+            }
+          });
+          
+          // 3. Suspend applications (Dunning action)
+          await tx.application.updateMany({
+            where: { tenantId },
+            data: { status: 'suspended' }
+          });
+
+          // 4. Downgrade to starter
+          const starterPlan = PLANS['starter'];
+          await this.entitlements.applyPlan(tenantId, starterPlan, tx);
+
+          this.logger.warn(`Payment failed for ${tenantId}. Apps suspended and plan downgraded.`);
+          return { message: 'Payment failed, dunning applied' };
+        }
+
         // 1. Create Invoice Record
         const invoiceAmount = plan.monthlyPriceCent || 0;
         if (invoiceAmount > 0) {
