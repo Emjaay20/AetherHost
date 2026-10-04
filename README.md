@@ -68,7 +68,7 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 | **CI Pipeline** | **Real** | GitHub Actions workflow for build + test on push. |
 | **Actual Hosting (Servers)** | **Stubbed** | Emits successful `ApplicationStatusChanged` events instead of running Terraform/SSH. |
 | **AI LLM Gateway** | **Stubbed** | Fully functional model factory, defaults to a zero-cost local string stub unless OpenAI keys are provided. |
-| **Stripe/Paystack Dashboard** | **Stubbed** | Skips the redirect to Stripe Checkout, allowing API simulation of the webhook payload instead. |
+| **Bachs.io Checkout** | **Real** | Integrates directly with the Bachs.io API to generate real checkout session URLs and handles asynchronous `subscription.canceled` webhooks. Stripe is disabled. |
 
 ## How to Run
 

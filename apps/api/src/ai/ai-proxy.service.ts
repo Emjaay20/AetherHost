@@ -30,14 +30,13 @@ export class AiProxyService {
   async complete(tenantId: string, prompt: string, purpose: string, applicationId?: string) {
     this.applyGuardrails(prompt);
 
-    const allowed = await this.entitlements.consumeAiRequestSlot(tenantId, 0);
+    const { allowed } = await this.entitlements.canAiRequest(tenantId);
     if (!allowed) throw new ForbiddenException('AI request quota exhausted');
 
     const start = Date.now();
     const result = await this.models.get().complete({ tenantId, prompt, purpose });
     const latencyMs = Date.now() - start;
     
-    // Some models don't return prompt/completion tokens, so we backfill using tiktoken if they are 0
     let { promptTokens, completionTokens } = result;
     if (promptTokens === 0 && completionTokens === 0) {
       const { getEncoding } = require('js-tiktoken');
@@ -47,7 +46,8 @@ export class AiProxyService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      await this.entitlements.recordAiTokenUsage(tenantId, promptTokens + completionTokens, tx);
+      const consumed = await this.entitlements.consumeAiRequestSlot(tenantId, promptTokens + completionTokens, tx);
+      if (!consumed) throw new ForbiddenException('AI request quota exhausted during processing');
 
       const id = `ai_${slugify(purpose)}_${Math.random().toString(36).substring(2, 7)}`;
       const costUsd = (promptTokens + completionTokens) * 0.000002;
@@ -62,7 +62,7 @@ export class AiProxyService {
     this.applyGuardrails(prompt);
 
     return new Observable((subscriber) => {
-      this.entitlements.consumeAiRequestSlot(tenantId, 0).then((allowed) => {
+      this.entitlements.canAiRequest(tenantId).then(({ allowed }) => {
         if (!allowed) {
           subscriber.error(new ForbiddenException('AI request quota exhausted'));
           return;
@@ -82,14 +82,18 @@ export class AiProxyService {
               outputAccumulator += chunk;
               subscriber.next({ data: chunk } as MessageEvent);
             }
-            // Emit usage domain event asynchronously after completion
+            
             const { getEncoding } = require('js-tiktoken');
             const enc = getEncoding("cl100k_base");
             const promptTokens = enc.encode(prompt).length;
             const completionTokens = enc.encode(outputAccumulator).length;
             const estimatedTokens = promptTokens + completionTokens;
+            
             await this.prisma.$transaction(async (tx) => {
-              await this.entitlements.recordAiTokenUsage(tenantId, estimatedTokens, tx);
+              const consumed = await this.entitlements.consumeAiRequestSlot(tenantId, estimatedTokens, tx);
+              if (!consumed) {
+                 console.warn(`Tenant ${tenantId} exhausted quota concurrently during stream`);
+              }
               await this.events.publish(new AIRequestCompleted(tenantId, applicationId, {
                 id: `ai_${slugify(purpose)}_${Math.random().toString(36).substring(2, 7)}`,
                 model: 'streamed',

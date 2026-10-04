@@ -38,7 +38,7 @@ describe('AiProxyService', () => {
   });
 
   it('does not call the model when quota is exhausted', async () => {
-    entitlements.consumeAiRequestSlot.mockResolvedValue(false);
+    entitlements.canAiRequest.mockResolvedValue({ allowed: false });
     const complete = jest.fn();
     models.get.mockReturnValue({ complete });
 
@@ -46,11 +46,11 @@ describe('AiProxyService', () => {
       service.complete('t1', 'hello', 'ops_insight'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(complete).not.toHaveBeenCalled();
-    expect(entitlements.recordAiTokenUsage).not.toHaveBeenCalled();
+    expect(entitlements.consumeAiRequestSlot).not.toHaveBeenCalled();
   });
 
   it('does not meter when the model adapter fails', async () => {
-    entitlements.consumeAiRequestSlot.mockResolvedValue(true);
+    entitlements.canAiRequest.mockResolvedValue({ allowed: true });
     models.get.mockReturnValue({
       complete: jest.fn().mockRejectedValue(new Error('provider 500')),
     });
@@ -58,11 +58,12 @@ describe('AiProxyService', () => {
     await expect(
       service.complete('t1', 'hello', 'ops_insight'),
     ).rejects.toThrow('provider 500');
-    expect(entitlements.recordAiTokenUsage).not.toHaveBeenCalled();
+    expect(entitlements.consumeAiRequestSlot).not.toHaveBeenCalled();
     expect(events.publish).not.toHaveBeenCalled();
   });
 
   it('meters only after a successful completion', async () => {
+    entitlements.canAiRequest.mockResolvedValue({ allowed: true });
     entitlements.consumeAiRequestSlot.mockResolvedValue(true);
     models.get.mockReturnValue({
       complete: jest.fn().mockResolvedValue({
@@ -75,8 +76,7 @@ describe('AiProxyService', () => {
 
     const result = await service.complete('t1', 'hello', 'ops_insight');
     expect(result.output).toBe('ok');
-    expect(entitlements.consumeAiRequestSlot).toHaveBeenCalledWith('t1', 0);
-    expect(entitlements.recordAiTokenUsage).toHaveBeenCalledWith('t1', 10, {});
+    expect(entitlements.consumeAiRequestSlot).toHaveBeenCalledWith('t1', 10, {});
     expect(events.publish).toHaveBeenCalledTimes(1);
   });
 });

@@ -30,7 +30,6 @@ services:
     image: traefik:latest
     container_name: aetherhost-traefik
     command:
-      - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=aetherhost-net"
@@ -42,7 +41,6 @@ services:
       - "--entrypoints.metrics.address=:8082"
     ports:
       - "80:80"
-      - "8080:8080"
       - "8082:8082"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"

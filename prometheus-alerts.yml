@@ -1,0 +1,10 @@
+groups:
+  - name: aetherhost-alerts
+    rules:
+      - alert: HighAiProxyUsage
+        expr: rate(aetherhost_ai_requests_total{model="proxy"}[5m]) > 100
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High AI Proxy Request Rate"

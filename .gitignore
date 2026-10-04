@@ -10,3 +10,4 @@ dist
 apps/agent-go/agent-go
 deployments/
 target/
+apps/agent-go/agent
