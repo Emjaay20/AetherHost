@@ -26,3 +26,15 @@ func TestGetDockerImageAndCmdForRuntime(t *testing.T) {
 		}
 	}
 }
+
+func TestSecuritySanitizer(t *testing.T) {
+	unsafeCompose1 := "services:\n  app:\n    privileged: true"
+	if !strings.Contains(unsafeCompose1, "privileged:") {
+		t.Errorf("Sanitizer failed to detect privileged:")
+	}
+
+	unsafeCompose2 := "services:\n  app:\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock"
+	if !strings.Contains(unsafeCompose2, "/var/run/docker.sock") {
+		t.Errorf("Sanitizer failed to detect docker.sock")
+	}
+}

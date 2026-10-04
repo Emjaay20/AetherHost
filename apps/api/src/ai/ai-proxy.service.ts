@@ -39,7 +39,7 @@ export class AiProxyService {
     
     let { promptTokens, completionTokens } = result;
     if (promptTokens === 0 && completionTokens === 0) {
-      const { getEncoding } = require('js-tiktoken');
+      
       const enc = getEncoding("cl100k_base");
       promptTokens = enc.encode(prompt).length;
       completionTokens = enc.encode(result.output).length;
@@ -83,7 +83,7 @@ export class AiProxyService {
               subscriber.next({ data: chunk } as MessageEvent);
             }
             
-            const { getEncoding } = require('js-tiktoken');
+            
             const enc = getEncoding("cl100k_base");
             const promptTokens = enc.encode(prompt).length;
             const completionTokens = enc.encode(outputAccumulator).length;

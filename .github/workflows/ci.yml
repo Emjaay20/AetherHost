@@ -38,5 +38,11 @@ jobs:
     - name: Build API
       run: pnpm --filter @aetherhost/api build
       
+      - name: Build and Test Go Agent
+        working-directory: apps/agent-go
+        run: |
+          go test -v ./...
+          go build -o agent main.go
+
     - name: Build Dashboard
       run: pnpm --filter dashboard build

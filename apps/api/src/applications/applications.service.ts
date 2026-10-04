@@ -14,7 +14,6 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
-import { clerkClient } from '@clerk/clerk-sdk-node';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
