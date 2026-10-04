@@ -11,3 +11,5 @@ apps/agent-go/agent-go
 deployments/
 target/
 apps/agent-go/agent
+apps/agent-go/agent
+apps/agent-go/agent-go

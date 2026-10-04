@@ -5,9 +5,9 @@ RUN go mod download
 COPY apps/agent-go/ ./
 RUN go build -o agent main.go
 
-FROM docker:dind
+FROM alpine:3.20
+RUN apk add --no-cache docker-cli docker-cli-compose
 WORKDIR /app
 COPY --from=builder /app/agent /app/agent
-# Copy runtimes into the agent image
 COPY apps/runtimes /app/runtimes
 ENTRYPOINT ["/app/agent"]

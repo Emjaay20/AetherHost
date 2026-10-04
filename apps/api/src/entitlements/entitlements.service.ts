@@ -73,7 +73,7 @@ export class EntitlementsService {
         applications: record.limitApplications,
         aiRequests: record.limitAiRequests,
         storageMb: record.limitStorageMb || 512,
-        bandwidthMb: tenant.planId === 'growth' ? 102400 : 10240, // 100 GB vs 10 GB
+        bandwidthMb: (PLANS[tenant.planId as keyof typeof PLANS]?.entitlements?.limits?.bandwidthGb ?? 10) * 1024,
       },
       usage: {
         applications: record.usageApplications,

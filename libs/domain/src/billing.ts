@@ -58,3 +58,25 @@ export const PLANS: Record<string, CatalogPlan> = {
     entitlements: GROWTH_ENTITLEMENTS,
   },
 };
+
+export interface TenantEntitlementsView {
+  tenantId: string;
+  planId: string;
+  subscriptionStatus: string;
+  limits: {
+    applications: number;
+    aiRequests: number;
+    storageMb: number;
+    bandwidthMb: number;
+  };
+  usage: {
+    applications: number;
+    aiRequests: number;
+    storageMb: number;
+    bandwidthMb: number;
+  };
+  metrics: {
+    totalAiTokens: number;
+    currentMemoryMb: number;
+  };
+}

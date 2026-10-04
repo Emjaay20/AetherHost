@@ -13,3 +13,6 @@ scrape_configs:
     metrics_path: "/v1/metrics"
     static_configs:
       - targets: ["api:3000"]
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:8082']

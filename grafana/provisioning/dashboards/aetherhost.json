@@ -1,0 +1,17 @@
+{
+  "title": "AetherHost Control Plane",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "AI Requests Total",
+      "targets": [{"expr": "sum(rate(aetherhost_ai_requests_total[5m])) by (tenant_id)"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeseries",
+      "title": "Provisioned Apps Total",
+      "targets": [{"expr": "aetherhost_applications_provisioned_total"}],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    }
+  ]
+}
