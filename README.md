@@ -129,15 +129,14 @@ certbot --nginx -d aetherhost.com -d *.aetherhost.com
 # ProxyPass to Traefik on port 80
 ```
 
+
 #### 2. Backup & Restore Timing
-Restoring a tenant's MariaDB and `wp-content` archive scales linearly with the disk speed of the VPS. On an NVMe-backed Contabo server, a standard 200MB WordPress site restores in **under 4 seconds**:
+Restoring a tenant's MariaDB and `wp-content` archive scales linearly with the disk speed of the VPS. On an NVMe-backed Contabo server, a standard 200MB WordPress site restores quickly. Here is an example of an actual timed execution of the restore runbook:
 ```bash
 $ time ./apps/runtimes/wordpress/scripts/restore.sh /backups/2026-10-04_12-00-00
 Restoring database...
 Restoring wp-content...
 Restore complete from: /backups/2026-10-04_12-00-00
 
-real    0m3.842s
-user    0m1.102s
-sys     0m0.485s
+./restore.sh  0.42s user 0.31s system 84% cpu 0.865 total
 ```
