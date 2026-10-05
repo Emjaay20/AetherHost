@@ -1,6 +1,6 @@
 module aetherhost/agent-go
 
-go 1.26.0
+go 1.22.4
 
 require github.com/docker/docker v28.5.2+incompatible
 

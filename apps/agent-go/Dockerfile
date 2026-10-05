@@ -1,9 +1,10 @@
-FROM golang:1.26-alpine AS builder
+FROM alpine:3.20 AS builder
+RUN apk add --no-cache go
 WORKDIR /app
 COPY apps/agent-go/go.mod apps/agent-go/go.sum ./
 RUN go mod download
 COPY apps/agent-go/ ./
-RUN go build -o agent main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags '-extldflags "-static"' -o agent .
 
 FROM alpine:3.20
 RUN apk add --no-cache docker-cli docker-cli-compose

@@ -23,7 +23,23 @@ export class ApplicationsController {
     if (tenantId === SYSTEM_TENANT_ID) {
       throw new ForbiddenException('Agent cannot create applications');
     }
-    return this.applicationsService.create(tenantId, body.name, body.runtime, body.githubRepo, body.dockerCompose, body.aiFiles);
+    return this.applicationsService.create(
+      tenantId,
+      body.name,
+      body.runtime,
+      body.githubRepo,
+      body.dockerCompose,
+      body.aiFiles,
+      body.githubRepoName,
+      body.githubRepoDescription,
+      body.dockerImage,
+      body.envVars,
+      body.workerCommand,
+      body.withPostgres,
+      body.withRedis,
+      body.port,
+      body.healthPath,
+    );
   }
 
   @Get()

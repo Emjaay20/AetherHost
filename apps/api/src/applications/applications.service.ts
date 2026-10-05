@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { assertWorkloadSpec } from './workload-spec';
 import { randomUUID } from 'crypto';
 import {
   Application,
@@ -34,7 +35,24 @@ export class ApplicationsService {
     aiFiles?: { path: string; content: string }[],
     githubRepoName?: string,
     githubRepoDescription?: string,
+    dockerImage?: string,
+    envVars?: Record<string, string>,
+    workerCommand?: string,
+    withPostgres?: boolean,
+    withRedis?: boolean,
+    port?: number,
+    healthPath?: string,
   ): Promise<Application> {
+    assertWorkloadSpec({
+      runtime,
+      dockerImage,
+      envVars,
+      workerCommand,
+      withPostgres,
+      withRedis,
+      port,
+      healthPath,
+    });
     return this.prisma.$transaction(async (tx) => {
       const slotConsumed =
         await this.entitlementsService.consumeApplicationSlot(tenantId, tx);
@@ -56,6 +74,13 @@ export class ApplicationsService {
           githubRepoDescription,
           dockerCompose,
           aiFiles: aiFiles ? JSON.parse(JSON.stringify(aiFiles)) : null,
+          dockerImage: dockerImage?.trim() || null,
+          envVars: envVars ? JSON.parse(JSON.stringify(envVars)) : null,
+          workerCommand: workerCommand?.trim() || null,
+          withPostgres,
+          withRedis,
+          port,
+          healthPath,
         },
       });
 

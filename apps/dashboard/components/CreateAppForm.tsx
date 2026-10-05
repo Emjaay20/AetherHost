@@ -25,6 +25,7 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedRuntime, setSelectedRuntime] = useState('nodejs')
+  const [dockerImage, setDockerImage] = useState('')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -73,7 +74,7 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative w-full max-w-lg bg-[#09090b] border border-border/50 rounded-2xl shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[#09090b] border border-border/50 rounded-2xl shadow-2xl"
             >
               <div className="p-6 border-b border-border/50 flex items-center justify-between bg-gradient-to-br from-muted/30 to-transparent">
                 <h2 className="text-xl font-semibold tracking-tight">Deploy Application</h2>
@@ -121,6 +122,77 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
                   </div>
                 </div>
                 
+                {selectedRuntime === 'nodejs' && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label htmlFor="dockerImage" className="text-sm font-medium text-foreground/80">Container image</label>
+                      <input
+                        id="dockerImage"
+                        name="dockerImage"
+                        value={dockerImage}
+                        onChange={(e) => setDockerImage(e.target.value)}
+                        placeholder="ghcr.io/acme/signaldesk:1"
+                        className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50 text-foreground shadow-inner"
+                      />
+                      <p className="text-xs text-muted-foreground">Leave empty for a source container. An image deploys the API, an optional worker, and private Postgres or Redis.</p>
+                    </div>
+                    {dockerImage.trim() && (
+                      <>
+                        <div className="space-y-2">
+                          <label htmlFor="workerCommand" className="text-sm font-medium text-foreground/80">Worker command</label>
+                          <input
+                            id="workerCommand"
+                            name="workerCommand"
+                            placeholder="node dist/worker.js"
+                            className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50 text-foreground shadow-inner"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-2">
+                            <label htmlFor="port" className="text-sm font-medium text-foreground/80">Port</label>
+                            <input
+                              id="port"
+                              name="port"
+                              type="number"
+                              defaultValue={3000}
+                              className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground shadow-inner"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label htmlFor="healthPath" className="text-sm font-medium text-foreground/80">Health path</label>
+                            <input
+                              id="healthPath"
+                              name="healthPath"
+                              defaultValue="/health"
+                              className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-foreground shadow-inner"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-4 text-sm">
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="withPostgres" value="true" defaultChecked />
+                            Postgres
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input type="checkbox" name="withRedis" value="true" defaultChecked />
+                            Redis
+                          </label>
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="envVars" className="text-sm font-medium text-foreground/80">Env</label>
+                          <textarea
+                            id="envVars"
+                            name="envVars"
+                            rows={3}
+                            placeholder="LOG_LEVEL=info"
+                            className="w-full bg-muted/30 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50 text-foreground shadow-inner font-mono text-sm"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {selectedRuntime === 'github' && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2">
                     <label htmlFor="githubRepo" className="text-sm font-medium text-foreground/80">GitHub Repository URL</label>

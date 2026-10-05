@@ -4,14 +4,13 @@ dist
 *.log
 .env
 .env.*
+!.env.example
 .DS_Store
+*.orig
+*.rej
+*.bak
 
-# Go / Rust binaries and build directories
+apps/agent-go/agent
 apps/agent-go/agent-go
 deployments/
 target/
-apps/agent-go/agent
-apps/agent-go/agent
-apps/agent-go/agent-go
-apps/agent-go/agent
-apps/agent-go/agent-go

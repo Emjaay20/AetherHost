@@ -1,8 +1,6 @@
 # AetherHost Go Agent
 
-This is the first out-of-process worker for AetherHost.
-
-It acts as a worker node that polls the control plane for `pending` applications of a specific runtime, and instructs the control plane to provision them.
+Out-of-process worker. It polls the control plane for `pending` applications and renders Compose on the local Docker host. It does not execute tenant-supplied Compose.
 
 ## Usage
 
@@ -12,5 +10,12 @@ go run .
 ```
 
 ### Environment Variables
-- `CONTROL_PLANE_URL` - Default: `http://127.0.0.1:3000`
-- `AGENT_RUNTIME` - The runtime to watch for. Default: `nodejs`
+- `CONTROL_PLANE_URL` - Default: `http://localhost:3000`
+- `AGENT_SECRET_KEY` - Sent as `x-agent-key`
+- `HOST_PWD` - Host path to the repo, used by the WordPress runtime. Default: `/opt/aetherhost`
+
+## Workload contract
+
+Set `dockerImage` on a Node application to deploy a multi-process app. The same image runs the API. `workerCommand` starts a second process. `withPostgres` and `withRedis` attach private sidecars. The agent writes `DATABASE_URL` and `REDIS_URL`. Traefik routes only the API, at `http://<name>.localhost`.
+
+The image must already be public or present on the host. This is not Kubernetes.

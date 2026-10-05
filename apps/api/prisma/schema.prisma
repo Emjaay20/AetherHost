@@ -31,6 +31,13 @@ model Application {
   githubRepoDescription String?
   dockerCompose         String?
   aiFiles               Json?
+  dockerImage           String?
+  envVars               Json?
+  workerCommand         String?
+  withPostgres          Boolean  @default(false)
+  withRedis             Boolean  @default(false)
+  port                  Int      @default(3000)
+  healthPath            String   @default("/health")
   createdAt             DateTime @default(now())
   tenant                Tenant   @relation(fields: [tenantId], references: [id])
 
