@@ -10,7 +10,14 @@ export async function upgradeTenantPlan(tenantId: string, planId: string) {
 
   // Create a checkout session on the Bachs API
   try {
-    const res = await fetch('https://api.bachs.io/v1/checkout-sessions', {
+    if (process.env.BILLING_ALLOW_SIMULATE === 'true') {
+      return { checkoutUrl: `http://localhost:3002/admin?success=true&simulate=true&plan=${planId}` };
+    }
+    const baseUrl = process.env.BACHS_SECRET_KEY?.startsWith('sk_sandbox_') 
+      ? 'https://sandbox-api.bachs.io' 
+      : 'https://api.bachs.io';
+
+    const res = await fetch(`${baseUrl}/v1/checkout-sessions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`,
@@ -24,8 +31,8 @@ export async function upgradeTenantPlan(tenantId: string, planId: string) {
           tenantId: tenantId,
           planId: planId
         },
-        success_url: 'http://localhost:3002/admin',
-        cancel_url: 'http://localhost:3002/admin'
+        success_url: 'http://localtest.me:3002/admin',
+        cancel_url: 'http://localtest.me:3002/admin'
       })
     });
 

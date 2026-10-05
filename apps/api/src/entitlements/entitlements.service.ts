@@ -49,7 +49,7 @@ export class EntitlementsService {
     
     const cacheKey = `entitlements:${tenantId}`;
     if (!tx) {
-      const cached = await this.cacheManager.get(cacheKey);
+      const cached = await this.cacheManager.get<TenantEntitlementsView>(cacheKey);
       if (cached) return cached;
     }
 
