@@ -17,6 +17,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN cd apps/api && npx prisma generate
 RUN pnpm --filter @aetherhost/api build
 
 # Production stage

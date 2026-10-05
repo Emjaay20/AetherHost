@@ -56,9 +56,16 @@ export class ProvisioningService {
       return { status: 'skipped or not found' };
     }
 
-    // NEW: Delegate docker and github runtimes to the external Go Agent
-    if (app.runtime === 'docker' || app.runtime === 'github') {
-      return { status: 'pending', message: 'Delegated to external orchestrator' };
+    if (
+      app.runtime === 'docker' ||
+      app.runtime === 'github' ||
+      app.runtime === 'wordpress' ||
+      app.dockerImage
+    ) {
+      return {
+        status: 'pending',
+        message: 'Delegated to external orchestrator',
+      };
     }
 
     try {

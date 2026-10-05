@@ -1,2 +1,4 @@
 node_modules
 apps/dashboard/.next
+agent
+agent-go

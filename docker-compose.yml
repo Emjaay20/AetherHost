@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: aether
       POSTGRES_DB: aetherhost
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,6 +30,8 @@ services:
     image: traefik:latest
     container_name: aetherhost-traefik
     command:
+      - "--api.dashboard=false"
+      - "--api.insecure=false"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=aetherhost-net"

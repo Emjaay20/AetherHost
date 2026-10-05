@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ApplicationsService } from './applications.service';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
@@ -56,6 +56,33 @@ describe('ApplicationsService', () => {
     await expect(service.remove('app_1', 'tenant-a')).rejects.toBeInstanceOf(
       ForbiddenException,
     );
+  });
+
+  it('rejects a worker without an image before consuming quota', async () => {
+    const entitlements = { consumeApplicationSlot: jest.fn() };
+    const guarded = new ApplicationsService(
+      entitlements as unknown as EntitlementsService,
+      {} as DomainEventsService,
+      prisma as unknown as PrismaService,
+    );
+    await expect(
+      guarded.create(
+        'tenant-a',
+        'signaldesk',
+        'nodejs' as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'node dist/worker.js',
+        true,
+        true,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(entitlements.consumeApplicationSlot).not.toHaveBeenCalled();
   });
 
   it('rejects delete of a missing application', async () => {

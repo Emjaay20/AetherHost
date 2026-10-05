@@ -1,3 +1,4 @@
+import { getEncoding } from 'js-tiktoken';
 import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EntitlementsService } from '../entitlements/entitlements.service';

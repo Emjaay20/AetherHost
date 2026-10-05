@@ -5,6 +5,22 @@ import { auth } from '@clerk/nextjs/server'
 
 const API_URL = process.env.API_URL ?? process.env.CONTROL_PLANE_URL ?? 'http://127.0.0.1:3000'
 
+function parseEnv(raw: string): Record<string, string> | { error: string } {
+  const env: Record<string, string> = {}
+  if (!raw.trim()) return env
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eq = trimmed.indexOf('=')
+    if (eq <= 0) return { error: `Invalid env line: ${trimmed}` }
+    const key = trimmed.slice(0, eq).trim()
+    const value = trimmed.slice(eq + 1)
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) return { error: `Invalid env key: ${key}` }
+    env[key] = value
+  }
+  return env
+}
+
 export async function getEntitlements() {
   const { userId, getToken } = await auth();
   if (!userId) return null;
@@ -49,6 +65,24 @@ export async function createApplication(formData: FormData) {
 
   const name = formData.get('name') as string
   const runtime = formData.get('runtime') as string
+  const githubRepo = String(formData.get('githubRepo') ?? '').trim()
+  const dockerImage = String(formData.get('dockerImage') ?? '').trim()
+  const body: Record<string, unknown> = { name, runtime }
+  if (githubRepo) body.githubRepo = githubRepo
+  if (dockerImage) {
+    body.dockerImage = dockerImage
+    const workerCommand = String(formData.get('workerCommand') ?? '').trim()
+    const healthPath = String(formData.get('healthPath') ?? '').trim()
+    const portRaw = String(formData.get('port') ?? '').trim()
+    if (workerCommand) body.workerCommand = workerCommand
+    if (healthPath) body.healthPath = healthPath
+    if (portRaw) body.port = Number(portRaw)
+    body.withPostgres = formData.get('withPostgres') === 'true'
+    body.withRedis = formData.get('withRedis') === 'true'
+    const env = parseEnv(String(formData.get('envVars') ?? ''))
+    if ('error' in env) return { error: env.error }
+    if (Object.keys(env).length > 0) body.envVars = env
+  }
 
   try {
     const res = await fetch(`${API_URL}/v1/applications`, {
@@ -57,7 +91,7 @@ export async function createApplication(formData: FormData) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ name, runtime })
+      body: JSON.stringify(body)
     })
 
     if (!res.ok) {

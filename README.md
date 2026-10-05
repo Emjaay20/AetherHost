@@ -14,7 +14,7 @@ Agencies often string together disparate services for hosting, billing, and inte
 ## Architecture
 
 ```text
-Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
+Dashboard (Next.js)      External Webhooks (Bachs / Paystack)
         │                                │
         ▼                                ▼
 ┌────────────────────────────────────────────────────────┐
@@ -51,6 +51,7 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 | `013` | **Swappable Model Adapters**: Safely swap a zero-cost local stub for real LLM providers (e.g. OpenAI). |
 | `014` | **Payments Apply Plans**: Webhooks idempotently upgrade catalog plans without coupling to core logic. |
 | `015` | **Liveness vs. Readiness Probes**: Separate health endpoints for orchestrators; IaC skeleton for future deploys. |
+| `016` | **Workload Contract**: An image deploy is API + optional worker + private Postgres/Redis. The agent renders Compose and probes health. |
 
 ## Real vs. Stub
 
@@ -59,16 +60,17 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 | **Control Plane API** | **Real** | Full NestJS domain, transactions, atomic locking, endpoints. |
 | **Persistence** | **Real** | Postgres via Prisma. Survives restarts. |
 | **Quotas & Entitlements** | **Real** | Strict enforcement using atomic SQL statements. |
-| **Payment Webhooks** | **Real** | HMAC verification (Stripe / Paystack / Bachs). Unique `providerEventId` is the replay lock. `/simulate` is off unless `BILLING_ALLOW_SIMULATE=true`. |
+| **Payment Webhooks** | **Real** | HMAC verification for Bachs and Paystack. Checkout is Bachs only. Stripe Checkout is not wired. `/simulate` is off unless `BILLING_ALLOW_SIMULATE=true`. |
 | **Invoicing** | **Real** | `Invoice` records created on plan upgrades with accurate `amountCent` from catalog. |
 | **Bandwidth Metering** | **Real** | Per-tenant `usageBandwidthMb` / `limitBandwidthGb` tracked in entitlements. |
 | **Authentication (Clerk)** | **Real** | Clerk JWT verification on API guards + Next.js middleware. |
 | **Dashboard (Next.js)** | **Real** | Agency control plane with app management, billing, admin panel, and event log. |
 | **Go Agent Worker** | **Real** | Polling worker built in Go that interacts with the API via HTTP. |
-| **CI Pipeline** | **Real** | GitHub Actions workflow for build + test on push. |
-| **Actual Hosting (Servers)** | **Stubbed** | Emits successful `ApplicationStatusChanged` events instead of running Terraform/SSH. |
+| **CI Pipeline** | **Real** | `.github/workflows/ci.yml` runs API tests, the Go agent tests, and both builds on push to `main`. |
+| **Actual Hosting (Servers)** | **Local only** | The Go agent renders Nginx, PHP-FPM, and MariaDB Compose on the Docker host. No public VPS, TLS, or Terraform. |
+| **Image workloads** | **Local Docker** | One image can run as API + worker with private Postgres and Redis. The agent injects env and probes health before `running`. Not Kubernetes. |
 | **AI LLM Gateway** | **Stubbed** | Fully functional model factory, defaults to a zero-cost local string stub unless OpenAI keys are provided. |
-| **Bachs.io Checkout** | **Real** | Integrates directly with the Bachs.io API to generate real checkout session URLs and handles asynchronous `subscription.canceled` webhooks. Stripe is disabled. |
+| **Bachs.io Checkout** | **Real** | Checkout sessions go to Bachs. Do not describe this as Stripe Checkout. |
 
 ## How to Run
 
@@ -103,25 +105,26 @@ Dashboard (Next.js)      External Webhooks (Stripe/Paystack)
 2. **Payment Webhook Replays**: `WebhookEvent` unique constraints guarantee a webhook payload is never processed twice (strict idempotency).
 3. **AI Provider Failures**: The proxy authorizes first, calls the LLM, and only meters on success. A provider 500 error will not burn the tenant's AI request quota.
 4. **Eventual Consistency**: Provisioning failures (when real) will not roll back the commercial transaction; the app simply remains `PENDING` for a retry.
+5. **Workload Health**: An image deploy is not `running` until the API health path answers. A failed probe tears the stack down.
 
 ---
 > *"The control plane is honest: entitlements own commercial truth, workers are replaceable, AI is proxied, payments are idempotent. Probes exist; managed Postgres + container orchestration is the next apply."*
 
 ### Recent Architectural Hardening
-- **Message Queues (BullMQ + Redis):** Webhooks are completely decoupled from HTTP ingestion. Stripe/Paystack/Bachs webhooks are dropped onto a Redis-backed BullMQ queue, ensuring zero data loss during high load or database contention.
+- **Message Queues (BullMQ + Redis):** Bachs and Paystack webhooks are queued on BullMQ. A replay with the same `providerEventId` is ignored.
 - **Accurate Token Metering:** The AI gateway now uses the official `js-tiktoken` (cl100k_base BPE) to accurately meter streaming LLM responses down to the byte-pair, replacing naive length-based estimations.
-- **SRE Orchestration (Go Agent):** The Go provisioning agent has been refactored to use the official Docker Go SDK (`github.com/docker/docker/client`) and generates strictly-isolated Compose definitions, completely stripping execution of untrusted tenant payloads.
-- **Graceful Shutdowns:** The Go agent leverages native OS signal handlers and `context.Context` to safely finish active provisioning jobs before shutting down, preventing zombie containers during deployments.
+- **SRE Orchestration (Go Agent):** The agent polls the API and renders Compose. Image workloads get an API, a worker, and private Postgres/Redis. Tenant Compose is not executed.
+- **Shutdown:** On SIGINT or SIGTERM the agent stops polling. An in-flight `docker compose up` is not cancelled.
 
 ### What's Next
 - Infrastructure-as-code (Terraform) for managed Postgres + container orchestration
 - SLO targets and observability dashboards once deployed to a real environment
-- Production multi-node WordPress fleet orchestration (single-host Compose already works)
+- Production multi-node WordPress fleet orchestration
 
 ### Production Runbooks (Automattic Track)
 
-#### 1. Host Nginx & TLS (Contabo VPS)
-When deploying to a public VPS (like Contabo), AetherHost relies on a host-level Nginx reverse proxy to terminate TLS (via Let's Encrypt) before routing traffic to the internal Traefik ingress network.
+#### 1. Host Nginx and TLS
+This is not deployed. Hosting in this repo is local Docker. If you later put it on a VPS, terminate TLS on host Nginx and proxy to Traefik. Do not claim that server until it is yours.
 ```bash
 # Install Host Nginx & Certbot
 apt install nginx python3-certbot-nginx
@@ -130,13 +133,5 @@ certbot --nginx -d aetherhost.com -d *.aetherhost.com
 ```
 
 
-#### 2. Backup & Restore Timing
-Restoring a tenant's MariaDB and `wp-content` archive scales linearly with the disk speed of the VPS. On an NVMe-backed Contabo server, a standard 200MB WordPress site restores quickly. Here is an example of an actual timed execution of the restore runbook:
-```bash
-$ time ./apps/runtimes/wordpress/scripts/restore.sh /backups/2026-10-04_12-00-00
-Restoring database...
-Restoring wp-content...
-Restore complete from: /backups/2026-10-04_12-00-00
-
-./restore.sh  0.42s user 0.31s system 84% cpu 0.865 total
-```
+#### 2. Backup and restore
+`apps/runtimes/wordpress/scripts/backup.sh` and `restore.sh` dump MariaDB and `wp-content`. No restore has been timed on a public VPS. Run `time ./apps/runtimes/wordpress/scripts/restore.sh <backup-dir>` yourself before quoting a number.

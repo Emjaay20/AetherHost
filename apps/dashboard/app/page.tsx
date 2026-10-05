@@ -8,6 +8,7 @@ import Sidebar from '../components/Sidebar'
 import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box, Terminal, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 import Link from 'next/link';
+import { safeAppName } from '../lib/app-name';
 
 export default async function Dashboard() {
   const apps = await getApplications()
@@ -186,9 +187,9 @@ export default async function Dashboard() {
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {(app.runtime === 'docker' || app.aiFiles) && (
+                          {(app.runtime === 'docker' || app.aiFiles) && !app.dockerImage && (
                             <a 
-                              href={`http://${app.name.toLowerCase().replace(/ /g, '-')}-ide.localhost`}
+                              href={`http://${safeAppName(app.name)}-ide.localhost`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-sm font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-3 py-1.5 rounded-lg border border-cyan-500/30 hover:bg-cyan-500/10 flex items-center gap-1"
@@ -198,7 +199,7 @@ export default async function Dashboard() {
                             </a>
                           )}
                           <a 
-                            href={`http://${app.name.toLowerCase().replace(/ /g, '-')}.localhost`}
+                            href={`http://${safeAppName(app.name)}.localhost`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/50 hover:bg-muted/50"

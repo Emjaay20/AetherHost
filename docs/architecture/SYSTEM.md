@@ -59,3 +59,14 @@ This document outlines the four critical request flows within the AetherHost con
 4. Transaction commits.
 
 *Key takeaway:* A verified, idempotent webhook is the sole mutator of a tenant's billing tier. The hosting and AI systems remain completely decoupled from Stripe.
+
+## 5. Image Workload → Agent Compose
+
+**Trigger:** `POST /v1/applications` with `dockerImage` (API, optional worker command, Postgres, Redis)
+
+1. The API validates the image, worker command, and env. It rejects tenant overrides of `DATABASE_URL` and `REDIS_URL`.
+2. The row stays `pending`. The Nest tick does not mark it `running`.
+3. The Go agent generates Compose: API and worker from the same image, Postgres and Redis on a private network, Traefik only on the API.
+4. The agent writes credentials into env files, probes the health path, then sets `running`. A failed probe tears the stack down and sets `failed`.
+
+*Key takeaway:* The hosted app does not import AetherHost. The platform owns the process graph and the datastore URLs.

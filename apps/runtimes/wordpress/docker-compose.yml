@@ -25,9 +25,8 @@ services:
 
   db:
     image: mariadb:10.11
-    command: --defaults-file=/etc/mysql/mariadb.cnf
     volumes:
-      - ./mariadb.cnf:/etc/mysql/mariadb.cnf:ro
+      - ./mariadb.cnf:/etc/mysql/conf.d/mariadb.cnf:ro
       - db_data:/var/lib/mysql
     environment:
       MARIADB_DATABASE: wordpress
