@@ -20,6 +20,10 @@ export async function createCheckoutSession(planId: string) {
     cache: 'no-store'
   });
   
-  if (!res.ok) throw new Error('Failed to create checkout');
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('API Error:', res.status, errorText);
+    throw new Error('Failed to create checkout');
+  }
   return res.json();
 }

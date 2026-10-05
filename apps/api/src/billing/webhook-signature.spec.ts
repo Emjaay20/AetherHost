@@ -7,7 +7,7 @@ import * as crypto from 'crypto';
 
 describe('webhook signatures', () => {
   const rawBody = Buffer.from(
-    '{"id":"evt_1","metadata":{"tenantId":"t1","planId":"growth"}}',
+    '{"id":"evt_1","metadata":{"tenantId":"t1","planId":"pro"}}',
   );
 
   it('accepts a valid Stripe signature and rejects a stale or wrong one', () => {

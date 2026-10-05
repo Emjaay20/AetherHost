@@ -39,7 +39,7 @@ describe('BillingService', () => {
     );
 
     await expect(
-      service.processWebhook('paystack', 'evt_1', 't1', 'growth'),
+      service.processWebhook('paystack', 'evt_1', 't1', 'pro'),
     ).resolves.toEqual({
       message: 'Plan applied successfully',
     });
@@ -51,7 +51,7 @@ describe('BillingService', () => {
     prisma.$transaction.mockRejectedValue({ code: 'P2002' });
 
     await expect(
-      service.processWebhook('paystack', 'evt_1', 't1', 'growth'),
+      service.processWebhook('paystack', 'evt_1', 't1', 'pro'),
     ).resolves.toEqual({
       message: 'Already processed',
     });

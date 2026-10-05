@@ -1,0 +1,3 @@
+    if (process.env.BILLING_ALLOW_SIMULATE === 'true') {
+      return { checkoutUrl: `http://localhost:3002/admin?success=true&simulate=true&plan=${planId}` };
+    }

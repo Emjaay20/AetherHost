@@ -17,7 +17,7 @@ export default function AdminDashboard({ tenants, analytics }: { tenants: any[],
   )
 
   const currentMrr = analytics?.mrr?.[0]?.mrr || 0;
-  const growthTenants = analytics?.cohorts?.[0]?.growth_tenants || 0;
+  const paidTenants = analytics?.cohorts?.[0]?.new_tenants || 0;
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -47,9 +47,9 @@ export default function AdminDashboard({ tenants, analytics }: { tenants: any[],
         <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm">
           <div className="flex items-center gap-3 text-muted-foreground mb-3">
             <TrendingUp className="w-5 h-5 text-blue-500" />
-            <h3 className="font-medium text-sm">Growth Tier Users</h3>
+            <h3 className="font-medium text-sm">New Tenants (Cohort)</h3>
           </div>
-          <p className="text-3xl font-bold">{growthTenants}</p>
+          <p className="text-3xl font-bold">{paidTenants}</p>
         </div>
         <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm">
           <div className="flex items-center gap-3 text-muted-foreground mb-3">
@@ -114,7 +114,7 @@ export default function AdminDashboard({ tenants, analytics }: { tenants: any[],
                   </td>
                   <td className="p-4">
                     <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                      t.planId === 'growth' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' : 
+                      t.planId === 'max' ? 'bg-purple-500/10 text-purple-500 border border-purple-500/20' : t.planId === 'pro' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' : 
                       'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
                     }`}>
                       {t.planId.toUpperCase()}
@@ -140,7 +140,7 @@ export default function AdminDashboard({ tenants, analytics }: { tenants: any[],
                     <button 
                       onClick={async () => {
                         setLoading(true);
-                        const result = await upgradeTenantPlan(t.id, t.planId === 'growth' ? 'starter' : 'growth');
+                        const result = await upgradeTenantPlan(t.id, t.planId === 'starter' ? 'pro' : 'starter');
                         if (result?.checkoutUrl) {
                           window.location.href = result.checkoutUrl;
                         } else {
@@ -151,7 +151,7 @@ export default function AdminDashboard({ tenants, analytics }: { tenants: any[],
                       disabled={loading}
                       className="px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-500 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
                     >
-                      {t.planId === 'growth' ? 'Downgrade Plan' : 'Generate Bachs Invoice'}
+                      {t.planId !== 'starter' ? 'Downgrade to Starter' : 'Upgrade to Pro'}
                     </button>
                   </td>
                 </tr>

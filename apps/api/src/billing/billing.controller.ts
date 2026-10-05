@@ -83,26 +83,31 @@ export class BillingController {
       throw new BadRequestException('Only Bachs.io is supported for checkout');
     }
 
-    if (process.env.BILLING_ALLOW_SIMULATE === 'true') {
-      return {
-        message: 'Checkout initialized (Simulated)',
-        checkoutUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true&simulate=true&plan=${body.planId}`
-      };
-    }
 
-    const res = await fetch('https://api.bachs.io/v1/checkout-sessions', {
+
+    console.log('Using Bachs API Key starting with:', process.env.BACHS_SECRET_KEY?.substring(0, 15));
+
+    const baseUrl = process.env.BACHS_SECRET_KEY?.startsWith('sk_sandbox_') 
+      ? 'https://sandbox-api.bachs.io' 
+      : 'https://api.bachs.io';
+
+    const res = await fetch(`${baseUrl}/v1/checkout-sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`
       },
       body: JSON.stringify({
-        amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
-        currency: 'USD',
-        productName: `AetherHost ${body.planId.toUpperCase()} Plan`,
-        successUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true`,
-        cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?canceled=true`,
-        metadata: { tenantId, planId: body.planId }
+        customer: { email: `${tenantId}@aetherhost.com`, name: tenantId },
+        pricing: {
+          amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
+          currency: 'USD',
+          productName: `AetherHost ${body.planId.toUpperCase()} Plan`
+        },
+        success_url: `${process.env.FRONTEND_URL || 'http://localtest.me:3002'}/billing?success=true`,
+        cancel_url: `${process.env.FRONTEND_URL || 'http://localtest.me:3002'}/billing?canceled=true`,
+        webhook_url: `https://sabbath-hyphen-pulverize.ngrok-free.dev/v1/billing/webhooks/bachs`,
+        reference: `${tenantId}:${body.planId}`
       })
     });
 
@@ -115,40 +120,7 @@ export class BillingController {
     const data = await res.json();
     return {
       message: 'Checkout initialized',
-      checkoutUrl: data.url
-    };
-  }
-        message: 'Checkout initialized (Simulated)',
-        checkoutUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true&simulate=true&plan=${body.planId}`
-      };
-    }
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`
-      },
-      body: JSON.stringify({
-        amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
-        currency: 'USD',
-        productName: `AetherHost ${body.planId.toUpperCase()} Plan`,
-        successUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true`,
-        cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?canceled=true`,
-        metadata: { tenantId, planId: body.planId }
-      })
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('Bachs API Error:', errText);
-      throw new BadRequestException(`Failed to generate Bachs invoice. Error: ${errText}`);
-    }
-
-    const data = await res.json();
-    return {
-      message: 'Checkout initialized',
-      checkoutUrl: data.checkoutUrl,
-      tenantId,
-      planId: body.planId,
+      checkoutUrl: data.checkout_url
     };
   }
 
@@ -173,10 +145,12 @@ export class BillingController {
     @Headers('x-bachs-signature') signature: string,
     @Headers('x-bachs-timestamp') timestamp: string,
   ) {
+    console.log('Received Bachs webhook:', req.body);
     const secret = process.env.BACHS_WEBHOOK_SECRET;
     const payloadBuffer = this.requireRawBody(req);
     if (!secret) throw new UnauthorizedException('Webhook secret not configured on server');
     if (!verifyBachsSignature(payloadBuffer, signature, timestamp, secret)) {
+      console.error('Bachs webhook signature verification failed');
       throw new UnauthorizedException('Invalid webhook signature');
     }
 
@@ -190,13 +164,21 @@ export class BillingController {
     } else if (body.type === 'invoice.payment_failed') {
       action = 'fail';
       status = 'payment_failed';
-    } else if (body.type !== 'checkout.session.completed') {
+    } else if (body.type !== 'checkout.completed') {
       return { message: 'Ignored non-success event' };
     }
     
     const providerEventId = body.id;
-    const tenantId = body.metadata?.tenantId;
-    const planId = body.metadata?.planId || 'starter'; // Default to starter if undefined (e.g. for cancellations)
+    let tenantId = body.data?.metadata?.tenantId;
+    let planId = body.data?.metadata?.planId;
+
+    if (body.data?.reference) {
+      const [tId, pId] = body.data.reference.split(':');
+      if (tId) tenantId = tId;
+      if (pId) planId = pId;
+    }
+
+    planId = planId || 'starter'; // Default to starter if undefined
     this.requireWebhookFields(providerEventId, tenantId, planId);
 
     return this.queueWebhook('bachs', providerEventId, tenantId, planId, action, status);
