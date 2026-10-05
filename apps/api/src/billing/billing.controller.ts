@@ -83,6 +83,13 @@ export class BillingController {
       throw new BadRequestException('Only Bachs.io is supported for checkout');
     }
 
+    if (process.env.BILLING_ALLOW_SIMULATE === 'true') {
+      return {
+        message: 'Checkout initialized (Simulated)',
+        checkoutUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true&simulate=true&plan=${body.planId}`
+      };
+    }
+
     const res = await fetch('https://api.bachs.io/v1/checkout-sessions', {
       method: 'POST',
       headers: {
@@ -100,7 +107,40 @@ export class BillingController {
     });
 
     if (!res.ok) {
-      throw new BadRequestException('Failed to generate Bachs invoice');
+      const errText = await res.text();
+      console.error('Bachs API Error:', errText);
+      throw new BadRequestException(`Failed to generate Bachs invoice. Error: ${errText}`);
+    }
+
+    const data = await res.json();
+    return {
+      message: 'Checkout initialized',
+      checkoutUrl: data.url
+    };
+  }
+        message: 'Checkout initialized (Simulated)',
+        checkoutUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true&simulate=true&plan=${body.planId}`
+      };
+    }
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`
+      },
+      body: JSON.stringify({
+        amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
+        currency: 'USD',
+        productName: `AetherHost ${body.planId.toUpperCase()} Plan`,
+        successUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?success=true`,
+        cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:3002'}/billing?canceled=true`,
+        metadata: { tenantId, planId: body.planId }
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('Bachs API Error:', errText);
+      throw new BadRequestException(`Failed to generate Bachs invoice. Error: ${errText}`);
     }
 
     const data = await res.json();
