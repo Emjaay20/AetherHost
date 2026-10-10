@@ -106,7 +106,7 @@ services:
       dockerfile: apps/agent-go/Dockerfile
     container_name: aetherhost-agent
     environment:
-      - CONTROL_PLANE_URL=http://api:3000
+      - CONTROL_PLANE_URL=http://host.docker.internal:3000
       - AGENT_SECRET_KEY=aether-secret
       - HOST_PWD=${PWD}
     volumes:
@@ -115,8 +115,6 @@ services:
       - ./deployments:/app/deployments
     networks:
       - aetherhost-net
-    depends_on:
-      - api
 
 networks:
   aetherhost-net:

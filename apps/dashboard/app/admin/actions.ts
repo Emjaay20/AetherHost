@@ -1,51 +1,148 @@
 'use server'
 
-import { auth } from '@clerk/nextjs/server'
+import { revalidatePath } from 'next/cache'
+import { adminPost } from './admin-api'
 
-const API_URL = process.env.API_URL ?? 'http://127.0.0.1:3000'
-
-export async function upgradeTenantPlan(tenantId: string, planId: string) {
-  const { userId } = await auth();
-  if (!userId) return { error: 'Unauthorized' };
-
-  // Create a checkout session on the Bachs API
-  try {
-    if (process.env.BILLING_ALLOW_SIMULATE === 'true') {
-      return { checkoutUrl: `http://localhost:3002/admin?success=true&simulate=true&plan=${planId}` };
-    }
-    const baseUrl = process.env.BACHS_SECRET_KEY?.startsWith('sk_sandbox_') 
-      ? 'https://sandbox-api.bachs.io' 
-      : 'https://api.bachs.io';
-
-    const res = await fetch(`${baseUrl}/v1/checkout-sessions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        customer: { email: `${tenantId}@test.com`, name: tenantId },
-        product_cart: [{ product_id: planId }], // e.g. "growth"
-        payment_method_types: ['USD_CARD'],
-        metadata: {
-          tenantId: tenantId,
-          planId: planId
-        },
-        success_url: 'http://localtest.me:3002/admin',
-        cancel_url: 'http://localtest.me:3002/admin'
-      })
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error('Failed to create Bachs checkout session:', errorText);
-      return { error: 'Failed to connect to Bachs.io API' };
-    }
-
-    const data = await res.json();
-    return { checkoutUrl: data.url }; // Return the URL so the dashboard can redirect
-  } catch (error) {
-    console.error('Error contacting Bachs.io:', error);
-    return { error: 'Network error connecting to Bachs.io' };
+export async function syncDirectory() {
+  const result = await adminPost<{
+    scanned: number
+    upserted: number
+    failed: number
+    truncated: boolean
+  }>('/directory/sync')
+  if (!result.ok) {
+    return { error: result.error === 'unreachable' ? 'Control plane unreachable' : 'Reconcile failed' }
   }
+  revalidatePath('/admin')
+  return result.data
 }
+
+export async function applyOperatorPlan(
+  tenantId: string,
+  planId: string,
+  idempotencyKey: string,
+) {
+  const result = await adminPost<{ message: string; planId: string; reconciled: boolean }>(
+    `/tenants/${encodeURIComponent(tenantId)}/plan`,
+    { planId, idempotencyKey },
+  )
+  if (!result.ok) {
+    return { error: result.detail || 'Plan apply failed' }
+  }
+  revalidatePath('/admin')
+  revalidatePath(`/admin/tenants/${tenantId}`)
+  return result.data
+}
+
+export async function impersonateTenant(tenantId: string, tenantName: string) {
+  const result = await adminPost<{
+    success: boolean
+    tenantId: string
+    tenantName: string
+    token: string
+    url?: string
+  }>(`/tenants/${encodeURIComponent(tenantId)}/impersonate`)
+
+  if (!result.ok) {
+    return { error: result.detail || 'Failed to impersonate tenant' }
+  }
+
+  const { cookies } = await import('next/headers')
+  const cookieStore = await cookies()
+  cookieStore.set('aether_impersonate_tenant', tenantId, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 3600, // 1 hour
+  })
+  cookieStore.set('aether_impersonate_tenant_name', tenantName, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 3600,
+  })
+
+  revalidatePath('/console')
+  return { success: true, url: result.data.url }
+}
+
+export async function stopImpersonating() {
+  const { cookies } = await import('next/headers')
+  const { redirect } = await import('next/navigation')
+  const cookieStore = await cookies()
+  cookieStore.delete('aether_impersonate_tenant')
+  cookieStore.delete('aether_impersonate_tenant_name')
+  revalidatePath('/console')
+  redirect('/admin')
+}
+
+export async function replayTenantWebhooks(tenantId: string) {
+  const result = await adminPost<{
+    success: boolean
+    count: number
+    message: string
+  }>(`/tenants/${encodeURIComponent(tenantId)}/replay-webhooks`)
+
+  if (!result.ok) {
+    return { error: result.detail || 'Failed to replay webhooks' }
+  }
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/tenants/${tenantId}`)
+  return result.data
+}
+
+export async function refundTenant(
+  tenantId: string,
+  amountDollars?: number,
+  reason?: string,
+) {
+  const result = await adminPost<{
+    success: boolean
+    invoiceId: string
+    refundedAmountDollars: number
+    message: string
+  }>(`/tenants/${encodeURIComponent(tenantId)}/refund`, {
+    amountDollars,
+    reason,
+  })
+
+  if (!result.ok) {
+    return { error: result.detail || 'Failed to issue refund' }
+  }
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/tenants/${tenantId}`)
+  return result.data
+}
+
+export async function suspendTenant(tenantId: string, reason?: string) {
+  const result = await adminPost<{
+    success: boolean
+    message: string
+  }>(`/tenants/${encodeURIComponent(tenantId)}/suspend`, { reason })
+
+  if (!result.ok) {
+    return { error: result.detail || 'Failed to suspend tenant' }
+  }
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/tenants/${tenantId}`)
+  return result.data
+}
+
+export async function unsuspendTenant(tenantId: string) {
+  const result = await adminPost<{
+    success: boolean
+    message: string
+  }>(`/tenants/${encodeURIComponent(tenantId)}/unsuspend`)
+
+  if (!result.ok) {
+    return { error: result.detail || 'Failed to reactivate tenant' }
+  }
+
+  revalidatePath('/admin')
+  revalidatePath(`/admin/tenants/${tenantId}`)
+  return result.data
+}
+

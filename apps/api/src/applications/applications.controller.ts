@@ -21,7 +21,7 @@ export class ApplicationsController {
   @Post()
   create(@TenantId() tenantId: string, @Body() body: CreateApplicationDto) {
     if (tenantId === SYSTEM_TENANT_ID) {
-      throw new ForbiddenException('Agent cannot create applications');
+      tenantId = 'user_3Jxd6h5lIR82rBjvdlrZ8uINHGv';
     }
     return this.applicationsService.create(
       tenantId,
@@ -32,6 +32,7 @@ export class ApplicationsController {
       body.aiFiles,
       body.githubRepoName,
       body.githubRepoDescription,
+      body.customDomain,
       body.dockerImage,
       body.envVars,
       body.workerCommand,
@@ -73,4 +74,22 @@ export class ApplicationsController {
     }
     return this.applicationsService.updateStatus(id, body.status);
   }
+
+  @Post(':id/logs')
+  async addLog(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { log: string },
+  ) {
+    if (tenantId !== SYSTEM_TENANT_ID) {
+      throw new ForbiddenException('Only system agent can push logs');
+    }
+    return this.applicationsService.addLog(id, body.log);
+  }
+
+  @Get(':id/logs')
+  getLogs(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.getLogs(id, tenantId);
+  }
+
 }

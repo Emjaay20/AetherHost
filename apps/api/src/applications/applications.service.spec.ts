@@ -75,9 +75,10 @@ describe('ApplicationsService', () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
-        'node dist/worker.js',
+        undefined, // customDomain
+        undefined, // dockerImage
+        undefined, // envVars
+        'node dist/worker.js', // workerCommand
         true,
         true,
       ),

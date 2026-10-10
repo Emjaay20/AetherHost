@@ -56,7 +56,20 @@ export class ClerkAuthGuard implements CanActivate {
       const decoded = await clerkClient.verifyToken(token, {
         secretKey: process.env.CLERK_SECRET_KEY,
       });
+      request.actorTenantId = decoded.sub;
       request.tenantId = decoded.sub;
+
+      const impersonateHeader = request.headers['x-impersonate-tenant'] as string | undefined;
+      if (impersonateHeader) {
+        const admins = (process.env.ADMIN_TENANT_IDS || '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (admins.includes(decoded.sub)) {
+          request.tenantId = impersonateHeader.trim();
+        }
+      }
+
       return true;
     } catch (error: any) {
       this.logger.error(`Clerk auth failed: ${error.message}`);

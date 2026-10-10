@@ -8,3 +8,11 @@ export const TenantId = createParamDecorator(
     return request.tenantId;
   },
 );
+
+export const ActorTenantId = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.actorTenantId || request.tenantId;
+  },
+);
+

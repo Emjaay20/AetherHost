@@ -46,11 +46,19 @@ export class BillingService {
     tenantId: string,
     planId: string,
     status: string = 'succeeded',
+    actor?: { id: string },
   ) {
     const plan = PLANS[planId];
     if (!plan) {
       throw new BadRequestException(`Unknown plan: ${planId}`);
     }
+
+    const subscriptionStatus =
+      status === 'payment_failed'
+        ? 'past_due'
+        : status === 'canceled'
+          ? 'cancelled'
+          : 'active';
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -68,6 +76,10 @@ export class BillingService {
           // Downgrade to starter
           const starterPlan = PLANS['starter'];
           await this.entitlements.applyPlan(tenantId, starterPlan, tx);
+          await tx.tenant.update({
+            where: { id: tenantId },
+            data: { subscriptionStatus },
+          });
           
           // Suspend apps exceeding the new limit
           const apps = await tx.application.findMany({
@@ -109,7 +121,7 @@ export class BillingService {
             data: {
               tenantId,
               action: 'PAYMENT_FAILED',
-              metadata: { planId, provider, providerEventId }
+              metadata: this.auditMetadata(planId, provider, providerEventId, actor),
             }
           });
           
@@ -122,6 +134,10 @@ export class BillingService {
           // 4. Downgrade to starter
           const starterPlan = PLANS['starter'];
           await this.entitlements.applyPlan(tenantId, starterPlan, tx);
+          await tx.tenant.update({
+            where: { id: tenantId },
+            data: { subscriptionStatus },
+          });
 
           this.logger.warn(`Payment failed for ${tenantId}. Apps suspended and plan downgraded.`);
           return { message: 'Payment failed, dunning applied' };
@@ -149,11 +165,15 @@ export class BillingService {
           data: {
             tenantId,
             action: 'PLAN_UPGRADED',
-            metadata: { planId, provider, providerEventId }
+            metadata: this.auditMetadata(planId, provider, providerEventId, actor),
           }
         });
 
         await this.entitlements.applyPlan(tenantId, plan, tx);
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: { subscriptionStatus },
+        });
 
         await this.events.publish(
           new PaymentSucceeded(tenantId, {
@@ -177,6 +197,20 @@ export class BillingService {
       }
       throw error;
     }
+  }
+
+  private auditMetadata(
+    planId: string,
+    provider: string,
+    providerEventId: string,
+    actor?: { id: string },
+  ) {
+    return {
+      planId,
+      provider,
+      providerEventId,
+      ...(actor ? { actorId: actor.id, source: 'operator' } : {}),
+    };
   }
 }
 
