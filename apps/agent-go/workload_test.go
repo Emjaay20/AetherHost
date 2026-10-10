@@ -124,4 +124,19 @@ func TestSafeAppName(t *testing.T) {
 	if safeAppName("My App") != "my-app" {
 		t.Fatal(safeAppName("My App"))
 	}
+	if safeAppName("../shared/deployment") != "shared-deployment" {
+		t.Fatal(safeAppName("../shared/deployment"))
+	}
+}
+
+func TestValidCustomDomain(t *testing.T) {
+	if !validCustomDomain("app.example.com") {
+		t.Fatal("expected a valid custom domain")
+	}
+	if validCustomDomain("bad domain.example.com") {
+		t.Fatal("expected invalid hostname to be rejected")
+	}
+	if validCustomDomain("signaldesk.localhost") {
+		t.Fatal("expected platform hostname to be rejected")
+	}
 }

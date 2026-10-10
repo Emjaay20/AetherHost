@@ -186,10 +186,15 @@ func main() {
 
 					sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning initiated for '%s' (Runtime: %s)", time.Now().Format("15:04:05"), app.Name, app.Runtime))
 
-					if app.DockerCompose != "" && rejectTenantCompose(app.DockerCompose) {
-						errMsg := fmt.Sprintf("[%s] Security check failed: unsafe compose file", time.Now().Format("15:04:05"))
+					if (app.DockerCompose != "" && rejectTenantCompose(app.DockerCompose)) || !validCustomDomain(app.CustomDomain) {
+						errMsg := fmt.Sprintf("[%s] Security check failed: unsafe compose or custom domain", time.Now().Format("15:04:05"))
 						sendAppLog(controlPlaneURL, app.ID, errMsg)
-						fmt.Printf("-> Security check failed: unsafe compose file\n")
+						fmt.Printf("-> Security check failed: unsafe compose or custom domain\n")
+						statusData := `{"status":"failed"}`
+						req, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
+						req.Header.Set("Content-Type", "application/json")
+						req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
+						http.DefaultClient.Do(req)
 						continue
 					}
 
@@ -197,18 +202,18 @@ func main() {
 						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cloning repository: %s", time.Now().Format("15:04:05"), app.GithubRepo))
 						fmt.Printf("-> Cloning github repository: %s\n", app.GithubRepo)
 						exec.Command("rm", "-rf", appDir).Run()
-						
+
 						repoUrl := app.GithubRepo
 						if app.GithubToken != "" && strings.HasPrefix(repoUrl, "https://github.com/") {
 							repoUrl = strings.Replace(repoUrl, "https://github.com/", fmt.Sprintf("https://%s@github.com/", app.GithubToken), 1)
 						}
-						
+
 						cloneCmd := exec.Command("git", "clone", repoUrl, appDir)
 						out, err := cloneCmd.CombinedOutput()
 						if err != nil {
 							fmt.Printf("-> Git clone failed or was empty: %s\n", string(out))
 						}
-						
+
 						// Write .env file so the build and runtime can access the variables
 						var envStr string
 						for k, v := range app.EnvVars {
@@ -267,9 +272,9 @@ func main() {
 					var safeCompose string
 
 					if app.Runtime == "github" && app.GithubRepo != "" {
-						hostRule := "\"" + safeName + "." + baseDomain + "\""
+						hostRule := "`" + safeName + "." + baseDomain + "`"
 						if app.CustomDomain != "" {
-							hostRule = "\"" + safeName + "." + baseDomain + "\" || Host(\"" + app.CustomDomain + "\")"
+							hostRule += " || Host(`" + app.CustomDomain + "`)"
 						}
 						safeCompose = fmt.Sprintf(`
 services:
@@ -279,7 +284,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.%s-app.rule=Host(%%s)"
+      - "traefik.http.routers.%s-app.rule=Host(%s)"
       - "traefik.http.services.%s-app.loadbalancer.server.port=3000"
     networks:
       - aetherhost-net
@@ -468,7 +473,7 @@ networks:
 			var termApps []Application
 			if json.Unmarshal(termBody, &termApps) == nil && len(termApps) > 0 {
 				for _, app := range termApps {
-					safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
+					safeName := safeAppName(app.Name)
 					fmt.Printf("-> Stopping and removing container: aetherhost-%s\n", safeName)
 					exec.Command("docker", "compose", "-f", fmt.Sprintf("./deployments/%s/docker-compose.yml", safeName), "-p", "aetherhost-"+safeName, "down").Run()
 					os.RemoveAll(fmt.Sprintf("./deployments/%s", safeName))
@@ -494,7 +499,7 @@ networks:
 			var suspApps []Application
 			if json.Unmarshal(suspBody, &suspApps) == nil && len(suspApps) > 0 {
 				for _, app := range suspApps {
-					safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
+					safeName := safeAppName(app.Name)
 					fmt.Printf("-> Suspending container: aetherhost-%s\n", safeName)
 					exec.Command("docker", "compose", "-f", fmt.Sprintf("./deployments/%s/docker-compose.yml", safeName), "-p", "aetherhost-"+safeName, "stop").Run()
 

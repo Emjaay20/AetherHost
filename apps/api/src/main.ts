@@ -39,14 +39,19 @@ async function bootstrap() {
   );
 
   // 3. Swagger / OpenAPI Setup (Universal Gap #4)
-  const config = new DocumentBuilder()
-    .setTitle('AetherHost API')
-    .setDescription('The multi-tenant control plane for AetherHost.')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('v1/docs', app, documentFactory);
+  if (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.ENABLE_SWAGGER === 'true'
+  ) {
+    const config = new DocumentBuilder()
+      .setTitle('AetherHost API')
+      .setDescription('The multi-tenant control plane for AetherHost.')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const documentFactory = () => SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('v1/docs', app, documentFactory);
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }

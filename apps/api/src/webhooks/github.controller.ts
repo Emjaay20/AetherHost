@@ -1,8 +1,17 @@
-import { Controller, Post, Body, Headers } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  Post,
+  Req,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { ApplicationsService } from '../applications/applications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { ApplicationProvisioningRequested } from '@aetherhost/domain';
+import { verifyGithubSignature } from './github-signature';
 
 @Controller('v1/webhooks/github')
 export class GithubWebhookController {
@@ -13,7 +22,22 @@ export class GithubWebhookController {
   ) {}
 
   @Post()
-  async handlePush(@Headers('x-github-event') event: string, @Body() payload: any) {
+  async handlePush(
+    @Headers('x-github-event') event: string,
+    @Headers('x-hub-signature-256') signature: string | undefined,
+    @Req() request: Request & { rawBody?: Buffer },
+    @Body() payload: any,
+  ) {
+    if (
+      !verifyGithubSignature(
+        request.rawBody ?? Buffer.from(''),
+        signature,
+        process.env.GITHUB_WEBHOOK_SECRET,
+      )
+    ) {
+      throw new UnauthorizedException('Invalid GitHub webhook signature');
+    }
+
     if (event === 'push') {
       const repoUrl = payload.repository?.html_url || payload.repository?.clone_url;
       if (!repoUrl) return { status: 'ignored' };

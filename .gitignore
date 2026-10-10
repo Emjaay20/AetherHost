@@ -2,6 +2,7 @@ node_modules
 dist
 .next
 *.log
+*.tsbuildinfo
 .env
 .env.*
 !.env.example

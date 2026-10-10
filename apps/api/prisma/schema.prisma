@@ -29,7 +29,7 @@ model Application {
   githubRepo            String?
   githubRepoName        String?
   githubRepoDescription String?
-  customDomain          String?
+  customDomain          String?  @unique
   dockerCompose         String?
   aiFiles               Json?
   dockerImage           String?

@@ -60,7 +60,7 @@ services:
       timeout: 5s
       retries: 10
     networks:
-      - aetherhost-net
+      - control-plane-net
 
   # =========================================================================
   # 3. Cache & Queue: Redis 7 (Internal Network Only)
@@ -75,7 +75,7 @@ services:
     volumes:
       - redisdata:/data
     networks:
-      - aetherhost-net
+      - control-plane-net
 
   # =========================================================================
   # 4. Control Plane: NestJS Backend API
@@ -101,6 +101,7 @@ services:
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
       - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
       - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
       - BASE_DOMAIN=${BASE_DOMAIN}
@@ -114,6 +115,7 @@ services:
       - "traefik.http.routers.aetherhost-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.aetherhost-api.loadbalancer.server.port=3000"
     networks:
+      - control-plane-net
       - aetherhost-net
 
   # =========================================================================
@@ -168,11 +170,15 @@ services:
       - ${HOST_PWD:-/opt/aetherhost}:/app
       - ${HOST_PWD:-/opt/aetherhost}/deployments:/app/deployments
     networks:
+      - control-plane-net
       - aetherhost-net
 
 networks:
   aetherhost-net:
     name: aetherhost-net
+  control-plane-net:
+    name: aetherhost-control-plane-net
+    internal: true
 
 volumes:
   pgdata:

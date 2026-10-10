@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   ForbiddenException,
   NotFoundException,
@@ -10,7 +12,7 @@ import {
   Runtime,
   ApplicationProvisioningRequested,
 } from '@aetherhost/domain';
-import { slugify } from '@aetherhost/common';
+import { safeAppName, slugify } from '@aetherhost/common';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -45,6 +47,11 @@ export class ApplicationsService {
     port?: number,
     healthPath?: string,
   ): Promise<Application> {
+    if (customDomain?.trim()) {
+      throw new BadRequestException(
+        'Custom domains require ownership verification before provisioning',
+      );
+    }
     assertWorkloadSpec({
       runtime,
       dockerImage,
@@ -55,10 +62,24 @@ export class ApplicationsService {
       port,
       healthPath,
     });
+    const normalizedName = safeAppName(name);
     return this.prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.findUnique({ where: { id: tenantId } });
       if (tenant?.subscriptionStatus === 'suspended') {
         throw new ForbiddenException('Tenant account is suspended');
+      }
+
+      const activeApps =
+        (await tx.application.findMany({
+          where: { status: { notIn: ['terminated', 'failed'] } },
+          select: { name: true },
+        })) ?? [];
+      if (
+        activeApps.some((existing) => safeAppName(existing.name) === normalizedName)
+      ) {
+        throw new ConflictException(
+          `Application route "${normalizedName}" is already in use`,
+        );
       }
 
       const slotConsumed =
@@ -334,8 +355,12 @@ if __name__ == '__main__':
 
   async updateCustomDomain(id: string, tenantId: string, customDomain: string | null): Promise<void> {
     await this.assertOwned(id, tenantId);
-    
-    // In a real app, verify the customDomain is unique and valid
+    if (customDomain?.trim()) {
+      throw new BadRequestException(
+        'Custom domains require ownership verification before provisioning',
+      );
+    }
+
     await this.prisma.application.update({
       where: { id },
       data: { customDomain },
