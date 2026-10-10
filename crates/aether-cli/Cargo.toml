@@ -1,0 +1,16 @@
+[package]
+name = "aether-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Official Developer CLI for AetherHost PaaS"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.38", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+colored = "2.1"
+comfy-table = "7.1"
+indicatif = "0.17"
+dirs = "5.0"

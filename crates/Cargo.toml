@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "aether-cli",
+    "aether-logd",
+    "aether-router",
+]
+resolver = "2"
