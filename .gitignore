@@ -16,3 +16,5 @@ apps/agent-go/agent
 apps/agent-go/agent-go
 deployments/
 target/
+crates/target/
+**/target/

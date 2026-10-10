@@ -1,0 +1,15 @@
+[package]
+name = "aether-router"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance edge reverse proxy and bandwidth meter for AetherHost"
+
+[dependencies]
+axum = { version = "0.7" }
+tokio = { version = "1.38", features = ["full"] }
+reqwest = { version = "0.12", features = ["stream"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tower-http = { version = "0.5", features = ["trace"] }
