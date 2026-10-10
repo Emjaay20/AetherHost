@@ -14,6 +14,7 @@ var (
 	healthPathPattern    = regexp.MustCompile(`^/[a-zA-Z0-9._/-]{0,80}$`)
 	workerCommandPattern = regexp.MustCompile(`^[A-Za-z0-9_ ./:=@,-]{1,200}$`)
 	envKeyPattern        = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,63}$`)
+	domainPattern        = regexp.MustCompile(`^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$`)
 )
 
 func runtimeSpec(runtime string) (string, string) {
@@ -75,6 +76,22 @@ func isReservedEnv(key string) bool {
 	}
 }
 
+func validCustomDomain(domain string) bool {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return true
+	}
+	if len(domain) > 253 || !domainPattern.MatchString(domain) {
+		return false
+	}
+	baseDomain := os.Getenv("BASE_DOMAIN")
+	if baseDomain == "" {
+		baseDomain = "localhost"
+	}
+	return !strings.EqualFold(domain, baseDomain) &&
+		!strings.HasSuffix(strings.ToLower(domain), "."+strings.ToLower(baseDomain))
+}
+
 type WorkloadPlan struct {
 	Compose     string
 	AppEnv      string
@@ -112,6 +129,9 @@ func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
 	}
 	if dbPass == "" || strings.ContainsAny(dbPass, "\r\n") {
 		return WorkloadPlan{}, fmt.Errorf("invalid database password")
+	}
+	if !validCustomDomain(app.CustomDomain) {
+		return WorkloadPlan{}, fmt.Errorf("invalid custom domain")
 	}
 
 	name := safeAppName(app.Name)
