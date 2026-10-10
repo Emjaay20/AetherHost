@@ -22,10 +22,27 @@ export class CreateApplicationDto {
   @IsEnum(Runtime)
   runtime: Runtime;
 
+  @IsOptional()
+  @IsString()
   githubRepo?: string;
+
+  @IsOptional()
+  @IsString()
   githubRepoName?: string;
+
+  @IsOptional()
+  @IsString()
   githubRepoDescription?: string;
+
+  @IsOptional()
+  @IsString()
+  customDomain?: string;
+
+  @IsOptional()
+  @IsString()
   dockerCompose?: string;
+
+  @IsOptional()
   aiFiles?: { path: string; content: string }[];
   @IsOptional()
   @IsString()

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -21,6 +22,12 @@ func runtimeSpec(runtime string) (string, string) {
 		return "node:18-alpine", "npm install --no-fund && npm start"
 	case "python":
 		return "python:3.11-slim", "pip install -r requirements.txt && python main.py"
+	case "go":
+		return "golang:1.22-alpine", "go build -o app . && ./app"
+	case "php":
+		return "php:8.2-cli-alpine", "php -S 0.0.0.0:8000 -t public"
+	case "rust":
+		return "rust:1.80-slim", "cargo build --release && ./target/release/app"
 	default:
 		return "alpine:latest", "sleep 3600"
 	}
@@ -115,7 +122,7 @@ func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
 
 	var b strings.Builder
 	b.WriteString("services:\n")
-	writeAPI(&b, apiName, image, name, port, app.WithPostgres, app.WithRedis, pgName, redisName)
+	writeAPI(&b, apiName, image, name, port, app.WithPostgres, app.WithRedis, pgName, redisName, app.CustomDomain)
 	if worker != "" {
 		writeWorker(&b, workerName, image, app.WithPostgres, app.WithRedis, pgName, redisName)
 	}
@@ -156,7 +163,7 @@ func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
 	}, nil
 }
 
-func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPostgres, withRedis bool, pgName, redisName string) {
+func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPostgres, withRedis bool, pgName, redisName, customDomain string) {
 	fmt.Fprintf(b, "  %s:\n", apiName)
 	fmt.Fprintf(b, "    image: %s\n", image)
 	fmt.Fprintf(b, "    container_name: %s\n", apiName)
@@ -168,7 +175,15 @@ func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPos
 	b.WriteString("    labels:\n")
 	b.WriteString("      - \"traefik.enable=true\"\n")
 	b.WriteString("      - \"traefik.docker.network=aetherhost-net\"\n")
-	fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.localhost`)\"\n", host, host)
+	baseDomain := os.Getenv("BASE_DOMAIN")
+	if baseDomain == "" {
+		baseDomain = "localhost"
+	}
+	if customDomain != "" {
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`) || Host(`%s`)\"\n", host, host, baseDomain, customDomain)
+	} else {
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`)\"\n", host, host, baseDomain)
+	}
 	fmt.Fprintf(b, "      - \"traefik.http.services.%s-app.loadbalancer.server.port=%d\"\n", host, port)
 	b.WriteString("    networks:\n")
 	b.WriteString("      private: {}\n")

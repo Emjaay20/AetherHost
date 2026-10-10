@@ -24,7 +24,7 @@ export class OpenAICompatibleAdapter implements ModelAdapter {
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: request.prompt }],
-        max_tokens: 4000,
+        max_tokens: 8000,
         temperature: 0.2,
       })
     });
@@ -35,8 +35,14 @@ export class OpenAICompatibleAdapter implements ModelAdapter {
     }
 
     const data = await res.json();
+    
+    let output = data.choices?.[0]?.message?.content || '';
+    if (!output && data.choices?.[0]?.message?.reasoning) {
+      throw new Error(`The AI model spent all ${data.usage?.completion_tokens || 'its'} tokens reasoning and failed to return the actual code. Please try a simpler request or change OPENAI_MODEL in .env to a non-reasoning model like llama-3.3-70b-versatile`);
+    }
+
     return {
-      output: data.choices?.[0]?.message?.content || '',
+      output,
       model: data.model || model,
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
@@ -57,7 +63,7 @@ export class OpenAICompatibleAdapter implements ModelAdapter {
       body: JSON.stringify({
         model,
         messages: [{ role: 'user', content: request.prompt }],
-        max_tokens: 4000,
+        max_tokens: 8000,
         temperature: 0.2,
         stream: true,
       })

@@ -5,6 +5,8 @@ dist
 .env
 .env.*
 !.env.example
+!.env.production.example
+!.env.*.example
 .DS_Store
 *.orig
 *.rej

@@ -22,9 +22,11 @@ type Application struct {
 	Runtime               string            `json:"runtime"`
 	Status                string            `json:"status"`
 	GithubToken           string            `json:"githubToken,omitempty"`
+	GithubRepo            string            `json:"githubRepo,omitempty"`
 	GithubRepoName        string            `json:"githubRepoName,omitempty"`
 	GithubRepoDescription string            `json:"githubRepoDescription,omitempty"`
 	DockerCompose         string            `json:"dockerCompose,omitempty"`
+	CustomDomain          string            `json:"customDomain,omitempty"`
 	DockerImage           string            `json:"dockerImage,omitempty"`
 	EnvVars               map[string]string `json:"envVars,omitempty"`
 	WorkerCommand         string            `json:"workerCommand,omitempty"`
@@ -32,6 +34,7 @@ type Application struct {
 	WithRedis             bool              `json:"withRedis,omitempty"`
 	Port                  int               `json:"port,omitempty"`
 	HealthPath            string            `json:"healthPath,omitempty"`
+	CommitMessage         string            `json:"commitMessage,omitempty"`
 	AiFiles               []struct {
 		Path    string `json:"path"`
 		Content string `json:"content"`
@@ -47,6 +50,20 @@ func randomPassword() string {
 	return string(b)
 }
 
+func sendAppLog(controlPlaneURL, appID, message string) {
+	fmt.Printf("[LOG %s] %s\n", appID, message)
+	body, _ := json.Marshal(map[string]string{"log": message})
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/v1/applications/%s/logs", controlPlaneURL, appID), strings.NewReader(string(body)))
+	if err == nil {
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
+		resp, doErr := http.DefaultClient.Do(req)
+		if doErr == nil {
+			resp.Body.Close()
+		}
+	}
+}
+
 func main() {
 	controlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
 	if controlPlaneURL == "" {
@@ -56,6 +73,11 @@ func main() {
 	hostPwd := os.Getenv("HOST_PWD")
 	if hostPwd == "" {
 		hostPwd = "/opt/aetherhost" // fallback
+	}
+
+	baseDomain := os.Getenv("BASE_DOMAIN")
+	if baseDomain == "" {
+		baseDomain = "localhost"
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -88,10 +110,13 @@ func main() {
 					dbPass := randomPassword()
 
 					if isWorkload(app) {
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning Workload: %s", time.Now().Format("15:04:05"), app.DockerImage))
 						fmt.Printf("-> Provisioning Workload: %s\n", app.DockerImage)
 
 						plan, err := buildWorkload(app, dbPass)
 						if err != nil {
+							errMsg := fmt.Sprintf("[%s] Workload build failed: %v", time.Now().Format("15:04:05"), err)
+							sendAppLog(controlPlaneURL, app.ID, errMsg)
 							fmt.Printf("-> Workload build failed: %v\n", err)
 							statusData := `{"status":"failed"}`
 							req, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
@@ -111,6 +136,8 @@ func main() {
 						cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d")
 						output, err := cmd.CombinedOutput()
 						if err != nil {
+							errMsg := fmt.Sprintf("[%s] Docker compose failed:\n%s", time.Now().Format("15:04:05"), string(output))
+							sendAppLog(controlPlaneURL, app.ID, errMsg)
 							fmt.Printf("-> Failed to run docker compose: %v\nOutput: %s\n", err, string(output))
 							exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "down").Run()
 							statusData := `{"status":"failed"}`
@@ -120,6 +147,8 @@ func main() {
 							http.DefaultClient.Do(req)
 							continue
 						}
+
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Workload containers launched. Checking health probes...", time.Now().Format("15:04:05")))
 
 						// wait for health check if applicable
 						healthPass := true
@@ -141,6 +170,9 @@ func main() {
 							fmt.Printf("-> Health check failed. Tearing down.\n")
 							exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "down").Run()
 							statusStr = "failed"
+							sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Health check failed for workload. Container torn down.", time.Now().Format("15:04:05")))
+						} else {
+							sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Workload is healthy and serving requests!", time.Now().Format("15:04:05")))
 						}
 
 						statusData := fmt.Sprintf(`{"status":"%s"}`, statusStr)
@@ -152,10 +184,52 @@ func main() {
 						continue
 					}
 
-					if app.DockerCompose != "" {
-						if rejectTenantCompose(app.DockerCompose) {
-							fmt.Printf("-> Security check failed: unsafe compose file\n")
-							continue
+					sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning initiated for '%s' (Runtime: %s)", time.Now().Format("15:04:05"), app.Name, app.Runtime))
+
+					if app.DockerCompose != "" && rejectTenantCompose(app.DockerCompose) {
+						errMsg := fmt.Sprintf("[%s] Security check failed: unsafe compose file", time.Now().Format("15:04:05"))
+						sendAppLog(controlPlaneURL, app.ID, errMsg)
+						fmt.Printf("-> Security check failed: unsafe compose file\n")
+						continue
+					}
+
+					if app.GithubRepo != "" {
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cloning repository: %s", time.Now().Format("15:04:05"), app.GithubRepo))
+						fmt.Printf("-> Cloning github repository: %s\n", app.GithubRepo)
+						exec.Command("rm", "-rf", appDir).Run()
+						
+						repoUrl := app.GithubRepo
+						if app.GithubToken != "" && strings.HasPrefix(repoUrl, "https://github.com/") {
+							repoUrl = strings.Replace(repoUrl, "https://github.com/", fmt.Sprintf("https://%s@github.com/", app.GithubToken), 1)
+						}
+						
+						cloneCmd := exec.Command("git", "clone", repoUrl, appDir)
+						out, err := cloneCmd.CombinedOutput()
+						if err != nil {
+							fmt.Printf("-> Git clone failed or was empty: %s\n", string(out))
+						}
+						
+						// Write .env file so the build and runtime can access the variables
+						var envStr string
+						for k, v := range app.EnvVars {
+							envStr += fmt.Sprintf("%s=%s\n", k, v)
+						}
+						os.WriteFile(fmt.Sprintf("%s/.env", appDir), []byte(envStr), 0644)
+					}
+
+					isUnborn := false
+					if app.GithubRepo != "" {
+						err := exec.Command("git", "-C", appDir, "rev-parse", "HEAD").Run()
+						if err != nil {
+							isUnborn = true
+						}
+					}
+
+					shouldWriteAiFiles := (app.GithubRepo == "") || isUnborn || (app.CommitMessage != "")
+
+					if shouldWriteAiFiles {
+						if len(app.AiFiles) > 0 {
+							sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Writing %d application source files...", time.Now().Format("15:04:05"), len(app.AiFiles)))
 						}
 						for _, f := range app.AiFiles {
 							if strings.Contains(f.Path, "..") || strings.HasPrefix(f.Path, "/") {
@@ -164,11 +238,60 @@ func main() {
 							os.MkdirAll(filepath.Dir(fmt.Sprintf("%s/%s", appDir, f.Path)), 0755)
 							os.WriteFile(fmt.Sprintf("%s/%s", appDir, f.Path), []byte(f.Content), 0644)
 						}
+
+						gitignorePath := fmt.Sprintf("%s/.gitignore", appDir)
+						if _, err := os.Stat(gitignorePath); os.IsNotExist(err) {
+							os.WriteFile(gitignorePath, []byte("node_modules/\n.env\n.DS_Store\n"), 0644)
+						}
+					}
+
+					// Commit and push
+					if app.GithubRepo != "" && app.GithubToken != "" && (isUnborn || app.CommitMessage != "") && len(app.AiFiles) > 0 {
+						msg := app.CommitMessage
+						if msg == "" {
+							msg = "Initial boilerplate by AetherHost"
+						}
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Committing changes: '%s' and pushing to GitHub...", time.Now().Format("15:04:05"), msg))
+						exec.Command("git", "-C", appDir, "config", "user.name", "AetherHost Agent").Run()
+						exec.Command("git", "-C", appDir, "config", "user.email", fmt.Sprintf("agent@aetherhost.%s", baseDomain)).Run()
+						exec.Command("git", "-C", appDir, "add", ".").Run()
+						exec.Command("git", "-C", appDir, "commit", "-m", msg).Run()
+						repoUrl := app.GithubRepo
+						if strings.HasPrefix(repoUrl, "https://github.com/") {
+							repoUrl = strings.Replace(repoUrl, "https://github.com/", fmt.Sprintf("https://%s@github.com/", app.GithubToken), 1)
+						}
+						exec.Command("git", "-C", appDir, "push", "-u", repoUrl, "HEAD:main").Run()
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Successfully pushed commit to GitHub main branch.", time.Now().Format("15:04:05")))
 					}
 
 					var safeCompose string
 
-					if app.Runtime == "wordpress" {
+					if app.Runtime == "github" && app.GithubRepo != "" {
+						hostRule := "\"" + safeName + "." + baseDomain + "\""
+						if app.CustomDomain != "" {
+							hostRule = "\"" + safeName + "." + baseDomain + "\" || Host(\"" + app.CustomDomain + "\")"
+						}
+						safeCompose = fmt.Sprintf(`
+services:
+  app:
+    build: .
+    env_file: .env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.%s-app.rule=Host(%%s)"
+      - "traefik.http.services.%s-app.loadbalancer.server.port=3000"
+    networks:
+      - aetherhost-net
+networks:
+  aetherhost-net:
+    external: true
+`, safeName, hostRule, safeName)
+					} else if app.Runtime == "wordpress" {
+						hostRule := "`" + safeName + "." + baseDomain + "`"
+						if app.CustomDomain != "" {
+							hostRule += " || Host(`" + app.CustomDomain + "`)"
+						}
 
 						safeCompose = fmt.Sprintf(`
 services:
@@ -221,8 +344,12 @@ volumes:
 networks:
   aetherhost-net:
     external: true
-`, hostPwd, hostPwd, safeName, "`"+safeName+".localhost`", safeName, hostPwd, dbPass, hostPwd, dbPass)
+`, hostPwd, hostPwd, safeName, hostRule, safeName, hostPwd, dbPass, hostPwd, dbPass)
 					} else {
+						hostRule := "`" + safeName + "." + baseDomain + "`"
+						if app.CustomDomain != "" {
+							hostRule += " || Host(`" + app.CustomDomain + "`)"
+						}
 						img, startCmd := runtimeSpec(app.Runtime)
 						safeCompose = fmt.Sprintf(`
 services:
@@ -230,7 +357,7 @@ services:
     image: %s
     command: sh -c "%s"
     volumes:
-      - .:/app
+      - %s/deployments/%s:/app
     working_dir: /app
     labels:
       - "traefik.enable=true"
@@ -242,15 +369,20 @@ services:
 networks:
   aetherhost-net:
     external: true
-`, img, startCmd, safeName, "`"+safeName+".localhost`", safeName)
+`, img, startCmd, hostPwd, safeName, safeName, hostRule, safeName)
 					}
 
-					os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
+					if safeCompose != "" {
+						os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
+					}
 
+					sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Building and starting container via Docker Compose...", time.Now().Format("15:04:05")))
 					exec.Command("docker", "network", "create", "aetherhost-net").Run()
 					cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d", "--build")
 					output, err := cmd.CombinedOutput()
 					if err != nil {
+						errMsg := fmt.Sprintf("[%s] Docker compose failed:\n%s", time.Now().Format("15:04:05"), string(output))
+						sendAppLog(controlPlaneURL, app.ID, errMsg)
 						fmt.Printf("-> Failed to run docker compose: %v\nOutput: %s\n", err, string(output))
 						statusData := `{"status":"failed"}`
 						req, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(statusData))
@@ -263,6 +395,7 @@ networks:
 					healthPass := true
 
 					if app.Runtime == "wordpress" {
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Waiting for Nginx and MariaDB health checks...", time.Now().Format("15:04:05")))
 						fmt.Printf("-> Waiting for Nginx and MariaDB health checks...\n")
 						healthPass = false
 						for i := 0; i < 60; i++ {
@@ -275,13 +408,44 @@ networks:
 							}
 							time.Sleep(2 * time.Second)
 						}
+					} else {
+						containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port 3000...", time.Now().Format("15:04:05"), containerName))
+						fmt.Printf("-> Probing readiness for container %s...\n", containerName)
+						healthPass = false
+						for i := 0; i < 30; i++ {
+							var probeCmd *exec.Cmd
+							if app.Runtime == "python" {
+								probeCmd = exec.Command("docker", "exec", containerName, "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/')")
+							} else if app.Runtime == "nodejs" {
+								probeCmd = exec.Command("docker", "exec", containerName, "node", "-e", "fetch('http://localhost:3000/').then(r => process.exit(0)).catch(() => process.exit(1))")
+							} else {
+								probeCmd = exec.Command("docker", "exec", containerName, "wget", "-q", "-O", "-", "http://localhost:3000/")
+							}
+
+							if probeCmd.Run() == nil {
+								fmt.Printf("-> Container %s is ready and serving requests on port 3000!\n", containerName)
+								healthPass = true
+								break
+							}
+							time.Sleep(2 * time.Second)
+						}
 					}
 
 					statusStr := "running"
+					containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
 					if !healthPass {
+						cLogs, _ := exec.Command("docker", "logs", "--tail", "50", containerName).CombinedOutput()
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Readiness check timed out after 60s.\nContainer output:\n%s", time.Now().Format("15:04:05"), string(cLogs)))
 						fmt.Printf("-> Health check failed. Tearing down.\n")
 						exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "down").Run()
 						statusStr = "failed"
+					} else {
+						sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Application is healthy, routed via Traefik, and serving traffic on http://%s.%s!", time.Now().Format("15:04:05"), safeName, baseDomain))
+						cLogs, _ := exec.Command("docker", "logs", "--tail", "25", containerName).CombinedOutput()
+						if len(cLogs) > 0 {
+							sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Recent container output:\n%s", time.Now().Format("15:04:05"), string(cLogs)))
+						}
 					}
 
 					statusData := fmt.Sprintf(`{"status":"%s"}`, statusStr)
@@ -316,6 +480,32 @@ networks:
 						delResp.Body.Close()
 					}
 					fmt.Printf("-> Hard delete completed.\n")
+				}
+			}
+		}
+
+		suspUrl := fmt.Sprintf("%s/v1/applications?status=suspending", controlPlaneURL)
+		req, _ = http.NewRequest("GET", suspUrl, nil)
+		req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
+		suspResp, err := http.DefaultClient.Do(req)
+		if err == nil {
+			suspBody, _ := io.ReadAll(suspResp.Body)
+			suspResp.Body.Close()
+			var suspApps []Application
+			if json.Unmarshal(suspBody, &suspApps) == nil && len(suspApps) > 0 {
+				for _, app := range suspApps {
+					safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
+					fmt.Printf("-> Suspending container: aetherhost-%s\n", safeName)
+					exec.Command("docker", "compose", "-f", fmt.Sprintf("./deployments/%s/docker-compose.yml", safeName), "-p", "aetherhost-"+safeName, "stop").Run()
+
+					patchReq, _ := http.NewRequest("PATCH", fmt.Sprintf("%s/v1/applications/%s/status", controlPlaneURL, app.ID), strings.NewReader(`{"status":"suspended"}`))
+					patchReq.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
+					patchReq.Header.Set("Content-Type", "application/json")
+					patchResp, err := http.DefaultClient.Do(patchReq)
+					if err == nil {
+						patchResp.Body.Close()
+					}
+					fmt.Printf("-> Workload suspended: %s\n", safeName)
 				}
 			}
 		}

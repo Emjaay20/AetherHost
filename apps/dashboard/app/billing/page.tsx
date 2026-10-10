@@ -16,7 +16,7 @@ export default async function BillingPage() {
     <div className="min-h-screen bg-background p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
         
-        <Link href="/" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
+        <Link href="/console" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
         </Link>
         

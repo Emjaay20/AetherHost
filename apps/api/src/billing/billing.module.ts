@@ -14,5 +14,6 @@ import { WebhookProcessor } from './webhook.processor';
   ],
   controllers: [BillingController],
   providers: [BillingService, WebhookProcessor],
+  exports: [BillingService, BullModule],
 })
 export class BillingModule {}

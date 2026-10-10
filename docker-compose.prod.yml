@@ -1,0 +1,180 @@
+services:
+  # =========================================================================
+  # 1. Edge Ingress: Traefik with Automated Let's Encrypt SSL/TLS
+  # =========================================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: aetherhost-traefik
+    restart: unless-stopped
+    command:
+      # API & Dashboard (internal only)
+      - "--api.dashboard=false"
+      - "--api.insecure=false"
+      # Docker Provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=aetherhost-net"
+      # Entrypoints: HTTP (80) and HTTPS (443)
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Global HTTP -> HTTPS Redirection
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # Let's Encrypt Certificate Resolver (ACME HTTP-01 challenge)
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # Metrics
+      - "--metrics.prometheus=true"
+      - "--entrypoints.metrics.address=:8082"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:8082:8082"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "traefik_acme:/etc/traefik/acme"
+    networks:
+      - aetherhost-net
+
+  # =========================================================================
+  # 2. Database: PostgreSQL 16 (Internal Network Only - Never Exposed to Public IP)
+  # =========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: aetherhost-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aether}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-aetherhost}
+    # Bound to localhost only for optional SSH tunneling or DB maintenance
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aether} -d ${POSTGRES_DB:-aetherhost}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - aetherhost-net
+
+  # =========================================================================
+  # 3. Cache & Queue: Redis 7 (Internal Network Only)
+  # =========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: aetherhost-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - aetherhost-net
+
+  # =========================================================================
+  # 4. Control Plane: NestJS Backend API
+  # =========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: aetherhost-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-aether}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aetherhost}?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+      - BASE_DOMAIN=${BASE_DOMAIN}
+      - APP_BASE_URL=https://console.${BASE_DOMAIN}
+      - API_BASE_URL=https://api.${BASE_DOMAIN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.aetherhost-api.rule=Host(`api.${BASE_DOMAIN}`)"
+      - "traefik.http.routers.aetherhost-api.entrypoints=websecure"
+      - "traefik.http.routers.aetherhost-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.aetherhost-api.loadbalancer.server.port=3000"
+    networks:
+      - aetherhost-net
+
+  # =========================================================================
+  # 5. Frontend: Next.js Dashboard Console
+  # =========================================================================
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+        - NEXT_PUBLIC_API_URL=https://api.${BASE_DOMAIN}
+        - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
+    container_name: aetherhost-dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
+      - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - NEXT_PUBLIC_API_URL=https://api.${BASE_DOMAIN}
+      - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aetherhost-net"
+      - "traefik.http.routers.aetherhost-dashboard.rule=Host(`console.${BASE_DOMAIN}`) || Host(`${BASE_DOMAIN}`)"
+      - "traefik.http.routers.aetherhost-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.aetherhost-dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.services.aetherhost-dashboard.loadbalancer.server.port=3000"
+    networks:
+      - aetherhost-net
+
+  # =========================================================================
+  # 6. Node Agent: Orchestration & Docker Runtime Agent
+  # =========================================================================
+  agent:
+    build:
+      context: .
+      dockerfile: apps/agent-go/Dockerfile
+    container_name: aetherhost-agent
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      - CONTROL_PLANE_URL=http://api:3000
+      - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
+      - HOST_PWD=${HOST_PWD:-/opt/aetherhost}
+      - BASE_DOMAIN=${BASE_DOMAIN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOST_PWD:-/opt/aetherhost}:/app
+      - ${HOST_PWD:-/opt/aetherhost}/deployments:/app/deployments
+    networks:
+      - aetherhost-net
+
+networks:
+  aetherhost-net:
+    name: aetherhost-net
+
+volumes:
+  pgdata:
+  redisdata:
+  traefik_acme:

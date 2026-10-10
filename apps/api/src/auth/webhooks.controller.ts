@@ -86,6 +86,8 @@ export class ClerkWebhookController {
             create: {
               limitApplications: STARTER_ENTITLEMENTS.limits.applications,
               limitAiRequests: STARTER_ENTITLEMENTS.limits.aiRequests,
+              limitStorageMb: STARTER_ENTITLEMENTS.limits.storageMb,
+              limitBandwidthGb: STARTER_ENTITLEMENTS.limits.bandwidthGb,
             },
           },
         },

@@ -1,10 +1,11 @@
-import { Controller, Post, Body, ForbiddenException, Sse } from '@nestjs/common';
+import { Controller, Post, Body, Param, ForbiddenException, Sse } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { AiProxyService } from './ai-proxy.service';
 import { OpsInsightService } from './ops-insight.service';
 import { AiProvisioningService } from './ai-provisioning.service';
 import { CompleteAiDto } from './dto/complete-ai.dto';
 import { ProvisionAiDto } from './dto/provision-ai.dto';
+import { IterateAiDto } from './dto/iterate-ai.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 
 @Controller('v1/ai')
@@ -52,6 +53,20 @@ export class AiProxyController {
       body.repositoryName,
       body.repositoryDescription,
       body.generateDescription
+    );
+  }
+
+  @Post('applications/:id/iterate')
+  iterate(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: IterateAiDto,
+  ) {
+    this.assertTenant(tenantId);
+    return this.aiProvisioningService.iterateOnApplication(
+      tenantId,
+      id,
+      body.prompt,
     );
   }
 

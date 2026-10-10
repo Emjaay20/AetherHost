@@ -29,6 +29,7 @@ model Application {
   githubRepo            String?
   githubRepoName        String?
   githubRepoDescription String?
+  customDomain          String?
   dockerCompose         String?
   aiFiles               Json?
   dockerImage           String?
@@ -38,8 +39,10 @@ model Application {
   withRedis             Boolean  @default(false)
   port                  Int      @default(3000)
   healthPath            String   @default("/health")
+  commitMessage         String?
   createdAt             DateTime @default(now())
   tenant                Tenant   @relation(fields: [tenantId], references: [id])
+  logs                  DeploymentLog[]
 
   @@index([tenantId])
   @@index([status])
@@ -111,4 +114,14 @@ model WebhookEvent {
   planId          String
   status          String
   createdAt       DateTime @default(now())
+}
+
+model DeploymentLog {
+  id            String      @id @default(uuid())
+  applicationId String
+  logContent    String      @db.Text
+  createdAt     DateTime    @default(now())
+  application   Application @relation(fields: [applicationId], references: [id])
+
+  @@index([applicationId])
 }
