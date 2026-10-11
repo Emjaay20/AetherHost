@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import { auth } from '@clerk/nextjs/server'
+import { resolveApiUrl } from '../lib/domain'
 
-const API_URL = process.env.API_URL ?? process.env.CONTROL_PLANE_URL ?? 'http://127.0.0.1:3000'
+const API_URL = resolveApiUrl()
 
 function parseEnv(raw: string): Record<string, string> | { error: string } {
   const env: Record<string, string> = {}

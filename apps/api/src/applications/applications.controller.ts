@@ -13,10 +13,18 @@ import {
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
+import { Public } from '../auth/public.decorator';
 
 @Controller('v1/applications')
 export class ApplicationsController {
   constructor(private readonly applicationsService: ApplicationsService) {}
+
+  @Public()
+  @Get('preview/:safeName')
+  @Header('Cache-Control', 'no-store')
+  getPreviewBySafeName(@Param('safeName') safeName: string) {
+    return this.applicationsService.findPreviewBySafeName(safeName);
+  }
 
   @Post()
   create(@TenantId() tenantId: string, @Body() body: CreateApplicationDto) {

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
+import { resolveApiUrl } from '../../lib/domain'
 
-const API_URL = process.env.API_URL ?? process.env.CONTROL_PLANE_URL ?? 'http://127.0.0.1:3000'
+const API_URL = resolveApiUrl()
 
 export type AdminResult<T> =
   | { ok: true; data: T }

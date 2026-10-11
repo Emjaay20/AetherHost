@@ -152,6 +152,15 @@ export class ApplicationsService {
         tx,
       );
 
+      if (process.env.DEMO_MODE === 'true') {
+        void this.simulateDemoProvisioning(
+          newApp.id,
+          newApp.name,
+          newApp.runtime,
+          'Initial deployment',
+        );
+      }
+
       return newApp as unknown as Application;
     });
   }
@@ -321,6 +330,9 @@ if __name__ == '__main__':
   }
 
   async remove(id: string, tenantId: string): Promise<void> {
+    if (process.env.DEMO_MODE === 'true') {
+      return this.hardDelete(id, tenantId);
+    }
     await this.assertOwned(id, tenantId);
     await this.updateStatus(id, 'terminating');
   }
@@ -383,6 +395,30 @@ if __name__ == '__main__':
     return this.assertOwned(id, tenantId);
   }
 
+  async findPreviewBySafeName(targetSafeName: string) {
+    const normalized = safeAppName(targetSafeName);
+    const apps = await this.prisma.application.findMany({
+      where: { status: { notIn: ['terminated'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const matched = apps.find((a) => safeAppName(a.name) === normalized);
+    if (!matched) {
+      throw new NotFoundException(`Application "${normalized}" not found`);
+    }
+    return {
+      id: matched.id,
+      name: matched.name,
+      runtime: matched.runtime,
+      status: matched.status,
+      aiFiles: matched.aiFiles,
+      dockerImage: matched.dockerImage,
+      port: matched.port,
+      healthPath: matched.healthPath,
+      updatedAt: matched.createdAt.toISOString(),
+      createdAt: matched.createdAt,
+    };
+  }
+
   async applyAiIteration(
     id: string,
     tenantId: string,
@@ -413,7 +449,51 @@ if __name__ == '__main__':
       this.prisma,
     );
 
+    if (process.env.DEMO_MODE === 'true') {
+      void this.simulateDemoProvisioning(
+        id,
+        app.name,
+        app.runtime,
+        data.commitMessage,
+      );
+    }
+
     return updated;
+  }
+
+  private async simulateDemoProvisioning(
+    appId: string,
+    appName: string,
+    runtime: string,
+    reason: string,
+  ): Promise<void> {
+    const ts = () => new Date().toTimeString().split(' ')[0];
+    const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+    try {
+      await this.addLog(
+        appId,
+        `[${ts()}] Provisioning initiated for '${appName}' (Runtime: ${runtime}) — ${reason}`,
+      );
+      await sleep(900);
+      await this.addLog(
+        appId,
+        `[${ts()}] Synthesizing application source files & building container image...`,
+      );
+      await sleep(1000);
+      await this.addLog(
+        appId,
+        `[${ts()}] Container launched on aetherhost-net. Probing HTTP readiness on port 3000 (/health)...`,
+      );
+      await sleep(900);
+      await this.addLog(
+        appId,
+        `[${ts()}] Health probe returned 200 OK! Application '${appName}' is online and serving traffic.`,
+      );
+      await this.updateStatus(appId, 'running');
+    } catch (err) {
+      console.error('Demo provisioning simulation error:', err);
+    }
   }
 
   async getLogs(id: string, tenantId: string) {
