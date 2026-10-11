@@ -23,6 +23,30 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-store';
 import { BullModule } from '@nestjs/bullmq';
 
+function getRedisConfig() {
+  if (process.env.REDIS_URL) {
+    try {
+      const parsed = new URL(process.env.REDIS_URL);
+      return {
+        host: parsed.hostname,
+        port: Number(parsed.port || 6379),
+        password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+        username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+        ...(parsed.protocol === 'rediss:' ? { tls: {} } : {}),
+      };
+    } catch {
+      // Fallback to host/port env vars
+    }
+  }
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: Number(process.env.REDIS_PORT || 6379),
+    ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
+  };
+}
+
+const redisConfig = getRedisConfig();
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -33,14 +57,10 @@ import { BullModule } from '@nestjs/bullmq';
     CacheModule.register({
       isGlobal: true,
       store: redisStore,
-      host: process.env.REDIS_HOST || 'localhost',
-      port: 6379,
+      ...redisConfig,
     }),
     BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: 6379,
-      },
+      connection: redisConfig,
     }),
     // Universal Gap #6: Rate limiting
     ThrottlerModule.forRoot([{

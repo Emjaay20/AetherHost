@@ -137,6 +137,7 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
       - CLERK_SECRET_KEY=${CLERK_SECRET_KEY}
+      - API_URL=http://api:3000
       - NEXT_PUBLIC_API_URL=https://api.${BASE_DOMAIN}
       - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
     labels:
@@ -147,6 +148,7 @@ services:
       - "traefik.http.routers.aetherhost-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.services.aetherhost-dashboard.loadbalancer.server.port=3000"
     networks:
+      - control-plane-net
       - aetherhost-net
 
   # =========================================================================

@@ -1,0 +1,83 @@
+# =============================================================================
+# AetherHost — Render Blueprint (Quick Cloud Demo Deployment)
+# =============================================================================
+# Deploys the full AetherHost Control Plane & Dashboard on Render with
+# DEMO_MODE=true enabled so live previews, build logs, and AI Architect
+# iterations work out-of-the-box without requiring a VPS Docker daemon.
+# =============================================================================
+
+databases:
+  - name: aetherhost-db
+    databaseName: aetherhost
+    user: aether
+    plan: free
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. Managed Redis / Key Value Store (Cache & BullMQ Queues)
+  # ---------------------------------------------------------------------------
+  - type: redis
+    name: aetherhost-redis
+    plan: free
+    ipAllowList: []
+
+  # ---------------------------------------------------------------------------
+  # 2. NestJS Control Plane API
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: aetherhost-api
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @aetherhost/api exec prisma generate && pnpm --filter @aetherhost/api build
+    startCommand: pnpm --filter @aetherhost/api exec prisma db push --skip-generate && node apps/api/dist/src/main.js
+    healthCheckPath: /v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEMO_MODE
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aetherhost-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: aetherhost-redis
+          property: connectionString
+      - key: AGENT_SECRET_KEY
+        generateValue: true
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ADMIN_TENANT_IDS
+        value: ""
+
+  # ---------------------------------------------------------------------------
+  # 3. Next.js 16 Dashboard Console & Cloud Preview Engine
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: aetherhost-dashboard
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter dashboard build
+    startCommand: pnpm --filter dashboard start -p $PORT -H 0.0.0.0
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_DEMO_MODE
+        value: "true"
+      - key: API_HOSTPORT
+        fromService:
+          type: web
+          name: aetherhost-api
+          property: hostport
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false

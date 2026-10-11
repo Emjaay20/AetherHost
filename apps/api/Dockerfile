@@ -10,6 +10,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json ./apps/api/
 COPY libs/domain/package.json ./libs/domain/
+COPY libs/common/package.json ./libs/common/
 RUN pnpm install --frozen-lockfile
 
 # Build stage
@@ -26,8 +27,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/libs/domain ./libs/domain
+COPY --from=builder /app/libs/common ./libs/common
 COPY --from=builder /app/node_modules ./node_modules
 
 EXPOSE 3000
-CMD ["node", "apps/api/dist/src/main.js"]
+CMD ["sh", "-c", "cd apps/api && npx prisma db push --skip-generate && cd /app && node apps/api/dist/src/main.js"]
