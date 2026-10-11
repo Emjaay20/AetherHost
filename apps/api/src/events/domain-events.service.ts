@@ -26,8 +26,16 @@ export class DomainEventsService {
   }
 
   async getForTenant(tenantId: string) {
+    const admins = (process.env.ADMIN_TENANT_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    const where = admins.includes(tenantId)
+      ? { tenantId: { in: admins } }
+      : { tenantId };
+
     const records = await this.prisma.domainEventRecord.findMany({
-      where: { tenantId },
+      where,
       orderBy: { createdAt: 'asc' }
     });
     

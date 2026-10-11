@@ -73,11 +73,14 @@ export async function getApplications() {
       headers,
       cache: 'no-store' 
     })
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.error(`[getApplications] API error ${res.status}: ${res.statusText}`);
+      return [];
+    }
     const apps = await res.json()
-    return apps
+    return Array.isArray(apps) ? apps : []
   } catch (error) {
-    console.error(error)
+    console.error('[getApplications] Network error:', error)
     return []
   }
 }

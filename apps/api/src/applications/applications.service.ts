@@ -170,12 +170,25 @@ export class ApplicationsService {
     runtime?: string,
     tenantId?: string,
   ): Promise<Application[]> {
-    const where: Record<string, string> = {};
+    const where: any = {};
     if (status) where.status = status;
     if (runtime) where.runtime = runtime;
-    if (tenantId && tenantId !== SYSTEM_TENANT_ID) where.tenantId = tenantId;
+    if (tenantId && tenantId !== SYSTEM_TENANT_ID) {
+      const admins = (process.env.ADMIN_TENANT_IDS || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
+      if (admins.includes(tenantId)) {
+        where.tenantId = { in: admins };
+      } else {
+        where.tenantId = tenantId;
+      }
+    }
 
-    const apps = await this.prisma.application.findMany({ where }) as unknown as Application[];
+    const apps = await this.prisma.application.findMany({ 
+      where,
+      orderBy: { createdAt: 'desc' },
+    }) as unknown as Application[];
 
     if (tenantId === SYSTEM_TENANT_ID && status === 'pending') {
       // Provide Github tokens to the agent
@@ -510,7 +523,13 @@ if __name__ == '__main__':
     if (!app) {
       throw new NotFoundException('Application not found');
     }
-    if (tenantId !== SYSTEM_TENANT_ID && app.tenantId !== tenantId) {
+    const admins = (process.env.ADMIN_TENANT_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    const isAdmin = admins.includes(tenantId);
+
+    if (tenantId !== SYSTEM_TENANT_ID && !isAdmin && app.tenantId !== tenantId) {
       throw new ForbiddenException(
         'Application does not belong to this tenant',
       );

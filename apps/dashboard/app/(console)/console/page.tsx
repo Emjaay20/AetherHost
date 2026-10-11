@@ -22,7 +22,7 @@ export default async function Dashboard() {
   const entitlements = await getEntitlements()
   const events = await getEvents()
   
-  const usage = entitlements?.usage?.applications || 0
+  const usage = Math.max(apps.length, entitlements?.usage?.applications || 0)
   const limit = entitlements?.limits?.applications || 3
   const limitReached = usage >= limit
   const percentUsed = Math.min((usage / limit) * 100, 100)
@@ -35,8 +35,8 @@ export default async function Dashboard() {
 
   return (
     <div className="min-h-screen flex w-full">
-      <AutoRefresh interval={3000} />
-      <Sidebar usage={usage} limit={limit} activePath="/console" />
+      <AutoRefresh interval={8000} />
+      <Sidebar usage={usage} limit={limit} activePath="/console" planId={planId} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
