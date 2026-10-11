@@ -96,6 +96,19 @@ export class EntitlementsService {
       .filter((id) => id.length > 0);
     const isAdmin = admins.includes(tenantId);
 
+    let usageApps = record.usageApplications;
+    let usageAi = record.usageAiRequests;
+    let totalTokens = record.totalAiTokens;
+
+    if (isAdmin && admins.length > 1) {
+      const adminEntitlements = await prismaClient.tenantEntitlement.findMany({
+        where: { tenantId: { in: admins } },
+      });
+      usageApps = adminEntitlements.reduce((acc, e) => Math.max(acc, e.usageApplications), 0);
+      usageAi = adminEntitlements.reduce((acc, e) => Math.max(acc, e.usageAiRequests), 0);
+      totalTokens = adminEntitlements.reduce((acc, e) => Math.max(acc, e.totalAiTokens), 0);
+    }
+
     const result = {
       planId: isAdmin ? 'max' : tenant.planId,
       subscriptionStatus: tenant.subscriptionStatus,
@@ -113,13 +126,13 @@ export class EntitlementsService {
             bandwidthMb: (PLANS[tenant.planId as keyof typeof PLANS]?.entitlements?.limits?.bandwidthGb ?? 10) * 1024,
           },
       usage: {
-        applications: record.usageApplications,
-        aiRequests: record.usageAiRequests,
+        applications: usageApps,
+        aiRequests: usageAi,
         storageMb: record.usageStorageMb || 0,
         bandwidthMb: record.usageBandwidthMb || 0,
       },
       metrics: {
-        totalAiTokens: record.totalAiTokens,
+        totalAiTokens: totalTokens,
         currentMemoryMb: record.currentMemoryMb,
       },
     };

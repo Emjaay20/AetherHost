@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AetherThrottlerGuard } from './auth/aether-throttler.guard';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TelemetryController } from './telemetry.controller';
@@ -65,7 +66,7 @@ const redisConfig = getRedisConfig();
     // Universal Gap #6: Rate limiting
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 100, // 100 requests per minute by default
+      limit: 600, // 600 requests per minute with localhost exemption
     }]),
     PrismaModule, 
     HealthModule, 
@@ -84,7 +85,7 @@ const redisConfig = getRedisConfig();
     BandwidthService,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: AetherThrottlerGuard,
     }
   ],
 })

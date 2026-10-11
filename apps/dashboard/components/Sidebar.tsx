@@ -1,7 +1,7 @@
 import { LayoutGrid, Settings, Server, Shield } from 'lucide-react'
 import Link from 'next/link'
 
-export default function Sidebar({ usage, limit, activePath }: { usage: number, limit: number, activePath: string }) {
+export default function Sidebar({ usage, limit, activePath, planId }: { usage: number, limit: number, activePath: string, planId?: string }) {
   const percentUsed = Math.min((usage / limit) * 100, 100)
 
   return (
@@ -41,7 +41,7 @@ export default function Sidebar({ usage, limit, activePath }: { usage: number, l
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Plan Usage</h4>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Starter</span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">{planId ? planId.toUpperCase() : 'Starter'}</span>
           </div>
           <div className="flex items-end gap-1 mb-2">
             <span className="text-2xl font-bold">{usage}</span>
