@@ -3,13 +3,16 @@ services:
   # 1. Edge Ingress: Traefik with Automated Let's Encrypt SSL/TLS
   # =========================================================================
   traefik:
-    image: traefik:v3.0
+    image: traefik:latest
     container_name: aetherhost-traefik
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     command:
       # API & Dashboard (internal only)
       - "--api.dashboard=false"
       - "--api.insecure=false"
+      - "--log.level=INFO"
       # Docker Provider
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
@@ -25,9 +28,11 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      # Metrics
+      # Metrics & Health Ping
       - "--metrics.prometheus=true"
       - "--entrypoints.metrics.address=:8082"
+      - "--ping=true"
+      - "--ping.entrypoint=metrics"
     ports:
       - "80:80"
       - "443:443"
@@ -35,6 +40,16 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "traefik_acme:/etc/traefik/acme"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8082/ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     networks:
       - aetherhost-net
 
@@ -45,6 +60,8 @@ services:
     image: postgres:16-alpine
     container_name: aetherhost-postgres
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-aether}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -59,6 +76,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
     networks:
       - control-plane-net
 
@@ -69,16 +91,56 @@ services:
     image: redis:7-alpine
     container_name: aetherhost-redis
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     command: redis-server --requirepass ${REDIS_PASSWORD}
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     networks:
       - control-plane-net
 
   # =========================================================================
-  # 4. Control Plane: NestJS Backend API
+  # 4. Scoped Docker Socket Proxy (Read-Only Socket Mount)
+  # =========================================================================
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3
+    container_name: aetherhost-docker-proxy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      IMAGES: 1
+      BUILD: 1
+      VOLUMES: 1
+      EXEC: 1
+      POST: 1
+      INFO: 1
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - control-plane-net
+
+  # =========================================================================
+  # 5. Control Plane: NestJS Backend API
   # =========================================================================
   api:
     build:
@@ -86,11 +148,13 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: aetherhost-api
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -104,9 +168,27 @@ services:
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
       - GROQ_API_KEY=${GROQ_API_KEY}
       - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-${GROQ_API_KEY}}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
+      - AI_PROVIDER=${AI_PROVIDER:-openai}
+      - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET}
+      - ADMIN_TENANT_IDS=${ADMIN_TENANT_IDS}
+      - BACHS_SECRET_KEY=${BACHS_SECRET_KEY}
+      - BACHS_WEBHOOK_SECRET=${BACHS_WEBHOOK_SECRET}
+      - BILLING_ALLOW_SIMULATE=${BILLING_ALLOW_SIMULATE:-true}
       - BASE_DOMAIN=${BASE_DOMAIN}
       - APP_BASE_URL=https://console.${BASE_DOMAIN}
       - API_BASE_URL=https://api.${BASE_DOMAIN}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1G
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
@@ -119,7 +201,7 @@ services:
       - aetherhost-net
 
   # =========================================================================
-  # 5. Frontend: Next.js Dashboard Console
+  # 6. Frontend: Next.js Dashboard Console
   # =========================================================================
   dashboard:
     build:
@@ -131,6 +213,8 @@ services:
         - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
     container_name: aetherhost-dashboard
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - api
     environment:
@@ -140,6 +224,16 @@ services:
       - API_URL=http://api:3000
       - NEXT_PUBLIC_API_URL=https://api.${BASE_DOMAIN}
       - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
@@ -152,7 +246,7 @@ services:
       - aetherhost-net
 
   # =========================================================================
-  # 6. Node Agent: Orchestration & Docker Runtime Agent
+  # 7. Node Agent: Orchestration & Docker Runtime Agent
   # =========================================================================
   agent:
     build:
@@ -160,17 +254,25 @@ services:
       dockerfile: apps/agent-go/Dockerfile
     container_name: aetherhost-agent
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - api
+      - docker-socket-proxy
     environment:
       - CONTROL_PLANE_URL=http://api:3000
       - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
       - HOST_PWD=${HOST_PWD:-/opt/aetherhost}
       - BASE_DOMAIN=${BASE_DOMAIN}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - ${HOST_PWD:-/opt/aetherhost}:/app
       - ${HOST_PWD:-/opt/aetherhost}/deployments:/app/deployments
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     networks:
       - control-plane-net
       - aetherhost-net
@@ -178,6 +280,7 @@ services:
 networks:
   aetherhost-net:
     name: aetherhost-net
+    external: true
   control-plane-net:
     name: aetherhost-control-plane-net
     internal: true
