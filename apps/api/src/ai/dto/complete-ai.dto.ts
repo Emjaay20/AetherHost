@@ -4,12 +4,12 @@ export class CompleteAiDto {
   @IsString()
   @MinLength(1)
   @MaxLength(8000)
-  prompt: string;
+  prompt!: string;
 
   @IsString()
   @MinLength(1)
   @MaxLength(80)
-  purpose: string;
+  purpose!: string;
 
   @IsOptional()
   @IsString()

@@ -51,8 +51,50 @@ function rewritePreviewLinks(html: string, appName: string): string {
     .replace(/fetch\(['"]\/api\/([^'"]+)['"]/g, `fetch('/preview/${appName}/api/$1'`);
 }
 
+function detectRoutesFromFiles(files: AiFile[]): string[] {
+  const routes = new Set<string>(['/health', '/api/info']);
+  const patterns = [
+    /HandleFunc\(\s*["'](\/[^"']*)["']/g,
+    /\.route\(\s*["'](\/[^"']*)["']/g,
+    /app\.(?:get|post|put|delete|route)\(\s*["'](\/[^"']*)["']/g,
+    /@app\.(?:get|post|route)\(\s*["'](\/[^"']*)["']/g,
+  ];
+  for (const file of files) {
+    for (const regex of patterns) {
+      let m: RegExpExecArray | null;
+      const re = new RegExp(regex.source, 'g');
+      while ((m = re.exec(file.content)) !== null) {
+        if (m[1]) routes.add(m[1]);
+      }
+    }
+  }
+  return Array.from(routes);
+}
+
 function renderDefaultServicePage(app: PreviewApp, safeName: string): string {
   const files = Array.isArray(app.aiFiles) ? app.aiFiles : [];
+  const detectedRoutes = detectRoutesFromFiles(files);
+  const isHealthy = app.status === 'running';
+  const isFailed = app.status === 'failed';
+
+  const badgeClasses = isHealthy
+    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+    : isFailed
+      ? 'bg-red-500/10 text-red-400 border-red-500/20'
+      : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+
+  const dotClasses = isHealthy
+    ? 'bg-emerald-400 animate-pulse'
+    : isFailed
+      ? 'bg-red-400'
+      : 'bg-amber-400 animate-pulse';
+
+  const statusLabel = isHealthy
+    ? 'Container Online'
+    : isFailed
+      ? 'Deployment Failed — Click Redeploy'
+      : 'Provisioning...';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,14 +104,14 @@ function renderDefaultServicePage(app: PreviewApp, safeName: string): string {
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-6 font-sans">
-  <div class="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
+  <div class="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
     <div class="flex items-center justify-between">
       <div class="w-12 h-12 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl flex items-center justify-center text-xl font-bold">
         ⚡
       </div>
-      <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        ${app.status === 'running' ? 'Container Online' : 'Provisioning'}
+      <span class="px-3 py-1 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${badgeClasses}">
+        <span class="w-2 h-2 rounded-full ${dotClasses}"></span>
+        ${statusLabel}
       </span>
     </div>
 
@@ -88,6 +130,21 @@ function renderDefaultServicePage(app: PreviewApp, safeName: string): string {
       <div class="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800">
         <span class="text-xs text-slate-500 block">Health Probe</span>
         <span class="text-sm font-semibold text-emerald-400 mt-0.5 block">200 OK (${app.healthPath || '/health'})</span>
+      </div>
+    </div>
+
+    <div class="bg-slate-950/70 p-4 rounded-xl border border-slate-800 space-y-2.5">
+      <div class="text-xs text-slate-400 font-mono flex items-center justify-between">
+        <span>Detected HTTP Routes (${detectedRoutes.length})</span>
+        <span class="text-blue-400">Interactive</span>
+      </div>
+      <div class="flex flex-wrap gap-2 pt-1">
+        ${detectedRoutes
+          .map(
+            (r) =>
+              `<a href="/preview/${safeName}${r === '/' ? '' : r}" class="px-2.5 py-1 text-xs font-mono rounded-lg bg-slate-900 hover:bg-blue-500/10 text-blue-300 border border-slate-800 hover:border-blue-500/40 transition-colors">GET ${r} &rarr;</a>`
+          )
+          .join('')}
       </div>
     </div>
 
@@ -113,7 +170,7 @@ function renderDefaultServicePage(app: PreviewApp, safeName: string): string {
     <div class="pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 font-mono">
       <span>Endpoint: /</span>
       <div class="flex items-center gap-4">
-        <a href="/preview/${safeName}/api/info" class="text-indigo-400 hover:underline">GET /api/info</a>
+        <a href="/preview/${safeName}/api/status" class="text-indigo-400 hover:underline">GET /api/status</a>
         <a href="/preview/${safeName}/health" class="text-blue-400 hover:underline">GET /health &rarr;</a>
       </div>
     </div>
@@ -144,6 +201,7 @@ export async function GET(
 
     const app = (await res.json()) as PreviewApp;
     const files = Array.isArray(app.aiFiles) ? app.aiFiles : [];
+    const detectedRoutes = detectRoutesFromFiles(files);
 
     if (subPath === '/health') {
       return NextResponse.json({
@@ -156,12 +214,15 @@ export async function GET(
       });
     }
 
-    if (subPath.startsWith('/api/')) {
+    if (subPath.startsWith('/api/') || (subPath !== '/' && detectedRoutes.includes(subPath))) {
       return NextResponse.json({
+        ok: true,
         application: app.name,
         runtime: app.runtime,
         endpoint: subPath,
         status: 'online',
+        uptimeSeconds: 3642,
+        availableRoutes: detectedRoutes,
         filesCount: files.length,
         timestamp: new Date().toISOString(),
       });

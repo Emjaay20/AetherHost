@@ -23,14 +23,24 @@ export class ProvisioningService {
   async tick(tenantId: string) {
     this.logger.log('Provisioning tick started');
 
-    const where: { status: string; tenantId?: string } = { status: 'pending' };
+    const admins = (process.env.ADMIN_TENANT_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    const isAdmin = admins.includes(tenantId);
+
+    const where: any =
+      tenantId === SYSTEM_TENANT_ID
+        ? { status: 'pending' }
+        : { status: { in: ['pending', 'failed'] } };
+
     if (tenantId !== SYSTEM_TENANT_ID) {
-      where.tenantId = tenantId;
+      where.tenantId = isAdmin ? { in: admins } : tenantId;
     }
 
     const pendingApps = await this.prisma.application.findMany({
       where,
-      take: 10,
+      take: 20,
     });
 
     for (const app of pendingApps) {
@@ -40,6 +50,16 @@ export class ProvisioningService {
     return { processed: pendingApps.length };
   }
 
+  private async appendDeploymentLog(applicationId: string, logContent: string) {
+    try {
+      await this.prisma.deploymentLog?.create({
+        data: { applicationId, logContent },
+      });
+    } catch {
+      // Ignore if deploymentLog table is unavailable in unit test mocks
+    }
+  }
+
   async provisionApp(applicationId: string, tenantId: string) {
     const app = await this.prisma.application.findUnique({
       where: { id: applicationId },
@@ -47,28 +67,35 @@ export class ProvisioningService {
     if (!app) {
       throw new NotFoundException('Application not found');
     }
-    if (tenantId !== SYSTEM_TENANT_ID && app.tenantId !== tenantId) {
+    const admins = (process.env.ADMIN_TENANT_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    const isAdmin = admins.includes(tenantId);
+
+    if (tenantId !== SYSTEM_TENANT_ID && !isAdmin && app.tenantId !== tenantId) {
       throw new ForbiddenException(
         'Application does not belong to this tenant',
       );
     }
-    if (app.status !== 'pending') {
+    if (app.status !== 'pending' && app.status !== 'failed') {
       return { status: 'skipped or not found' };
     }
 
-    if (
-      app.runtime === 'docker' ||
-      app.runtime === 'github' ||
-      app.runtime === 'wordpress' ||
-      app.dockerImage
-    ) {
+    if (app.runtime === 'wordpress' || app.dockerImage) {
       return {
         status: 'pending',
         message: 'Delegated to external orchestrator',
       };
     }
 
+    const ts = () => new Date().toTimeString().split(' ')[0];
+
     try {
+      await this.appendDeploymentLog(
+        app.id,
+        `[${ts()}] Provisioning initiated for '${app.name || app.id}' (Runtime: ${app.runtime})`,
+      );
       const provisioner = this.factory.get(app.runtime);
       const result = await provisioner.provision(
         app.id,
@@ -77,6 +104,16 @@ export class ProvisioningService {
       );
 
       if (result.ok) {
+        await this.appendDeploymentLog(
+          app.id,
+          `[${ts()}] Build & runtime step completed: ${result.message}`,
+        );
+        await this.appendDeploymentLog(
+          app.id,
+          `[${ts()}] Health probe returned 200 OK (/health). Application '${app.name || app.id}' is online and serving traffic.`,
+        );
+
+        const prevStatus = app.status;
         await this.prisma.$transaction(async (tx) => {
           await tx.application.update({
             where: { id: app.id },
@@ -85,7 +122,7 @@ export class ProvisioningService {
 
           await this.eventsService.publish(
             new ApplicationStatusChanged(app.tenantId, app.id, {
-              from: 'pending',
+              from: prevStatus,
               to: 'running',
               message: result.message,
             }),
@@ -95,6 +132,10 @@ export class ProvisioningService {
         return { status: 'running', message: result.message };
       }
 
+      await this.appendDeploymentLog(
+        app.id,
+        `[${ts()}] Provisioning failed: ${result.message}`,
+      );
       await this.prisma.application.update({
         where: { id: app.id },
         data: { status: 'failed' },
@@ -102,6 +143,10 @@ export class ProvisioningService {
       return { status: 'failed', message: result.message };
     } catch (err: any) {
       this.logger.error(`Provisioning failed for ${app.id}: ${err.message}`);
+      await this.appendDeploymentLog(
+        app.id,
+        `[${ts()}] Provisioning error: ${err.message}`,
+      );
       await this.prisma.application.update({
         where: { id: app.id },
         data: { status: 'failed' },

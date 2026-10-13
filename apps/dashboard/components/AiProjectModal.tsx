@@ -53,10 +53,20 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
   const [iframeKey, setIframeKey] = useState(0)
   const [copiedFile, setCopiedFile] = useState(false)
 
+  const [localFiles, setLocalFiles] = useState<{ path: string; content: string }[]>(
+    Array.isArray(app.aiFiles) ? app.aiFiles : []
+  )
+
+  useEffect(() => {
+    if (Array.isArray(app.aiFiles)) {
+      setLocalFiles(app.aiFiles)
+    }
+  }, [app.aiFiles])
+
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const safeName = safeAppName(app.name)
   const appBaseUrl = getAppUrl(safeName)
-  const files = Array.isArray(app.aiFiles) ? app.aiFiles : []
+  const files = localFiles
   const activeFile = files[selectedFileIndex] || files[0]
 
   // Reload iframe helper
@@ -77,19 +87,23 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
       if (res.error) {
         setError(res.error)
       } else {
+        if (Array.isArray(res.files)) {
+          setLocalFiles(res.files)
+        }
         setResult({
           summary: res.summary,
           commitMessage: res.commitMessage,
           githubRepo: res.githubRepo || app.githubRepo || undefined
         })
         setPrompt('')
-        // Give the agent 3 seconds to complete container hot-reload, then reload preview
+        handleReloadPreview()
+        // Reload again after container hot-reload completes
         setTimeout(() => {
           handleReloadPreview()
-        }, 3000)
+        }, 2500)
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to apply AI changes')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to apply AI changes')
     } finally {
       setLoading(false)
     }

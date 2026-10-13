@@ -19,7 +19,15 @@ function getEventMeta(eventName: string) {
   }
 }
 
-export default function EventsPanel({ events }: { events: any[] }) {
+export interface DomainEventItem {
+  id?: string
+  eventName: string
+  createdAt: string | Date
+  applicationId?: string | null
+  payload?: Record<string, unknown> | null
+}
+
+export default function EventsPanel({ events }: { events: DomainEventItem[] }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
@@ -51,7 +59,7 @@ export default function EventsPanel({ events }: { events: any[] }) {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {events.map((event: any, i: number) => {
+              {events.map((event: DomainEventItem, i: number) => {
                 const meta = getEventMeta(event.eventName)
                 const Icon = meta.icon
                 

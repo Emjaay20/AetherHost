@@ -1,0 +1,10 @@
+[package]
+name = "aether-core"
+version = "0.1.0"
+edition = "2021"
+description = "Shared core types, HTTP client utilities, and auth helpers for AetherHost Rust services"
+
+[dependencies]
+reqwest = { workspace = true, features = ["json", "stream"] }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -62,10 +62,10 @@ export function AdminTenantActions({
         } else {
           router.push('/console');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setFeedback({
           type: 'error',
-          message: err?.message || 'Failed to impersonate',
+          message: err instanceof Error ? err.message : 'Failed to impersonate',
         });
       }
     });
@@ -84,10 +84,10 @@ export function AdminTenantActions({
             message: res.message || `Replayed ${res.count} webhooks`,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setFeedback({
           type: 'error',
-          message: err?.message || 'Replay failed',
+          message: err instanceof Error ? err.message : 'Replay failed',
         });
       }
     });
@@ -109,10 +109,10 @@ export function AdminTenantActions({
               `Refunded $${res.refundedAmountDollars.toFixed(2)} (Invoice ${res.invoiceId})`,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setFeedback({
           type: 'error',
-          message: err?.message || 'Refund failed',
+          message: err instanceof Error ? err.message : 'Refund failed',
         });
       } finally {
         setRefundAmount('');
@@ -134,10 +134,10 @@ export function AdminTenantActions({
             message: res.message || `Tenant suspended`,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setFeedback({
           type: 'error',
-          message: err?.message || 'Suspension failed',
+          message: err instanceof Error ? err.message : 'Suspension failed',
         });
       } finally {
         setReason('');
@@ -158,10 +158,10 @@ export function AdminTenantActions({
             message: res.message || `Tenant reactivated`,
           });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         setFeedback({
           type: 'error',
-          message: err?.message || 'Reactivation failed',
+          message: err instanceof Error ? err.message : 'Reactivation failed',
         });
       }
     });

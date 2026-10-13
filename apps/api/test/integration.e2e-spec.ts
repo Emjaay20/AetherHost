@@ -1,57 +1,94 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import request from 'supertest';
-import { App } from 'supertest/types';
-import { PrismaService } from '../src/prisma/prisma.service';
-import { AppModule } from '../src/app.module';
+jest.mock('@nestjs/bullmq', () => ({
+  InjectQueue: () => () => undefined,
+}));
 
-describe('Integration (e2e)', () => {
-  let app: INestApplication<App>;
-  let prisma: PrismaService;
+jest.mock('bullmq', () => ({
+  Queue: class Queue {},
+}));
 
-  beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+import * as crypto from 'crypto';
+import { BillingController } from '../src/billing/billing.controller';
+import { BillingService } from '../src/billing/billing.service';
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
-    await app.init();
-    
-    prisma = app.get(PrismaService);
-    try {
-      await prisma.tenant.deleteMany();
-    } catch (e) {}
+describe('Billing & Webhook Integration (e2e)', () => {
+  let controller: BillingController;
+  let webhooksQueue: { add: jest.Mock };
+
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_stripe_secret';
+    process.env.PAYSTACK_WEBHOOK_SECRET = 'sk_test_paystack_secret';
+    process.env.BACHS_WEBHOOK_SECRET = 'whsec_test_bachs_secret';
+    process.env.BILLING_ALLOW_SIMULATE = 'false';
+
+    webhooksQueue = { add: jest.fn().mockResolvedValue({ id: 'job_1' }) };
+    const billingService = {
+      getPlans: jest.fn(),
+      getInvoices: jest.fn(),
+    } as unknown as BillingService;
+
+    controller = new BillingController(billingService, webhooksQueue as never);
   });
 
-  afterAll(async () => {
-    if (app) await app.close();
-  });
-
-  it('runs integration test for pay, create, quota, replay', async () => {
-    // If we have no DB connection, skip
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-    } catch (e) {
-      console.log('Skipping real postgres test because DB is not running');
-      return;
-    }
-
-    // 1. Pay (Webhook)
-    const payload = {
-      type: 'invoice.payment_succeeded',
+  it('verifies Stripe webhook signature and queues BullMQ job', async () => {
+    const payloadObj = {
+      id: 'evt_stripe_1',
+      type: 'checkout.session.completed',
       data: {
         object: {
-          customer: 'cus_123',
-          subscription: 'sub_123',
-          lines: { data: [{ plan: { id: 'price_growth' } }] }
-        }
-      }
+          metadata: { tenantId: 'tenant_1', planId: 'pro' },
+        },
+      },
     };
-    // The problem is we need the actual webhook signature to bypass the middleware,
-    // or we mock the signature check if we want to hit the real DB.
-    // For now, this is a placeholder to show the test exists.
-    expect(true).toBe(true);
+    const rawBody = Buffer.from(JSON.stringify(payloadObj));
+    const timestamp = Math.floor(Date.now() / 1000);
+    const sig = crypto
+      .createHmac('sha256', process.env.STRIPE_WEBHOOK_SECRET!)
+      .update(`${timestamp}.${rawBody.toString('utf8')}`)
+      .digest('hex');
+
+    const res = await controller.handleStripeWebhook(
+      { rawBody, body: payloadObj } as never,
+      `t=${timestamp},v1=${sig}`,
+    );
+
+    expect(res).toEqual({ message: 'Webhook queued successfully' });
+    expect(webhooksQueue.add).toHaveBeenCalledWith(
+      'process',
+      expect.objectContaining({
+        provider: 'stripe',
+        providerEventId: 'evt_stripe_1',
+        tenantId: 'tenant_1',
+        planId: 'pro',
+        status: 'succeeded',
+      }),
+      expect.objectContaining({ jobId: 'evt_stripe_1' }),
+    );
+  });
+
+  it('rejects tampered Stripe webhook signatures', async () => {
+    const payloadObj = {
+      id: 'evt_stripe_bad',
+      type: 'checkout.session.completed',
+    };
+    const rawBody = Buffer.from(JSON.stringify(payloadObj));
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    await expect(
+      controller.handleStripeWebhook(
+        { rawBody, body: payloadObj } as never,
+        `t=${timestamp},v1=deadbeef`,
+      ),
+    ).rejects.toThrow('Invalid webhook signature');
+  });
+
+  it('blocks billing simulation when BILLING_ALLOW_SIMULATE is not true', async () => {
+    await expect(
+      controller.simulateWebhook({
+        tenantId: 'tenant_1',
+        planId: 'pro',
+        provider: 'stripe',
+        providerEventId: 'evt_sim_1',
+      }),
+    ).rejects.toThrow('Billing simulation is disabled');
   });
 });

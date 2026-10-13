@@ -35,7 +35,7 @@ export function MrrChart({ data }: { data: { month: string; dollars: number }[] 
           <Tooltip 
             cursor={{ fill: '#222' }}
             contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '12px', borderRadius: '8px' }}
-            formatter={(value: any) => [`$${Number(value || 0).toFixed(2)}`, 'Revenue']}
+            formatter={(value: unknown) => [`$${Number(value || 0).toFixed(2)}`, 'Revenue']}
           />
           <Bar dataKey="dollars" fill="#4ade80" radius={[4, 4, 0, 0]} maxBarSize={40} />
         </BarChart>
@@ -71,7 +71,7 @@ export function CohortChart({ data }: { data: { month: string; newTenants: numbe
           <Tooltip 
             cursor={{ fill: '#222' }}
             contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: '12px', borderRadius: '8px' }}
-            formatter={(value: any) => [Number(value || 0), 'New Tenants']}
+            formatter={(value: unknown) => [Number(value || 0), 'New Tenants']}
           />
           <Bar dataKey="newTenants" fill="#60a5fa" radius={[4, 4, 0, 0]} maxBarSize={40} />
         </BarChart>

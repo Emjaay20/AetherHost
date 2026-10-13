@@ -96,6 +96,7 @@ describe('ApplicationsService', () => {
     await service.findAll('pending', undefined, 'tenant-a');
     expect(prisma.application.findMany).toHaveBeenCalledWith({
       where: { status: 'pending', tenantId: 'tenant-a' },
+      orderBy: { createdAt: 'desc' },
     });
   });
 
@@ -104,6 +105,7 @@ describe('ApplicationsService', () => {
     await service.findAll('pending', undefined, SYSTEM_TENANT_ID);
     expect(prisma.application.findMany).toHaveBeenCalledWith({
       where: { status: 'pending' },
+      orderBy: { createdAt: 'desc' },
     });
   });
 

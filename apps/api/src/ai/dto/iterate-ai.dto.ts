@@ -4,5 +4,5 @@ export class IterateAiDto {
   @IsString()
   @MinLength(1)
   @MaxLength(4000)
-  prompt: string;
+  prompt!: string;
 }

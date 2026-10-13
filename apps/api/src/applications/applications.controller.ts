@@ -12,6 +12,10 @@ import {
 } from '@nestjs/common';
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import {
+  AddApplicationLogDto,
+  UpdateApplicationStatusDto,
+} from './dto/update-application.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { Public } from '../auth/public.decorator';
 
@@ -29,7 +33,13 @@ export class ApplicationsController {
   @Post()
   create(@TenantId() tenantId: string, @Body() body: CreateApplicationDto) {
     if (tenantId === SYSTEM_TENANT_ID) {
-      tenantId = 'user_3Jxd6h5lIR82rBjvdlrZ8uINHGv';
+      const configuredTenantId = process.env.DEFAULT_SYSTEM_TENANT_ID?.trim();
+      if (!configuredTenantId) {
+        throw new ForbiddenException(
+          'System agent cannot create applications without DEFAULT_SYSTEM_TENANT_ID configured',
+        );
+      }
+      tenantId = configuredTenantId;
     }
     return this.applicationsService.create(
       tenantId,
@@ -75,7 +85,7 @@ export class ApplicationsController {
   updateStatusPatch(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() body: UpdateApplicationStatusDto,
   ) {
     if (tenantId !== SYSTEM_TENANT_ID) {
       throw new ForbiddenException('Only system agent can update status directly');
@@ -87,7 +97,7 @@ export class ApplicationsController {
   async addLog(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { log: string },
+    @Body() body: AddApplicationLogDto,
   ) {
     if (tenantId !== SYSTEM_TENANT_ID) {
       throw new ForbiddenException('Only system agent can push logs');
@@ -100,4 +110,8 @@ export class ApplicationsController {
     return this.applicationsService.getLogs(id, tenantId);
   }
 
+  @Post(':id/redeploy')
+  redeploy(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.redeploy(id, tenantId);
+  }
 }

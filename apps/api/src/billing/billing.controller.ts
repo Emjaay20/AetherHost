@@ -2,7 +2,8 @@ import {
   Controller,
   Post,
   Get,
-  Body, Query,
+  Body,
+  Query,
   BadRequestException,
   HttpCode,
   HttpStatus,
@@ -10,6 +11,7 @@ import {
   UnauthorizedException,
   ForbiddenException,
   Req,
+  Logger,
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
@@ -28,28 +30,30 @@ import { Queue } from 'bullmq';
 
 class CheckoutDto {
   @IsString()
-  planId: string;
+  planId!: string;
 
   @IsIn(['stripe', 'paystack', 'bachs'])
-  provider: 'stripe' | 'paystack' | 'bachs';
+  provider!: 'stripe' | 'paystack' | 'bachs';
 }
 
 class SimulateDto {
   @IsString()
-  tenantId: string;
+  tenantId!: string;
 
   @IsString()
-  planId: string;
+  planId!: string;
 
   @IsString()
-  provider: string;
+  provider!: string;
 
   @IsString()
-  providerEventId: string;
+  providerEventId!: string;
 }
 
 @Controller('v1/billing')
 export class BillingController {
+  private readonly logger = new Logger(BillingController.name);
+
   constructor(
     private readonly billing: BillingService,
     @InjectQueue('webhooks') private readonly webhooksQueue: Queue
@@ -83,13 +87,13 @@ export class BillingController {
       throw new BadRequestException('Only Bachs.io is supported for checkout');
     }
 
-
-
-    console.log('Using Bachs API Key starting with:', process.env.BACHS_SECRET_KEY?.substring(0, 15));
-
     const baseUrl = process.env.BACHS_SECRET_KEY?.startsWith('sk_sandbox_') 
       ? 'https://sandbox-api.bachs.io' 
       : 'https://api.bachs.io';
+
+    const webhookUrl =
+      process.env.BACHS_WEBHOOK_URL ||
+      `${process.env.API_BASE_URL || 'http://localhost:3000'}/v1/billing/webhooks/bachs`;
 
     const res = await fetch(`${baseUrl}/v1/checkout-sessions`, {
       method: 'POST',
@@ -106,14 +110,14 @@ export class BillingController {
         },
         success_url: `${process.env.FRONTEND_URL || 'http://localtest.me:3002'}/billing?success=true`,
         cancel_url: `${process.env.FRONTEND_URL || 'http://localtest.me:3002'}/billing?canceled=true`,
-        webhook_url: `https://sabbath-hyphen-pulverize.ngrok-free.dev/v1/billing/webhooks/bachs`,
+        webhook_url: webhookUrl,
         reference: `${tenantId}:${body.planId}`
       })
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error('Bachs API Error:', errText);
+      this.logger.error(`Bachs API Error: ${errText}`);
       throw new BadRequestException(`Failed to generate Bachs invoice. Error: ${errText}`);
     }
 
@@ -145,12 +149,12 @@ export class BillingController {
     @Headers('x-bachs-signature') signature: string,
     @Headers('x-bachs-timestamp') timestamp: string,
   ) {
-    console.log('Received Bachs webhook:', req.body);
+    this.logger.log(`Received Bachs webhook event: ${req.body?.type ?? 'unknown'}`);
     const secret = process.env.BACHS_WEBHOOK_SECRET;
     const payloadBuffer = this.requireRawBody(req);
     if (!secret) throw new UnauthorizedException('Webhook secret not configured on server');
     if (!verifyBachsSignature(payloadBuffer, signature, timestamp, secret)) {
-      console.error('Bachs webhook signature verification failed');
+      this.logger.warn('Bachs webhook signature verification failed');
       throw new UnauthorizedException('Invalid webhook signature');
     }
 

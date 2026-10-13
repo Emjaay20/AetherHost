@@ -1,7 +1,8 @@
+use aether_core::{build_http_client, constant_time_eq, extract_app_subdomain};
 use axum::{
     body::Bytes,
     extract::{Request, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{any, get},
     Router,
@@ -13,22 +14,38 @@ use std::{
 };
 use tracing::{info, warn};
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct MeterState {
     // Maps app_name -> (ingress_bytes, egress_bytes)
     counters: Arc<RwLock<HashMap<String, (u64, u64)>>>,
     default_backend: Arc<String>,
+    http_client: reqwest::Client,
+    metrics_token: Option<String>,
+}
+
+impl MeterState {
+    fn new(default_backend: String, metrics_token: Option<String>) -> Self {
+        Self {
+            counters: Arc::new(RwLock::new(HashMap::new())),
+            default_backend: Arc::new(default_backend),
+            http_client: build_http_client(30),
+            metrics_token,
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let backend = std::env::var("DEFAULT_BACKEND").unwrap_or_else(|_| "http://127.0.0.1:80".to_string());
-    let state = MeterState {
-        counters: Arc::new(RwLock::new(HashMap::new())),
-        default_backend: Arc::new(backend),
-    };
+    let backend = std::env::var("DEFAULT_BACKEND")
+        .unwrap_or_else(|_| "http://127.0.0.1:80".to_string());
+    let metrics_token = std::env::var("ROUTER_METRICS_TOKEN")
+        .ok()
+        .or_else(|| std::env::var("AGENT_SECRET_KEY").ok())
+        .filter(|t| !t.trim().is_empty());
+
+    let state = MeterState::new(backend, metrics_token);
 
     let app = Router::new()
         .route("/_aether/metrics", get(metrics_handler))
@@ -54,20 +71,64 @@ async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, "aether-router healthy\n")
 }
 
-async fn metrics_handler(State(state): State<MeterState>) -> impl IntoResponse {
-    let map = state.counters.read().unwrap();
-    let mut out = String::from("# HELP aether_bandwidth_bytes_total Bandwidth bytes processed by AetherHost Edge\n# TYPE aether_bandwidth_bytes_total counter\n");
-
-    for (app, (ingress, egress)) in map.iter() {
-        out.push_str(&format!(
-            "aether_bandwidth_bytes_total{{app=\"{}\",direction=\"ingress\"}} {}\n",
-            app, ingress
-        ));
-        out.push_str(&format!(
-            "aether_bandwidth_bytes_total{{app=\"{}\",direction=\"egress\"}} {}\n",
-            app, egress
-        ));
+fn is_authorized_for_metrics(headers: &HeaderMap, expected_token: Option<&str>) -> bool {
+    let Some(expected) = expected_token else {
+        return true;
+    };
+    if let Some(agent_key) = headers.get("x-agent-key").and_then(|v| v.to_str().ok()) {
+        if constant_time_eq(agent_key, expected) {
+            return true;
+        }
     }
+    if let Some(auth) = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(bearer) = auth.strip_prefix("Bearer ") {
+            if constant_time_eq(bearer.trim(), expected) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn format_prometheus_metrics(map: &HashMap<String, (u64, u64)>) -> String {
+    let mut out = String::from(
+        "# HELP aether_bandwidth_bytes_total Bandwidth bytes processed by AetherHost Edge\n# TYPE aether_bandwidth_bytes_total counter\n",
+    );
+
+    let mut keys: Vec<&String> = map.keys().collect();
+    keys.sort();
+
+    for app in keys {
+        if let Some((ingress, egress)) = map.get(app) {
+            out.push_str(&format!(
+                "aether_bandwidth_bytes_total{{app=\"{}\",direction=\"ingress\"}} {}\n",
+                app, ingress
+            ));
+            out.push_str(&format!(
+                "aether_bandwidth_bytes_total{{app=\"{}\",direction=\"egress\"}} {}\n",
+                app, egress
+            ));
+        }
+    }
+    out
+}
+
+async fn metrics_handler(
+    State(state): State<MeterState>,
+    headers: HeaderMap,
+) -> Response {
+    if !is_authorized_for_metrics(&headers, state.metrics_token.as_deref()) {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized metrics access\n").into_response();
+    }
+
+    let map = state
+        .counters
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let out = format_prometheus_metrics(&map);
 
     (
         [(
@@ -76,6 +137,7 @@ async fn metrics_handler(State(state): State<MeterState>) -> impl IntoResponse {
         )],
         out,
     )
+        .into_response()
 }
 
 async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Response {
@@ -86,7 +148,7 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
         .unwrap_or("unknown")
         .to_string();
 
-    let app_name = host.split('.').next().unwrap_or("default").to_string();
+    let app_name = extract_app_subdomain(&host);
 
     let method = req.method().clone();
     let uri = req.uri().clone();
@@ -107,13 +169,15 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
 
     // Record ingress bytes
     {
-        let mut map = state.counters.write().unwrap();
+        let mut map = state
+            .counters
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let entry = map.entry(app_name.clone()).or_insert((0, 0));
         entry.0 += ingress_len;
     }
 
-    let client = reqwest::Client::new();
-    let mut fwd_req = client.request(method, &target_url);
+    let mut fwd_req = state.http_client.request(method, &target_url);
 
     for (k, v) in parts.headers.iter() {
         if k != "host" && k != "content-length" {
@@ -125,14 +189,18 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
 
     match fwd_req.send().await {
         Ok(resp) => {
-            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+            let status = StatusCode::from_u16(resp.status().as_u16())
+                .unwrap_or(StatusCode::BAD_GATEWAY);
             let headers = resp.headers().clone();
             let resp_bytes = resp.bytes().await.unwrap_or_else(|_| Bytes::new());
             let egress_len = resp_bytes.len() as u64;
 
             // Record egress bytes
             {
-                let mut map = state.counters.write().unwrap();
+                let mut map = state
+                    .counters
+                    .write()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
                 let entry = map.entry(app_name).or_insert((0, 0));
                 entry.1 += egress_len;
             }
@@ -143,11 +211,39 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
             }
 
             res.body(axum::body::Body::from(resp_bytes))
-                .unwrap_or_else(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Proxy build error").into_response())
+                .unwrap_or_else(|_| {
+                    (StatusCode::INTERNAL_SERVER_ERROR, "Proxy build error").into_response()
+                })
         }
         Err(e) => {
             warn!("Proxy forwarding error to {}: {}", target_url, e);
             (StatusCode::BAD_GATEWAY, format!("Bad Gateway: {}", e)).into_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    #[test]
+    fn test_format_prometheus_metrics() {
+        let mut map = HashMap::new();
+        map.insert("my-app".to_string(), (1024, 4096));
+        let output = format_prometheus_metrics(&map);
+        assert!(output.contains("aether_bandwidth_bytes_total{app=\"my-app\",direction=\"ingress\"} 1024"));
+        assert!(output.contains("aether_bandwidth_bytes_total{app=\"my-app\",direction=\"egress\"} 4096"));
+    }
+
+    #[test]
+    fn test_metrics_authorization() {
+        let mut headers = HeaderMap::new();
+        assert!(is_authorized_for_metrics(&headers, None));
+        assert!(!is_authorized_for_metrics(&headers, Some("secret-123")));
+
+        headers.insert("x-agent-key", HeaderValue::from_static("secret-123"));
+        assert!(is_authorized_for_metrics(&headers, Some("secret-123")));
+        assert!(!is_authorized_for_metrics(&headers, Some("wrong-secret")));
     }
 }

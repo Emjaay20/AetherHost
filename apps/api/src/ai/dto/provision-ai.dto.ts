@@ -4,7 +4,7 @@ export class ProvisionAiDto {
   @IsString()
   @MinLength(1)
   @MaxLength(2000)
-  prompt: string;
+  prompt!: string;
 
   @IsOptional()
   @IsString()

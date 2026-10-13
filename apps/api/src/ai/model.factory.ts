@@ -13,9 +13,9 @@ export class ModelFactory {
   ) {}
 
   get(): ModelAdapter {
-    const provider = process.env.AI_PROVIDER || 'stub';
-    const hasKey = !!process.env.OPENAI_API_KEY;
-    const baseUrl = process.env.OPENAI_BASE_URL;
+    const provider = process.env.AI_PROVIDER || (process.env.GROQ_API_KEY ? 'openai' : 'stub');
+    const hasKey = !!(process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY);
+    const baseUrl = process.env.OPENAI_BASE_URL || (process.env.GROQ_API_KEY ? 'https://api.groq.com/openai/v1' : undefined);
     
     if (provider === 'openai' && hasKey) {
       if (baseUrl?.includes('groq')) {
