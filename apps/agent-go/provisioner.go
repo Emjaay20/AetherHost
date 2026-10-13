@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -32,7 +31,12 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 
 	safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
 	appDir := fmt.Sprintf("./deployments/%s", safeName)
-	_ = os.MkdirAll(appDir, 0755)
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cannot create deployment directory: %v", time.Now().Format("15:04:05"), err))
+		appLog.Error("cannot create deployment directory", slog.String("error", err.Error()))
+		updateAppStatus(controlPlaneURL, app.ID, "failed")
+		return
+	}
 
 	dbPass := randomPassword()
 
@@ -300,17 +304,8 @@ networks:
 `, hostPwd, hostPwd, safeName, hostRule, tlsLabels, safeName, hostPwd, dbPass, hostPwd, dbPass)
 	}
 
-	if strings.TrimSpace(app.DockerCompose) != "" {
-		compose := app.DockerCompose
-		hostRegex := regexp.MustCompile("traefik\\.http\\.routers\\.[^.]+\\.rule=Host\\([^)]+\\)")
-		compose = hostRegex.ReplaceAllString(compose, fmt.Sprintf("traefik.http.routers.%s-app.rule=Host(%s)", safeName, hostRule))
-		if tlsLabels != "" && !strings.Contains(compose, "tls.certresolver") {
-			compose = strings.Replace(compose, fmt.Sprintf("traefik.http.routers.%s-app.rule=Host(%s)", safeName, hostRule), fmt.Sprintf("traefik.http.routers.%s-app.rule=Host(%s)%s", safeName, hostRule, tlsLabels), 1)
-		}
-		if !strings.Contains(compose, "networks:") {
-			compose += "\nnetworks:\n  aetherhost-net:\n    external: true\n"
-		}
-		return compose
+	if app.Runtime == "docker" {
+		return renderDockerRuntimeCompose(app, safeName, hostPwd, hostRule, tlsLabels)
 	}
 
 	img, startCmd := runtimeSpec(app.Runtime)
@@ -352,6 +347,24 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 	}
 
 	containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
+
+	if app.Runtime == "docker" {
+		appDir := filepath.Join("deployments", safeName)
+		_, port := dockerRuntimeService(appDir, "", detectAppPort(app, appDir))
+		path := "/"
+		if app.HealthPath != "" && healthPathPattern.MatchString(app.HealthPath) {
+			path = app.HealthPath
+		}
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port %d%s...", time.Now().Format("15:04:05"), containerName, port, path))
+		for i := 0; i < 90; i++ {
+			if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) == nil {
+				appLog.Info("container ready", slog.String("container", containerName), slog.Int("port", port))
+				return true
+			}
+			time.Sleep(2 * time.Second)
+		}
+		return false
+	}
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port 3000...", time.Now().Format("15:04:05"), containerName))
 	appLog.Info("probing readiness for container", slog.String("container", containerName))
 	for i := 0; i < 30; i++ {
