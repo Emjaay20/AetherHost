@@ -96,25 +96,6 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		}
 	}
 
-	// Commit and push without embedding token in URL
-	if app.GithubRepo != "" && app.GithubToken != "" && len(app.AiFiles) > 0 {
-		msg := app.CommitMessage
-		if msg == "" {
-			msg = "Update application files by AetherHost"
-		}
-		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Committing changes: '%s' and pushing to GitHub...", time.Now().Format("15:04:05"), msg))
-		_ = exec.Command("git", "-C", appDir, "config", "user.name", "AetherHost Agent").Run()
-		_ = exec.Command("git", "-C", appDir, "config", "user.email", fmt.Sprintf("agent@aetherhost.%s", baseDomain)).Run()
-		_ = exec.Command("git", "-C", appDir, "add", ".").Run()
-		_ = exec.Command("git", "-C", appDir, "commit", "-m", msg).Run()
-
-		if out, err := runGitWithToken(app.GithubToken, "-C", appDir, "push", "-u", app.GithubRepo, "HEAD:main"); err != nil {
-			appLog.Warn("git push failed", slog.String("output", out))
-		} else {
-			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Successfully pushed commit to GitHub main branch.", time.Now().Format("15:04:05")))
-		}
-	}
-
 	// Ensure Cargo.lock exists and is not excluded by .dockerignore if Cargo.toml is present
 	if _, err := os.Stat(filepath.Join(appDir, "Cargo.toml")); err == nil {
 		if _, err := os.Stat(filepath.Join(appDir, "Cargo.lock")); os.IsNotExist(err) {
@@ -134,6 +115,25 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	safeCompose := renderRuntimeCompose(app, safeName, hostPwd, baseDomain, dbPass)
 	if safeCompose != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
+	}
+
+	// Commit and push without embedding token in URL
+	if app.GithubRepo != "" && app.GithubToken != "" && len(app.AiFiles) > 0 {
+		msg := app.CommitMessage
+		if msg == "" {
+			msg = "Update application files by AetherHost"
+		}
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Committing changes: '%s' and pushing to GitHub...", time.Now().Format("15:04:05"), msg))
+		_ = exec.Command("git", "-C", appDir, "config", "user.name", "AetherHost Agent").Run()
+		_ = exec.Command("git", "-C", appDir, "config", "user.email", fmt.Sprintf("agent@aetherhost.%s", baseDomain)).Run()
+		_ = exec.Command("git", "-C", appDir, "add", ".").Run()
+		_ = exec.Command("git", "-C", appDir, "commit", "-m", msg).Run()
+
+		if out, err := runGitWithToken(app.GithubToken, "-C", appDir, "push", "-u", app.GithubRepo, "HEAD:main"); err != nil {
+			appLog.Warn("git push failed", slog.String("output", out))
+		} else {
+			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Successfully pushed commit to GitHub main branch.", time.Now().Format("15:04:05")))
+		}
 	}
 
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Building and starting container via Docker Compose...", time.Now().Format("15:04:05")))
