@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -69,7 +70,11 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 
 	isUnborn := false
 	if app.GithubRepo != "" {
-		if err := exec.Command("git", "-C", appDir, "rev-parse", "HEAD").Run(); err != nil {
+		if _, err := os.Stat(filepath.Join(appDir, ".git")); os.IsNotExist(err) {
+			_ = exec.Command("git", "-C", appDir, "init", "-b", "main").Run()
+			_ = exec.Command("git", "-C", appDir, "remote", "add", "origin", app.GithubRepo).Run()
+			isUnborn = true
+		} else if err := exec.Command("git", "-C", appDir, "rev-parse", "HEAD").Run(); err != nil {
 			isUnborn = true
 		}
 	}
@@ -216,6 +221,11 @@ func renderRuntimeCompose(app Application, safeName, hostPwd, baseDomain, dbPass
 		hostRule += " || Host(`" + app.CustomDomain + "`)"
 	}
 
+	tlsLabels := ""
+	if baseDomain != "localhost" && baseDomain != "127.0.0.1" && !strings.HasSuffix(baseDomain, ".localhost") && baseDomain != "" {
+		tlsLabels = fmt.Sprintf("\n      - \"traefik.http.routers.%s-app.entrypoints=websecure\"\n      - \"traefik.http.routers.%s-app.tls.certresolver=letsencrypt\"", safeName, safeName)
+	}
+
 	if app.Runtime == "github" && app.GithubRepo != "" {
 		return fmt.Sprintf(`
 services:
@@ -225,14 +235,14 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.%s-app.rule=Host(%s)"
+      - "traefik.http.routers.%s-app.rule=Host(%s)"%s
       - "traefik.http.services.%s-app.loadbalancer.server.port=3000"
     networks:
       - aetherhost-net
 networks:
   aetherhost-net:
     external: true
-`, safeName, hostRule, safeName)
+`, safeName, hostRule, tlsLabels, safeName)
 	}
 
 	if app.Runtime == "wordpress" {
@@ -246,7 +256,7 @@ services:
       - wordpress_data:/var/www/html
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.%s-app.rule=Host(%s)"
+      - "traefik.http.routers.%s-app.rule=Host(%s)"%s
       - "traefik.http.services.%s-app.loadbalancer.server.port=80"
       - "traefik.docker.network=aetherhost-net"
     networks:
@@ -287,7 +297,20 @@ volumes:
 networks:
   aetherhost-net:
     external: true
-`, hostPwd, hostPwd, safeName, hostRule, safeName, hostPwd, dbPass, hostPwd, dbPass)
+`, hostPwd, hostPwd, safeName, hostRule, tlsLabels, safeName, hostPwd, dbPass, hostPwd, dbPass)
+	}
+
+	if strings.TrimSpace(app.DockerCompose) != "" {
+		compose := app.DockerCompose
+		hostRegex := regexp.MustCompile("traefik\\.http\\.routers\\.[^.]+\\.rule=Host\\([^)]+\\)")
+		compose = hostRegex.ReplaceAllString(compose, fmt.Sprintf("traefik.http.routers.%s-app.rule=Host(%s)", safeName, hostRule))
+		if tlsLabels != "" && !strings.Contains(compose, "tls.certresolver") {
+			compose = strings.Replace(compose, fmt.Sprintf("traefik.http.routers.%s-app.rule=Host(%s)", safeName, hostRule), fmt.Sprintf("traefik.http.routers.%s-app.rule=Host(%s)%s", safeName, hostRule, tlsLabels), 1)
+		}
+		if !strings.Contains(compose, "networks:") {
+			compose += "\nnetworks:\n  aetherhost-net:\n    external: true\n"
+		}
+		return compose
 	}
 
 	img, startCmd := runtimeSpec(app.Runtime)
@@ -302,14 +325,14 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.%s-app.rule=Host(%s)"
+      - "traefik.http.routers.%s-app.rule=Host(%s)"%s
       - "traefik.http.services.%s-app.loadbalancer.server.port=3000"
     networks:
       - aetherhost-net
 networks:
   aetherhost-net:
     external: true
-`, img, startCmd, hostPwd, safeName, safeName, hostRule, safeName)
+`, img, startCmd, hostPwd, safeName, safeName, hostRule, tlsLabels, safeName)
 }
 
 func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass, controlPlaneURL string) bool {

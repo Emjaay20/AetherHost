@@ -207,6 +207,7 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json',
+                'User-Agent': 'AetherHost-API',
               },
               body: JSON.stringify({
                 name: app.githubRepoName || app.name,
@@ -218,6 +219,30 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
             if (ghRes.ok) {
               const repoData = await ghRes.json();
               finalGithubRepo = repoData.clone_url;
+            } else if (ghRes.status === 422) {
+              const userRes = await fetch('https://api.github.com/user', {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'User-Agent': 'AetherHost-API',
+                },
+              });
+              if (userRes.ok) {
+                const userData = await userRes.json();
+                const targetName = app.githubRepoName || app.name;
+                const existingRepoRes = await fetch(`https://api.github.com/repos/${userData.login}/${targetName}`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'AetherHost-API',
+                  },
+                });
+                if (existingRepoRes.ok) {
+                  const existingData = await existingRepoRes.json();
+                  finalGithubRepo = existingData.clone_url;
+                }
+              }
+            } else {
+              const errBody = await ghRes.text();
+              this.logger.warn(`GitHub API repo creation returned ${ghRes.status}: ${errBody}`);
             }
           } catch (e) {
             this.logger.error(
