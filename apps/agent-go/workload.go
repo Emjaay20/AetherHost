@@ -204,6 +204,10 @@ func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPos
 	} else {
 		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`)\"\n", host, host, baseDomain)
 	}
+	if baseDomain != "localhost" && baseDomain != "127.0.0.1" && !strings.HasSuffix(baseDomain, ".localhost") {
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.entrypoints=websecure\"\n", host)
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.tls.certresolver=letsencrypt\"\n", host)
+	}
 	fmt.Fprintf(b, "      - \"traefik.http.services.%s-app.loadbalancer.server.port=%d\"\n", host, port)
 	b.WriteString("    networks:\n")
 	b.WriteString("      private: {}\n")

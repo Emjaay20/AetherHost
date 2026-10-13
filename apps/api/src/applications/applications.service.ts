@@ -106,6 +106,7 @@ export class ApplicationsService {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json',
+                'User-Agent': 'AetherHost-API',
               },
               body: JSON.stringify({
                 name: githubRepoName || name,
@@ -117,6 +118,30 @@ export class ApplicationsService {
             if (ghRes.ok) {
               const repoData = await ghRes.json();
               finalGithubRepo = repoData.clone_url;
+            } else if (ghRes.status === 422) {
+              const userRes = await fetch('https://api.github.com/user', {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'User-Agent': 'AetherHost-API',
+                },
+              });
+              if (userRes.ok) {
+                const userData = await userRes.json();
+                const targetName = githubRepoName || name;
+                const existingRepoRes = await fetch(`https://api.github.com/repos/${userData.login}/${targetName}`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'User-Agent': 'AetherHost-API',
+                  },
+                });
+                if (existingRepoRes.ok) {
+                  const existingData = await existingRepoRes.json();
+                  finalGithubRepo = existingData.clone_url;
+                }
+              }
+            } else {
+              const errBody = await ghRes.text();
+              this.logger.warn(`GitHub API repo creation returned ${ghRes.status}: ${errBody}`);
             }
           } catch (e) {
             this.logger.error(
@@ -170,9 +195,7 @@ export class ApplicationsService {
   }
 
   private shouldSimulateProvisioning(): boolean {
-    return (
-      process.env.NODE_ENV !== 'test' && process.env.DEMO_MODE !== 'false'
-    );
+    return process.env.DEMO_MODE === 'true';
   }
 
   async findAll(
