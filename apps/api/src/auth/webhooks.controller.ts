@@ -53,11 +53,12 @@ export class ClerkWebhookController {
     let evt: { type: string; data: any };
 
     try {
-      evt = wh.verify(payload, {
+      wh.verify(payload, {
         'svix-id': svixId,
         'svix-timestamp': svixTimestamp,
         'svix-signature': svixSignature,
-      }) as unknown as { type: string; data: any };
+      });
+      evt = JSON.parse(payload) as { type: string; data: any };
     } catch (err) {
       this.logger.error(
         `Webhook signature verification failed: ${(err as Error).message}`,
