@@ -72,22 +72,16 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		_ = os.WriteFile(fmt.Sprintf("%s/.env", appDir), []byte(envBuilder.String()), 0600)
 	}
 
-	isUnborn := false
 	if app.GithubRepo != "" {
 		if _, err := os.Stat(filepath.Join(appDir, ".git")); os.IsNotExist(err) {
 			_ = exec.Command("git", "-C", appDir, "init", "-b", "main").Run()
 			_ = exec.Command("git", "-C", appDir, "remote", "add", "origin", app.GithubRepo).Run()
-			isUnborn = true
-		} else if err := exec.Command("git", "-C", appDir, "rev-parse", "HEAD").Run(); err != nil {
-			isUnborn = true
 		}
 	}
 
-	shouldWriteAiFiles := (app.GithubRepo == "") || isUnborn || (app.CommitMessage != "")
+	shouldWriteAiFiles := len(app.AiFiles) > 0
 	if shouldWriteAiFiles {
-		if len(app.AiFiles) > 0 {
-			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Writing %d application source files...", time.Now().Format("15:04:05"), len(app.AiFiles)))
-		}
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Writing %d application source files...", time.Now().Format("15:04:05"), len(app.AiFiles)))
 		for _, f := range app.AiFiles {
 			if strings.Contains(f.Path, "..") || strings.HasPrefix(f.Path, "/") {
 				continue
@@ -103,10 +97,10 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	}
 
 	// Commit and push without embedding token in URL
-	if app.GithubRepo != "" && app.GithubToken != "" && (isUnborn || app.CommitMessage != "") && len(app.AiFiles) > 0 {
+	if app.GithubRepo != "" && app.GithubToken != "" && len(app.AiFiles) > 0 {
 		msg := app.CommitMessage
 		if msg == "" {
-			msg = "Initial boilerplate by AetherHost"
+			msg = "Update application files by AetherHost"
 		}
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Committing changes: '%s' and pushing to GitHub...", time.Now().Format("15:04:05"), msg))
 		_ = exec.Command("git", "-C", appDir, "config", "user.name", "AetherHost Agent").Run()
