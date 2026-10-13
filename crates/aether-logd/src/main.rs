@@ -3,7 +3,7 @@ use axum::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         Path, State,
     },
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     response::{IntoResponse, Json},
     routing::{get, post},
     Router,
@@ -16,10 +16,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tokio::sync::broadcast;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing::info;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LogMessage {
     pub app_id: String,
     pub log: String,
@@ -57,7 +57,10 @@ impl AppState {
     }
 
     fn get_or_create_sender(&self, app_id: &str) -> broadcast::Sender<LogMessage> {
-        let mut map = self.channels.write().unwrap();
+        let mut map = self
+            .channels
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(sender) = map.get(app_id) {
             sender.clone()
         } else {
@@ -68,16 +71,40 @@ impl AppState {
     }
 }
 
+fn build_cors_layer(raw_origins: Option<&str>) -> CorsLayer {
+    let origins_str = raw_origins.unwrap_or("http://localhost:3002,http://127.0.0.1:3002");
+    if origins_str.trim() == "*" {
+        return CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any);
+    }
+
+    let parsed: Vec<HeaderValue> = origins_str
+        .split(',')
+        .filter_map(|s| HeaderValue::from_str(s.trim()).ok())
+        .collect();
+
+    if parsed.is_empty() {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    } else {
+        CorsLayer::new()
+            .allow_origin(AllowOrigin::list(parsed))
+            .allow_methods(Any)
+            .allow_headers(Any)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     let state = AppState::new();
-
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors_env = std::env::var("CORS_ORIGIN").ok();
+    let cors = build_cors_layer(cors_env.as_deref());
 
     let app = Router::new()
         .route("/health", get(health_check))
@@ -121,10 +148,7 @@ async fn ingest_log(
             info!("Ingested log for app {} -> {} live subscribers", app_id, subscribers);
             StatusCode::ACCEPTED
         }
-        Err(_) => {
-            // No active subscribers on channel; still accepted
-            StatusCode::ACCEPTED
-        }
+        Err(_) => StatusCode::ACCEPTED,
     }
 }
 
@@ -167,4 +191,37 @@ async fn handle_socket(socket: WebSocket, app_id: String, state: AppState) {
     };
 
     info!("Client disconnected from log stream for app: {}", app_id);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_log_message_defaults() {
+        let json_str = r#"{"app_id":"app_123","log":"Build succeeded"}"#;
+        let msg: LogMessage = serde_json::from_str(json_str).expect("valid log message");
+        assert_eq!(msg.app_id, "app_123");
+        assert_eq!(msg.log, "Build succeeded");
+        assert_eq!(msg.level, "info");
+        assert!(!msg.timestamp.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_app_state_broadcast_channel() {
+        let state = AppState::new();
+        let tx = state.get_or_create_sender("app_test");
+        let mut rx = tx.subscribe();
+
+        let payload = LogMessage {
+            app_id: "app_test".to_string(),
+            log: "Container listening on 3000".to_string(),
+            level: "info".to_string(),
+            timestamp: "+10s".to_string(),
+        };
+
+        tx.send(payload.clone()).expect("broadcast send");
+        let received = rx.recv().await.expect("broadcast recv");
+        assert_eq!(received, payload);
+    }
 }

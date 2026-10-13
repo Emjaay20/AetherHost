@@ -2,7 +2,7 @@ import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
 
 export class ApplyPlanDto {
   @IsIn(['starter', 'pro', 'max'])
-  planId: string;
+  planId!: string;
 
   @IsOptional()
   @IsString()

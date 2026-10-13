@@ -16,7 +16,7 @@ export default function AdminShell({
 }) {
   return (
     <div className="min-h-screen flex w-full">
-      <Sidebar usage={usage} limit={Math.max(limit, 1)} activePath="/admin" />
+      <Sidebar usage={usage} limit={Math.max(limit, 1)} activePath="/admin" isAdmin={true} />
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 flex items-center justify-between px-8 border-b border-border/40 bg-background/50 backdrop-blur-xl sticky top-0 z-10">
           <div className="flex items-center gap-2 min-w-0">

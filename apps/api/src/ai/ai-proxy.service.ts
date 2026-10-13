@@ -1,5 +1,5 @@
 import { getEncoding } from 'js-tiktoken';
-import { Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
@@ -11,6 +11,8 @@ import { ModelFactory } from './model.factory';
 
 @Injectable()
 export class AiProxyService {
+  private readonly logger = new Logger(AiProxyService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly entitlements: EntitlementsService,
@@ -93,7 +95,7 @@ export class AiProxyService {
             await this.prisma.$transaction(async (tx) => {
               const consumed = await this.entitlements.consumeAiRequestSlot(tenantId, estimatedTokens, tx);
               if (!consumed) {
-                 console.warn(`Tenant ${tenantId} exhausted quota concurrently during stream`);
+                this.logger.warn(`Tenant ${tenantId} exhausted quota concurrently during stream`);
               }
               await this.events.publish(new AIRequestCompleted(tenantId, applicationId, {
                 id: `ai_${slugify(purpose)}_${Math.random().toString(36).substring(2, 7)}`,

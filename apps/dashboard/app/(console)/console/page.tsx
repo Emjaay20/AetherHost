@@ -4,7 +4,7 @@ import EventsPanel from '../../../components/EventsPanel'
 import OpsInsightPanel from '../../../components/OpsInsightPanel'
 import AiProvisioningPrompt from '../../../components/AiProvisioningPrompt'
 import AutoRefresh from '../../../components/AutoRefresh'
-import ApplicationCardItem from '../../../components/ApplicationCardItem'
+import ApplicationCardItem, { type ApplicationItem } from '../../../components/ApplicationCardItem'
 import Sidebar from '../../../components/Sidebar'
 import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box, Terminal, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
@@ -13,14 +13,19 @@ import { cookies } from 'next/headers';
 import { safeAppName } from '../../../lib/app-name';
 import { stopImpersonating } from '../../admin/actions';
 
+import { isCurrentUserAdmin } from '../../../lib/admin'
+
 export default async function Dashboard() {
   const cookieStore = await cookies();
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
   const impersonateTenantName = cookieStore.get('aether_impersonate_tenant_name')?.value;
 
-  const apps = await getApplications()
-  const entitlements = await getEntitlements()
-  const events = await getEvents()
+  const [apps, entitlements, events, isAdmin] = await Promise.all([
+    getApplications(),
+    getEntitlements(),
+    getEvents(),
+    isCurrentUserAdmin(),
+  ])
   
   const usage = Math.max(apps.length, entitlements?.usage?.applications || 0)
   const limit = entitlements?.limits?.applications || 3
@@ -36,7 +41,7 @@ export default async function Dashboard() {
   return (
     <div className="min-h-screen flex w-full">
       <AutoRefresh interval={8000} />
-      <Sidebar usage={usage} limit={limit} activePath="/console" planId={planId} />
+      <Sidebar usage={usage} limit={limit} activePath="/console" planId={planId} isAdmin={isAdmin} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -177,7 +182,7 @@ export default async function Dashboard() {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {apps.map((app: any) => (
+                  {apps.map((app: ApplicationItem) => (
                     <ApplicationCardItem
                       key={app.id}
                       app={app}
@@ -192,7 +197,7 @@ export default async function Dashboard() {
             <EventsPanel events={events} />
 
             {/* AI Ops Insight */}
-            <OpsInsightPanel />
+            <OpsInsightPanel apps={apps} />
 
             {/* AI Provisioning Prompt */}
             <AiProvisioningPrompt apps={apps} />

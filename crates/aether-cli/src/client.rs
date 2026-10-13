@@ -1,40 +1,7 @@
 use crate::config::CliConfig;
+pub use aether_core::{AiIterationResult, Application, DeploymentLog};
+use aether_core::build_http_client;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Application {
-    pub id: String,
-    pub name: String,
-    pub runtime: String,
-    pub status: String,
-    #[serde(rename = "customDomain")]
-    pub custom_domain: Option<String>,
-    #[serde(rename = "githubRepo")]
-    pub github_repo: Option<String>,
-    #[serde(rename = "createdAt")]
-    pub created_at: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct DeploymentLog {
-    pub id: String,
-    #[serde(rename = "applicationId")]
-    pub application_id: String,
-    #[serde(rename = "logContent")]
-    pub log_content: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct AiIterationResult {
-    pub summary: Option<String>,
-    #[serde(rename = "commitMessage")]
-    pub commit_message: Option<String>,
-    #[serde(rename = "githubRepo")]
-    pub github_repo: Option<String>,
-}
 
 pub struct AetherClient {
     http: reqwest::Client,
@@ -44,7 +11,7 @@ pub struct AetherClient {
 impl AetherClient {
     pub fn new(config: CliConfig) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http: build_http_client(30),
             config,
         }
     }
@@ -158,5 +125,30 @@ impl AetherClient {
 
         let result: AiIterationResult = resp.json().await?;
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_headers_with_token_and_agent_key() {
+        let cfg = CliConfig {
+            api_url: "http://localhost:3000".to_string(),
+            token: Some("jwt_123".to_string()),
+            agent_key: Some("agent_secret".to_string()),
+        };
+        let client = AetherClient::new(cfg);
+        let headers = client.headers();
+
+        assert_eq!(
+            headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok()),
+            Some("Bearer jwt_123")
+        );
+        assert_eq!(
+            headers.get("x-agent-key").and_then(|v| v.to_str().ok()),
+            Some("agent_secret")
+        );
     }
 }

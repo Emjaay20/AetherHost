@@ -4,14 +4,19 @@ import { getEntitlements } from '../actions'
 import { UserButton } from "@clerk/nextjs"
 import { Shield, Key, CreditCard, Building2, Bell } from 'lucide-react'
 
+import { isCurrentUserAdmin } from '../../lib/admin'
+
 export default async function SettingsPage() {
-  const entitlements = await getEntitlements()
+  const [entitlements, isAdmin] = await Promise.all([
+    getEntitlements(),
+    isCurrentUserAdmin(),
+  ])
   const usage = entitlements?.usage?.applications || 0
   const limit = entitlements?.limits?.applications || 3
 
   return (
     <div className="min-h-screen flex w-full">
-      <Sidebar usage={usage} limit={limit} activePath="/settings" />
+      <Sidebar usage={usage} limit={limit} activePath="/settings" isAdmin={isAdmin} />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">

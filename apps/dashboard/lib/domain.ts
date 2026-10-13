@@ -14,14 +14,12 @@ export function resolveApiUrl(): string {
 
 export function getAppUrl(safeName: string, path = '') {
   const cleanPath = path ? (path.startsWith('/') ? path : `/${path}`) : ''
-  const isDemoEnv = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+  const useTraefik = process.env.NEXT_PUBLIC_USE_TRAEFIK === 'true'
 
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    if (isDemoEnv || host.endsWith('.onrender.com')) {
+  if (!useTraefik) {
+    if (typeof window !== 'undefined') {
       return `${window.location.origin}/preview/${safeName}${cleanPath}`
     }
-  } else if (isDemoEnv) {
     return `/preview/${safeName}${cleanPath}`
   }
 

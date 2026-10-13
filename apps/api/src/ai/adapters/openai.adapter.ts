@@ -3,16 +3,19 @@ import { ModelAdapter } from '../model-adapter';
 
 @Injectable()
 export class OpenAICompatibleAdapter implements ModelAdapter {
-  private routeModel(purpose: string) {
-    if (purpose === 'insight' || purpose === 'simple') {
-      return 'llama3-8b-8192'; // Fast/cheap routing
-    }
-    return process.env.OPENAI_MODEL || 'llama3-70b-8192'; // Powerful routing
+  private routeModel(_purpose: string) {
+    return (
+      process.env.OPENAI_MODEL ||
+      process.env.GROQ_MODEL ||
+      'llama-3.3-70b-versatile'
+    );
   }
 
   async complete(request: { prompt: string; purpose: string; tenantId: string }) {
-    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-    const apiKey = process.env.OPENAI_API_KEY;
+    const baseUrl =
+      process.env.OPENAI_BASE_URL ||
+      (process.env.GROQ_API_KEY ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1');
+    const apiKey = process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY;
     const model = this.routeModel(request.purpose);
     
     const res = await fetch(`${baseUrl}/chat/completions`, {
@@ -36,7 +39,9 @@ export class OpenAICompatibleAdapter implements ModelAdapter {
 
     const data = await res.json();
     
-    let output = data.choices?.[0]?.message?.content || '';
+    let output = (data.choices?.[0]?.message?.content || '')
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .trim();
     if (!output && data.choices?.[0]?.message?.reasoning) {
       throw new Error(`The AI model spent all ${data.usage?.completion_tokens || 'its'} tokens reasoning and failed to return the actual code. Please try a simpler request or change OPENAI_MODEL in .env to a non-reasoning model like llama-3.3-70b-versatile`);
     }
@@ -50,8 +55,10 @@ export class OpenAICompatibleAdapter implements ModelAdapter {
   }
 
   async *completeStream(request: { prompt: string; purpose: string; tenantId: string }) {
-    const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';
-    const apiKey = process.env.OPENAI_API_KEY;
+    const baseUrl =
+      process.env.OPENAI_BASE_URL ||
+      (process.env.GROQ_API_KEY ? 'https://api.groq.com/openai/v1' : 'https://api.openai.com/v1');
+    const apiKey = process.env.OPENAI_API_KEY || process.env.GROQ_API_KEY;
     const model = this.routeModel(request.purpose);
     
     const res = await fetch(`${baseUrl}/chat/completions`, {

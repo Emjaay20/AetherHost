@@ -4,8 +4,16 @@ import { useState } from 'react'
 import { promptApplication, iterateApplicationWithAi } from '../app/actions'
 import { Sparkles, AlertCircle, Loader2, GitBranch, ArrowUpRight, CheckCircle2, RefreshCw } from 'lucide-react'
 
+interface AiAppSummary {
+  id: string
+  name: string
+  runtime: string
+  status?: string
+  githubRepo?: string | null
+}
+
 interface AiProvisioningPromptProps {
-  apps?: any[]
+  apps?: AiAppSummary[]
 }
 
 const SUGGESTIONS = [
@@ -43,7 +51,7 @@ export default function AiProvisioningPrompt({ apps = [] }: AiProvisioningPrompt
       } else {
         ;(e.target as HTMLFormElement).reset()
       }
-    } catch (e: any) {
+    } catch {
       setError('An error occurred communicating with the AI service')
     } finally {
       setLoading(false)
@@ -70,8 +78,8 @@ export default function AiProvisioningPrompt({ apps = [] }: AiProvisioningPrompt
         })
         setIteratePrompt('')
       }
-    } catch (e: any) {
-      setError('Failed to apply AI changes: ' + (e?.message || 'Unknown error'))
+    } catch (e: unknown) {
+      setError('Failed to apply AI changes: ' + (e instanceof Error ? e.message : 'Unknown error'))
     } finally {
       setLoading(false)
     }

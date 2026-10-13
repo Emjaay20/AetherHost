@@ -6,6 +6,7 @@ version = 4
 name = "aether-cli"
 version = "0.1.0"
 dependencies = [
+ "aether-core",
  "clap",
  "colored",
  "comfy-table",
@@ -18,9 +19,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aether-core"
+version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aether-logd"
 version = "0.1.0"
 dependencies = [
+ "aether-core",
  "axum",
  "futures-util",
  "serde",
@@ -35,6 +46,7 @@ dependencies = [
 name = "aether-router"
 version = "0.1.0"
 dependencies = [
+ "aether-core",
  "axum",
  "reqwest",
  "serde",

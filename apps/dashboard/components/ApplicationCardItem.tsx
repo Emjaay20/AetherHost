@@ -1,45 +1,80 @@
 'use client'
 
-import { useState } from 'react'
-import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2 } from 'lucide-react'
 import { safeAppName } from '../lib/app-name'
 import { getAppUrl } from '../lib/domain'
+import { redeployApplication } from '../app/actions'
 import DeploymentLogViewer from './DeploymentLogViewer'
 import AiProjectModal from './AiProjectModal'
 
+export interface ApplicationItem {
+  id: string
+  name: string
+  runtime: string
+  status: string
+  githubRepo?: string | null
+  customDomain?: string | null
+  dockerImage?: string | null
+  aiFiles?: { path: string; content: string }[] | null
+}
+
 interface ApplicationCardItemProps {
-  app: {
-    id: string
-    name: string
-    runtime: string
-    status: string
-    githubRepo?: string | null
-    customDomain?: string | null
-    dockerImage?: string | null
-    aiFiles?: { path: string; content: string }[] | null
-  }
-  deleteAction: (id: string) => Promise<any>
+  app: ApplicationItem
+  deleteAction: (id: string) => Promise<unknown>
 }
 
 export default function ApplicationCardItem({ app, deleteAction }: ApplicationCardItemProps) {
+  const router = useRouter()
   const [aiModalOpen, setAiModalOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isRedeploying, setIsRedeploying] = useState(false)
+  const [localStatus, setLocalStatus] = useState(app.status)
+
+  useEffect(() => {
+    setLocalStatus(app.status)
+  }, [app.status])
 
   async function handleDelete() {
     if (!confirm(`Are you sure you want to delete ${app.name}?`)) return
     setIsDeleting(true)
     try {
       await deleteAction(app.id)
+      router.refresh()
     } finally {
       setIsDeleting(false)
     }
+  }
+
+  async function handleRedeploy() {
+    if (isRedeploying) return
+    setIsRedeploying(true)
+    setLocalStatus('pending')
+    try {
+      const res = await redeployApplication(app.id)
+      if (!res.error) {
+        router.refresh()
+        setTimeout(() => {
+          setLocalStatus('running')
+          router.refresh()
+          setIsRedeploying(false)
+        }, 2800)
+        return
+      } else {
+        setLocalStatus(app.status)
+      }
+    } catch {
+      setLocalStatus(app.status)
+    }
+    setIsRedeploying(false)
   }
 
   const safeName = safeAppName(app.name)
 
   return (
     <div className="group p-4 rounded-xl border border-border/50 bg-card hover:border-border transition-all shadow-sm hover:shadow-md flex flex-col justify-between">
-      <div className="flex items-center justify-between w-full">
+      <div className="flex flex-wrap items-center justify-between gap-4 w-full">
         {/* Left: Icon & Details */}
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border/50 group-hover:scale-105 transition-transform">
@@ -72,14 +107,19 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
         </div>
 
         {/* Right: Status & Actions */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4 sm:gap-6">
           {/* Status Badge */}
           <div className="flex items-center gap-2">
             <div className="relative flex h-2 w-2">
-              {app.status === 'running' ? (
+              {localStatus === 'running' ? (
                 <>
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </>
+              ) : localStatus === 'failed' ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                 </>
               ) : (
                 <>
@@ -88,13 +128,41 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                 </>
               )}
             </div>
-            <span className={`text-xs font-medium capitalize ${app.status === 'running' ? 'text-green-500' : 'text-amber-500'}`}>
-              {app.status}
+            <span
+              className={`text-xs font-medium capitalize ${
+                localStatus === 'running'
+                  ? 'text-green-500'
+                  : localStatus === 'failed'
+                    ? 'text-red-400'
+                    : 'text-amber-500'
+              }`}
+            >
+              {isRedeploying ? 'redeploying' : localStatus}
             </span>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* Redeploy Button */}
+            <button
+              type="button"
+              onClick={handleRedeploy}
+              disabled={isRedeploying}
+              className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-sm disabled:opacity-50 ${
+                localStatus === 'failed' || localStatus === 'pending'
+                  ? 'text-emerald-300 hover:text-emerald-200 border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25'
+                  : 'text-zinc-300 hover:text-foreground border-border/50 hover:bg-muted/50'
+              }`}
+              title="Trigger fresh container build & redeploy"
+            >
+              {isRedeploying ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3.5 h-3.5" />
+              )}
+              <span>{isRedeploying ? 'Deploying...' : 'Redeploy'}</span>
+            </button>
+
             {/* AI Architect Button */}
             <button
               type="button"
@@ -143,13 +211,27 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
       </div>
 
       {/* Deployment Logs */}
-      <DeploymentLogViewer appId={app.id} status={app.status} />
+      <DeploymentLogViewer
+        appId={app.id}
+        status={localStatus}
+        onRedeployTriggered={() => {
+          setLocalStatus('pending')
+          router.refresh()
+          setTimeout(() => {
+            setLocalStatus('running')
+            router.refresh()
+          }, 2800)
+        }}
+      />
 
       {/* AI Project Architect Modal */}
       <AiProjectModal
-        app={app}
+        app={{ ...app, status: localStatus }}
         isOpen={aiModalOpen}
-        onClose={() => setAiModalOpen(false)}
+        onClose={() => {
+          setAiModalOpen(false)
+          router.refresh()
+        }}
       />
     </div>
   )

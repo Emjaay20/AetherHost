@@ -2,21 +2,31 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getApplicationLogs, debugWithAi } from '../app/actions'
-import { Terminal, Sparkles, ChevronDown, ChevronUp, Loader2, Copy, Check, RefreshCw } from 'lucide-react'
-import Markdown from 'react-markdown'
+import { getApplicationLogs, debugWithAi, redeployApplication } from '../app/actions'
+import { Terminal, Sparkles, ChevronDown, ChevronUp, Loader2, Copy, Check, RefreshCw, X, RotateCcw } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
+interface DeploymentLogEntry {
+  id?: string
+  logContent: string
+  createdAt?: string
+}
 
 interface DeploymentLogViewerProps {
   appId: string
   status: string
+  onRedeployTriggered?: () => void
 }
 
-export default function DeploymentLogViewer({ appId, status }: DeploymentLogViewerProps) {
-  const [logs, setLogs] = useState<any[]>([])
+export default function DeploymentLogViewer({ appId, status, onRedeployTriggered }: DeploymentLogViewerProps) {
+  const [logs, setLogs] = useState<DeploymentLogEntry[]>([])
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [debugging, setDebugging] = useState(false)
+  const [redeploying, setRedeploying] = useState(false)
   const [aiResponse, setAiResponse] = useState<string | null>(null)
+  const [aiCollapsed, setAiCollapsed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -26,19 +36,19 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
     if (expanded) {
       loadLogs()
     }
-  }, [expanded, appId])
+  }, [expanded, appId, status])
 
-  // Polling if expanded and still pending
+  // Polling if expanded and still pending or redeploying
   useEffect(() => {
     if (!expanded) return
-    if (status !== 'pending') return
+    if (status !== 'pending' && !redeploying) return
 
     const interval = setInterval(() => {
       loadLogs(false)
-    }, 2500)
+    }, 1800)
 
     return () => clearInterval(interval)
-  }, [expanded, status, appId])
+  }, [expanded, status, redeploying, appId])
 
   const loadLogs = async (showLoading = true) => {
     if (showLoading && logs.length === 0) setLoading(true)
@@ -63,22 +73,52 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
   }
 
   const handleDebug = async () => {
-    if (logs.length === 0) return
     setDebugging(true)
     setError(null)
+    setAiCollapsed(false)
     try {
-      const latestLog = logs[logs.length - 1]?.logContent || logs.map(l => l.logContent).join('\n')
-      const res = await debugWithAi(appId, latestLog)
+      const fullLog = logs.map(l => l.logContent).join('\n')
+      const res = await debugWithAi(appId, fullLog)
       if (res.error) {
         setError(res.error)
       } else {
-        setAiResponse(res.data?.output)
+        const text = res.data?.insight || res.data?.output
+        if (text) {
+          setAiResponse(text)
+        } else {
+          setError('AI returned an empty diagnosis. Please try again.')
+        }
       }
     } catch (e) {
       setError('An error occurred during AI analysis')
     } finally {
       setDebugging(false)
     }
+  }
+
+  const handleRedeploy = async () => {
+    setRedeploying(true)
+    setError(null)
+    setExpanded(true)
+    try {
+      const res = await redeployApplication(appId)
+      if (res.error) {
+        setError(res.error)
+      } else {
+        setAiResponse(null)
+        onRedeployTriggered?.()
+        await loadLogs(false)
+        setTimeout(() => loadLogs(false), 1200)
+        setTimeout(() => {
+          loadLogs(false)
+          setRedeploying(false)
+        }, 3200)
+        return
+      }
+    } catch (e) {
+      setError('Failed to trigger redeploy')
+    }
+    setRedeploying(false)
   }
 
   const combinedLogText = logs.map(l => l.logContent).join('\n')
@@ -92,7 +132,7 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
           className={`flex items-center gap-2 text-xs font-medium transition-colors ${
             status === 'failed' 
               ? 'text-red-400 hover:text-red-300' 
-              : status === 'pending'
+              : status === 'pending' || redeploying
                 ? 'text-amber-400 hover:text-amber-300'
                 : 'text-zinc-400 hover:text-foreground'
           }`}
@@ -100,36 +140,60 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
           <Terminal className="w-3.5 h-3.5" />
           <span>
             {status === 'failed' 
-              ? (expanded ? 'Hide Error Logs' : 'View Error Logs (Deployment Failed)') 
-              : status === 'pending'
+              ? (expanded ? 'Hide Error Logs & AI Debugger' : 'View Error Logs & Analyze Failure') 
+              : status === 'pending' || redeploying
                 ? (expanded ? 'Hide Live Logs' : 'Stream Live Build Logs...')
                 : (expanded ? 'Hide Logs' : 'View Deployment & Container Logs')}
           </span>
           {expanded ? <ChevronUp className="w-3.5 h-3.5 opacity-60" /> : <ChevronDown className="w-3.5 h-3.5 opacity-60" />}
         </button>
 
-        {expanded && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {status === 'failed' && !expanded && (
             <button
               type="button"
-              onClick={() => loadLogs(true)}
-              className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-              title="Refresh logs"
+              onClick={() => {
+                setExpanded(true)
+                handleDebug()
+              }}
+              className="flex items-center gap-1 text-[11px] font-medium text-purple-300 hover:text-purple-200 px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 transition-colors"
             >
-              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+              <Sparkles className="w-3 h-3" />
+              <span>Analyze Failure with AI</span>
             </button>
-            {logs.length > 0 && (
+          )}
+
+          {expanded && (
+            <>
               <button
                 type="button"
-                onClick={handleCopy}
-                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/80 transition-colors"
+                onClick={() => loadLogs(true)}
+                className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+                title="Refresh logs"
               >
-                {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                <span>{copied ? 'Copied' : 'Copy'}</span>
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
               </button>
-            )}
-          </div>
-        )}
+              {logs.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/80 transition-colors"
+                >
+                  {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                className="p-1 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+                title="Close log viewer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
@@ -152,7 +216,7 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
                   <span className="ml-2 text-zinc-500">deployment-stdout.log</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {status === 'pending' && (
+                  {(status === 'pending' || redeploying) && (
                     <span className="flex items-center gap-1 text-amber-400">
                       <Loader2 className="w-3 h-3 animate-spin" /> Live Streaming
                     </span>
@@ -162,7 +226,7 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
               </div>
 
               {/* Terminal body */}
-              <div ref={scrollRef} className="p-4 max-h-64 overflow-y-auto font-mono text-xs leading-relaxed select-text">
+              <div ref={scrollRef} className="p-4 max-h-56 overflow-y-auto font-mono text-xs leading-relaxed select-text">
                 {loading && logs.length === 0 ? (
                   <div className="flex items-center gap-2 text-muted-foreground text-xs py-3">
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -174,6 +238,10 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
                   }`}>
                     {combinedLogText}
                   </pre>
+                ) : status === 'failed' ? (
+                  <div className="text-red-300/80 italic py-2">
+                    Container exited or failed provisioning before writing stdout logs. Click &ldquo;Analyze Failure with AI&rdquo; below to diagnose configuration, or click &ldquo;Redeploy&rdquo; to rebuild and restart.
+                  </div>
                 ) : (
                   <div className="text-zinc-500 italic py-2">
                     No deployment logs recorded yet. Application is healthy.
@@ -181,34 +249,66 @@ export default function DeploymentLogViewer({ appId, status }: DeploymentLogView
                 )}
               </div>
 
-              {/* Failure AI Debugger */}
+              {/* Failure AI Debugger & Redeploy Bar */}
               {status === 'failed' && (
-                <div className="p-3 border-t border-red-950/80 bg-red-950/20">
-                  {!aiResponse ? (
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-red-300">Application failed to start or pass readiness checks.</p>
+                <div className="p-3 border-t border-red-950/80 bg-red-950/20 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-red-300">
+                      Application failed to start or pass readiness checks.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRedeploy}
+                        disabled={redeploying}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {redeploying ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                        {redeploying ? 'Redeploying...' : 'Redeploy Now'}
+                      </button>
                       <button 
                         type="button"
                         onClick={handleDebug}
-                        disabled={debugging || logs.length === 0}
+                        disabled={debugging}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                       >
                         {debugging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                        Analyze Failure with AI
+                        {debugging ? 'Analyzing...' : aiResponse ? 'Re-Analyze with AI' : 'Analyze Failure with AI'}
                       </button>
                     </div>
-                  ) : (
-                    <div className="p-3 rounded-lg bg-purple-950/30 border border-purple-500/30 prose prose-sm prose-invert max-w-none text-xs">
-                      <div className="flex items-center gap-2 mb-2 text-purple-300 font-medium pb-2 border-b border-purple-500/20">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        AI Root-Cause Diagnosis & Fix
+                  </div>
+
+                  {aiResponse && (
+                    <div className="rounded-xl bg-purple-950/30 border border-purple-500/30 overflow-hidden">
+                      <div className="px-3.5 py-2 bg-purple-950/50 border-b border-purple-500/20 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setAiCollapsed(!aiCollapsed)}
+                          className="flex items-center gap-2 text-purple-300 font-medium text-xs hover:text-purple-200 transition-colors"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>AI Root-Cause Diagnosis & Fix</span>
+                          {aiCollapsed ? <ChevronDown className="w-3.5 h-3.5 opacity-70" /> : <ChevronUp className="w-3.5 h-3.5 opacity-70" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAiResponse(null)}
+                          className="p-1 rounded hover:bg-purple-500/20 text-purple-300/70 hover:text-purple-200 transition-colors"
+                          title="Close diagnosis"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <Markdown>{aiResponse}</Markdown>
+                      {!aiCollapsed && (
+                        <div className="p-3.5 max-h-60 overflow-y-auto prose prose-sm prose-invert max-w-none text-xs leading-relaxed">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiResponse}</ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {error && (
-                    <p className="mt-2 text-xs text-red-400">{error}</p>
+                    <p className="mt-1 text-xs text-red-400">{error}</p>
                   )}
                 </div>
               )}

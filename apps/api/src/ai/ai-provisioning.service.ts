@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { AiProxyService } from './ai-proxy.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { Runtime } from '@aetherhost/domain';
@@ -7,10 +7,64 @@ import { getGithubToken } from '../applications/github-utils';
 
 @Injectable()
 export class AiProvisioningService {
+  private readonly logger = new Logger(AiProvisioningService.name);
+
   constructor(
     private readonly aiProxy: AiProxyService,
     private readonly appsService: ApplicationsService,
   ) {}
+
+  private extractJson(rawOutput: string): any {
+    let cleaned = rawOutput
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
+
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      // Repair literal control characters inside JSON string values if present
+      let inString = false;
+      let escaped = false;
+      let repaired = '';
+      for (let i = 0; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (inString) {
+          if (escaped) {
+            repaired += ch;
+            escaped = false;
+          } else if (ch === '\\') {
+            repaired += ch;
+            escaped = true;
+          } else if (ch === '"') {
+            repaired += ch;
+            inString = false;
+          } else if (ch === '\n') {
+            repaired += '\\n';
+          } else if (ch === '\r') {
+            repaired += '\\r';
+          } else if (ch === '\t') {
+            repaired += '\\t';
+          } else {
+            repaired += ch;
+          }
+        } else {
+          if (ch === '"') {
+            inString = true;
+          }
+          repaired += ch;
+        }
+      }
+      return JSON.parse(repaired);
+    }
+  }
 
   async provisionFromPrompt(tenantId: string, userPrompt: string, repoName?: string, repoDesc?: string, generateDesc?: boolean) {
     const prompt = `
@@ -22,14 +76,11 @@ Use standard images. The compose file should NOT define any networks.
 Do not expose any ports to the host (no 'ports: - "80:80"'), instead just use 'expose: - "80"'.
 VERY IMPORTANT: You MUST add Traefik labels to the main application container so it routes correctly. Add these exact labels under the main service (replace APP_NAME with the generated name):
 labels:
-  - "traefik.enable=true"\n  - "traefik.docker.network=aetherhost-net"
+  - "traefik.enable=true"
+  - "traefik.docker.network=aetherhost-net"
   - "traefik.http.routers.APP_NAME.rule=Host(\`APP_NAME.localhost\`)"
   - "traefik.http.services.APP_NAME.loadbalancer.server.port=80" (adjust port to match what the app listens on, e.g. 8080 or 8000)
-Crucially, generate the actual minimal application code files needed (e.g. src/main.rs, app.py, requirements.txt, Cargo.toml) and put them in the 'files' array. Ensure your 'path' properties respect language conventions (e.g. for Rust, 'Cargo.toml' is in the root, but 'src/main.rs' must be inside a 'src' folder!). Keep code extremely short and minimal (hello world level with the requested DB connected) to avoid cutting off the JSON.
-In your docker-compose, you can mount these files into the container using:
-volumes:
-  - .:/app
-and set the working_dir to /app, and the command to run/compile the app on the fly (e.g. 'cargo run' or 'python app.py').
+Crucially, generate the actual minimal application code files needed (e.g. src/main.rs, app.py, requirements.txt, Cargo.toml, index.html) and put them in the 'files' array. Include a clean HTML UI or index.html so the live preview looks great. Keep code concise to avoid cutting off the JSON.
 The runtime field should be "docker".
 ${generateDesc ? '\nAlso generate a short engaging repository description based on the prompt in the "description" field.' : ''}
 
@@ -39,19 +90,10 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
 {"name": "generated-name", "runtime": "docker", "dockerCompose": "version: '3'\\n...", "files": [{"path": "src/app.py", "content": "print('hello')"}]${generateDesc ? ', "description": "generated description"' : ''}}
     `.trim();
 
-
     const response = await this.aiProxy.complete(tenantId, prompt, 'infrastructure-provisioning');
     
     try {
-      let cleanOutput = response.output.trim();
-      if (cleanOutput.startsWith('\`\`\`json')) {
-         cleanOutput = cleanOutput.replace(/\`\`\`json/g, '').replace(/\`\`\`/g, '').trim();
-      } else if (cleanOutput.startsWith('\`\`\`')) {
-         cleanOutput = cleanOutput.replace(/\`\`\`/g, '').trim();
-      }
-
-      
-      const parsed = JSON.parse(cleanOutput);
+      const parsed = this.extractJson(response.output);
       
       if (!parsed.name || !parsed.runtime || !parsed.dockerCompose) {
         throw new Error('Invalid JSON structure returned by LLM');
@@ -60,7 +102,7 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
       const finalRepoName = repoName || parsed.name;
       const finalRepoDesc = repoDesc || parsed.description || '';
       
-      let githubRepoUrl = undefined;
+      const githubRepoUrl = undefined;
       
       const app = await this.appsService.create(
         tenantId,
@@ -73,14 +115,13 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
         finalRepoDesc,
       );
 
-      
       return {
         success: true,
         application: app,
         aiUsage: response.usage,
       };
-    } catch (err) {
-      throw new BadRequestException('Failed to parse AI response into infrastructure: ' + err.message + '. Raw response: ' + response.output);
+    } catch (err: any) {
+      throw new BadRequestException('Failed to parse AI response into infrastructure: ' + err.message);
     }
   }
 
@@ -119,9 +160,10 @@ User Change Request:
 
 Instructions:
 1. Carefully update, improve, or add files to satisfy the user's request.
-2. Return complete, production-ready file contents for every modified or new file (do not truncate or use placeholders).
-3. Generate a concise, conventional git commit message (e.g. "feat: add /api/users endpoint").
-4. Provide a brief 1-2 sentence human summary of changes.
+2. Return complete, working file contents for every modified or new file. Keep code concise and well-structured so the JSON output is never truncated.
+3. Ensure the root "/" route or an "index.html" file renders a clean, interactive HTML UI reflecting the new features so the Live Preview updates visibly, and ensure "/health" returns HTTP 200.
+4. Generate a concise, conventional git commit message (e.g. "feat: add /api/users endpoint").
+5. Provide a brief 1-2 sentence human summary of changes.
 
 Respond ONLY with valid JSON in this exact structure, with no markdown code blocks or backticks. DO NOT output reasoning or <think> tags. Output the JSON object immediately:
 {
@@ -136,14 +178,7 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
     const response = await this.aiProxy.complete(tenantId, prompt, 'application-iteration', app.id);
 
     try {
-      let cleanOutput = response.output.trim();
-      if (cleanOutput.startsWith('```json')) {
-        cleanOutput = cleanOutput.replace(/```json/g, '').replace(/```/g, '').trim();
-      } else if (cleanOutput.startsWith('```')) {
-        cleanOutput = cleanOutput.replace(/```/g, '').trim();
-      }
-
-      const parsed = JSON.parse(cleanOutput);
+      const parsed = this.extractJson(response.output);
       if (!parsed.files || !Array.isArray(parsed.files)) {
         throw new Error('LLM response must contain a "files" array');
       }
@@ -185,7 +220,9 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
               finalGithubRepo = repoData.clone_url;
             }
           } catch (e) {
-            console.error('Failed to create repo during iteration', e);
+            this.logger.error(
+              `Failed to create repo during iteration: ${e instanceof Error ? e.message : String(e)}`,
+            );
           }
         }
       }
@@ -205,7 +242,7 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
         aiUsage: response.usage,
       };
     } catch (err: any) {
-      throw new BadRequestException('Failed to process AI changes: ' + err.message + '. Raw response: ' + response.output);
+      throw new BadRequestException('Failed to process AI changes: ' + err.message);
     }
   }
 }

@@ -17,10 +17,10 @@ export class CreateApplicationDto {
   @IsString()
   @MinLength(1)
   @MaxLength(80)
-  name: string;
+  name!: string;
 
   @IsEnum(Runtime)
-  runtime: Runtime;
+  runtime!: Runtime;
 
   @IsOptional()
   @IsString()

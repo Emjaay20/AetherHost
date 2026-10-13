@@ -62,4 +62,48 @@ describe('ProvisioningService', () => {
     expect(prisma.application.update).not.toHaveBeenCalled();
     expect(factory.get).not.toHaveBeenCalled();
   });
+
+  it('provisions go, rust, and docker apps and records deployment logs', async () => {
+    const updateMock = jest.fn().mockResolvedValue({});
+    const createLogMock = jest.fn().mockResolvedValue({});
+    const publishMock = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      application: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'app_go',
+          name: 'nexa-sales',
+          tenantId: 'tenant-a',
+          runtime: 'go',
+          status: 'failed',
+          dockerImage: null,
+        }),
+        update: updateMock,
+      },
+      deploymentLog: {
+        create: createLogMock,
+      },
+      $transaction: jest.fn((cb: any) =>
+        cb({ application: { update: updateMock } }),
+      ),
+    };
+    const factory = new ProvisionerFactory(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const service = new ProvisioningService(
+      prisma as unknown as PrismaService,
+      { publish: publishMock } as unknown as DomainEventsService,
+      factory,
+    );
+
+    const res = await service.provisionApp('app_go', 'tenant-a');
+    expect(res.status).toBe('running');
+    expect(updateMock).toHaveBeenCalledWith({
+      where: { id: 'app_go' },
+      data: { status: 'running' },
+    });
+    expect(createLogMock).toHaveBeenCalled();
+  });
 });

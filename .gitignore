@@ -5,9 +5,9 @@ dist
 *.tsbuildinfo
 .env
 .env.*
-!.env.example
-!.env.production.example
-!.env.*.example
+!**/.env.example
+!**/.env.production.example
+!**/.env.*.example
 .DS_Store
 *.orig
 *.rej

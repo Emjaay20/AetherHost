@@ -6,7 +6,11 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(@nestjs/cache-manager|cache-manager)/)"
+  ],
   "moduleNameMapper": {
+    "^@nestjs/cache-manager$": "<rootDir>/../src/test-mocks/cache-manager.mock.ts",
     "^@aetherhost/domain$": "<rootDir>/../../../libs/domain/src/index.ts",
     "^@aetherhost/common$": "<rootDir>/../../../libs/common/src/index.ts"
   }

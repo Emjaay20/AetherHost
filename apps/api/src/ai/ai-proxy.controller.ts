@@ -6,6 +6,7 @@ import { AiProvisioningService } from './ai-provisioning.service';
 import { CompleteAiDto } from './dto/complete-ai.dto';
 import { ProvisionAiDto } from './dto/provision-ai.dto';
 import { IterateAiDto } from './dto/iterate-ai.dto';
+import { GenerateOpsInsightDto } from './dto/ops-insight.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 
 @Controller('v1/ai')
@@ -39,9 +40,12 @@ export class AiProxyController {
   }
 
   @Post('insights/ops')
-  generateOpsInsight(@TenantId() tenantId: string) {
+  generateOpsInsight(
+    @TenantId() tenantId: string,
+    @Body() body?: GenerateOpsInsightDto,
+  ) {
     this.assertTenant(tenantId);
-    return this.opsInsightService.generate(tenantId);
+    return this.opsInsightService.generate(tenantId, body);
   }
 
   @Post('provision')

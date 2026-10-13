@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { 
@@ -14,13 +15,8 @@ async function bootstrap() {
   // 1. Enable Graceful Shutdown (Universal Gap #7)
   app.enableShutdownHooks();
 
-  // 2. Structured Logging / JSON Logger (Universal Gap #5)
-  // In production, we force JSON format for ELK/Grafana Loki
-  if (process.env.NODE_ENV === 'production') {
-    app.useLogger(console); // A full structured logger like nest-winston would go here
-    // For now, Nest v11's default logger can output JSON if configured, 
-    // but overriding console for raw outputs or adding a middleware is standard.
-  }
+  // 2. Global Exception Filter for normalized { statusCode, message, error } responses
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',') ?? [

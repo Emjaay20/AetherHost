@@ -1,11 +1,11 @@
 package main
 
 import (
-	"os"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
+	"io"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -22,17 +22,21 @@ type TelemetryPayload struct {
 	Metrics []TelemetryMetric `json:"metrics"`
 }
 
-func startTelemetryReporter(controlPlaneURL string) {
+func startTelemetryReporter(ctx context.Context, controlPlaneURL string) {
 	ticker := time.NewTicker(10 * time.Second)
-	
+	defer ticker.Stop()
+
 	for {
-		<-ticker.C
-		
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
 		// Run docker stats
 		cmd := exec.Command("docker", "stats", "--no-stream", "--format", "{{.Name}},{{.MemUsage}}")
 		output, err := cmd.Output()
 		if err != nil {
-			fmt.Printf("Telemetry error: %v\n", err)
 			continue
 		}
 
@@ -47,18 +51,18 @@ func startTelemetryReporter(controlPlaneURL string) {
 			if len(parts) != 2 {
 				continue
 			}
-			
+
 			containerName := parts[0]
 			if !strings.HasPrefix(containerName, "aetherhost-") || strings.HasPrefix(containerName, "aetherhost-db-") || containerName == "aetherhost-traefik" {
 				continue
 			}
-			
+
 			safeName := strings.TrimPrefix(containerName, "aetherhost-")
-			
+
 			memStr := parts[1]
 			memStr = strings.Split(memStr, "/")[0] // "120MiB "
 			memStr = strings.TrimSpace(memStr)
-			
+
 			var memVal float64
 			if strings.HasSuffix(memStr, "GiB") || strings.HasSuffix(memStr, "GB") {
 				val, _ := strconv.ParseFloat(memStr[:len(memStr)-3], 64)
@@ -79,31 +83,31 @@ func startTelemetryReporter(controlPlaneURL string) {
 			sizeOutput, err := sizeCmd.Output()
 			if err == nil {
 				sizeStr := strings.TrimSpace(string(sizeOutput))
-				if bytes, err := strconv.ParseFloat(sizeStr, 64); err == nil {
-					storageMb = bytes / (1024 * 1024)
+				if bytesVal, err := strconv.ParseFloat(sizeStr, 64); err == nil {
+					storageMb = bytesVal / (1024 * 1024)
 				}
 			}
-			
+
 			metrics = append(metrics, TelemetryMetric{
 				ApplicationName: safeName,
 				MemoryMb:        memVal,
 				StorageMb:       storageMb,
 			})
 		}
-		
+
 		if len(metrics) > 0 {
 			payload := TelemetryPayload{Metrics: metrics}
-			jsonBytes, _ := json.Marshal(payload)
-			
-			url := fmt.Sprintf("%s/v1/telemetry", controlPlaneURL)
-			req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBytes))
-			req.Header.Set("Content-Type", "application/json")
-			if key := os.Getenv("AGENT_SECRET_KEY"); key != "" {
-				req.Header.Set("x-agent-key", key)
+			jsonBytes, err := json.Marshal(payload)
+			if err != nil {
+				continue
 			}
-			
-			client := &http.Client{Timeout: 5 * time.Second}
-			client.Do(req)
+
+			url := fmt.Sprintf("%s/v1/telemetry", controlPlaneURL)
+			resp, err := doControlPlaneRequest("POST", url, bytes.NewBuffer(jsonBytes))
+			if err == nil {
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
+			}
 		}
 	}
 }

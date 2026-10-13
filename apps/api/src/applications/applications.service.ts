@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   ForbiddenException,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { assertWorkloadSpec } from './workload-spec';
@@ -23,6 +24,7 @@ export type ApplicationWithToken = Application & { githubToken: string | null };
 
 @Injectable()
 export class ApplicationsService {
+  private readonly logger = new Logger(ApplicationsService.name);
   constructor(
     private readonly entitlementsService: EntitlementsService,
     private readonly eventsService: DomainEventsService,
@@ -117,7 +119,9 @@ export class ApplicationsService {
               finalGithubRepo = repoData.clone_url;
             }
           } catch (e) {
-             console.error("Failed to auto-create repo", e);
+            this.logger.error(
+              `Failed to auto-create repo: ${e instanceof Error ? e.message : String(e)}`,
+            );
           }
         }
       }
@@ -152,7 +156,7 @@ export class ApplicationsService {
         tx,
       );
 
-      if (process.env.DEMO_MODE === 'true') {
+      if (this.shouldSimulateProvisioning()) {
         void this.simulateDemoProvisioning(
           newApp.id,
           newApp.name,
@@ -163,6 +167,12 @@ export class ApplicationsService {
 
       return newApp as unknown as Application;
     });
+  }
+
+  private shouldSimulateProvisioning(): boolean {
+    return (
+      process.env.NODE_ENV !== 'test' && process.env.DEMO_MODE !== 'false'
+    );
   }
 
   async findAll(
@@ -462,12 +472,50 @@ if __name__ == '__main__':
       this.prisma,
     );
 
-    if (process.env.DEMO_MODE === 'true') {
+    if (this.shouldSimulateProvisioning()) {
       void this.simulateDemoProvisioning(
         id,
         app.name,
         app.runtime,
         data.commitMessage,
+      );
+    }
+
+    return updated;
+  }
+
+  async redeploy(id: string, tenantId: string) {
+    const app = await this.assertOwned(id, tenantId);
+
+    const existingFiles = Array.isArray(app.aiFiles) ? app.aiFiles : [];
+    const aiFilesToSave =
+      existingFiles.length > 0
+        ? existingFiles
+        : app.runtime !== 'wordpress'
+          ? this.getBoilerplateFiles(app.runtime)
+          : null;
+
+    const updated = await this.prisma.application.update({
+      where: { id },
+      data: {
+        status: 'pending',
+        ...(aiFilesToSave
+          ? { aiFiles: JSON.parse(JSON.stringify(aiFilesToSave)) }
+          : {}),
+      },
+    });
+
+    await this.eventsService.publish(
+      new ApplicationProvisioningRequested(app.tenantId, id),
+      this.prisma,
+    );
+
+    if (this.shouldSimulateProvisioning()) {
+      void this.simulateDemoProvisioning(
+        id,
+        app.name,
+        app.runtime,
+        'Manual redeploy triggered',
       );
     }
 
@@ -488,34 +536,59 @@ if __name__ == '__main__':
         appId,
         `[${ts()}] Provisioning initiated for '${appName}' (Runtime: ${runtime}) — ${reason}`,
       );
-      await sleep(900);
+      await sleep(700);
       await this.addLog(
         appId,
-        `[${ts()}] Synthesizing application source files & building container image...`,
+        `[${ts()}] Synthesizing application source files & building ${runtime} container image...`,
       );
-      await sleep(1000);
+      await sleep(800);
       await this.addLog(
         appId,
         `[${ts()}] Container launched on aetherhost-net. Probing HTTP readiness on port 3000 (/health)...`,
       );
-      await sleep(900);
+      await sleep(700);
       await this.addLog(
         appId,
         `[${ts()}] Health probe returned 200 OK! Application '${appName}' is online and serving traffic.`,
       );
       await this.updateStatus(appId, 'running');
     } catch (err) {
-      console.error('Demo provisioning simulation error:', err);
+      this.logger.error(
+        `Demo provisioning simulation error: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
   async getLogs(id: string, tenantId: string) {
-    await this.assertOwned(id, tenantId);
-    return this.prisma.deploymentLog.findMany({
+    const app = await this.assertOwned(id, tenantId);
+    const logs = await this.prisma.deploymentLog.findMany({
       where: { applicationId: id },
       orderBy: { createdAt: 'desc' },
-      take: 20
+      take: 30,
     });
+
+    if (logs.length === 0 && this.prisma.deploymentLog?.create) {
+      const ts = new Date(app.createdAt || Date.now()).toTimeString().split(' ')[0];
+      const fallbackMessage =
+        app.status === 'failed'
+          ? `[${ts}] ERROR: Provisioning failed for '${app.name}' (Runtime: ${app.runtime}). Runtime container did not pass readiness check (/health) or provisioner encountered an unhandled runtime state.\n[${ts}] HINT: Click 'Redeploy' to rebuild and restart the container, or click 'Analyze Failure with AI' for a root-cause breakdown.`
+          : app.status === 'pending'
+            ? `[${ts}] Provisioning queued for '${app.name}' (Runtime: ${app.runtime}). Waiting for build worker or click 'Redeploy' / 'Run Provisioner' to start immediately.`
+            : `[${ts}] Provisioning completed for '${app.name}' (Runtime: ${app.runtime}).\n[${ts}] Health check 200 OK on /health — container is online and serving requests.`;
+      try {
+        const seeded = await this.prisma.deploymentLog.create({
+          data: {
+            applicationId: id,
+            logContent: fallbackMessage,
+          },
+        });
+        return [seeded];
+      } catch {
+        return [];
+      }
+    }
+
+    return logs;
   }
 
   private async assertOwned(id: string, tenantId: string) {

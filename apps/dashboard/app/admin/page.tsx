@@ -6,6 +6,8 @@ import OverviewBoard from './Overview'
 import { adminGet } from './admin-api'
 import type { Overview, TenantPage } from './types'
 
+import { isCurrentUserAdmin } from '../../lib/admin'
+
 export const dynamic = 'force-dynamic'
 
 export default async function AdminPage({
@@ -13,6 +15,11 @@ export default async function AdminPage({
 }: {
   searchParams: Promise<{ q?: string; skip?: string }>
 }) {
+  const isAdmin = await isCurrentUserAdmin()
+  if (!isAdmin) {
+    redirect('/console')
+  }
+
   const sp = await searchParams
   const q = sp.q?.trim().slice(0, 80) ?? ''
   const skip = Math.max(0, Number(sp.skip) || 0)
@@ -24,12 +31,7 @@ export default async function AdminPage({
 
   if (!overview.ok && overview.error === 'signed_out') redirect('/sign-in')
   if (!overview.ok && overview.error === 'forbidden') {
-    return (
-      <AdminShell usage={0} limit={1} crumb="denied">
-        <h1 className="text-2xl font-semibold">Access denied</h1>
-        <p className="text-sm text-muted-foreground">This Clerk user is not in ADMIN_TENANT_IDS.</p>
-      </AdminShell>
-    )
+    redirect('/console')
   }
   if (!overview.ok || !directory.ok || !isOverview(overview.data) || !isDirectory(directory.data)) {
     return (

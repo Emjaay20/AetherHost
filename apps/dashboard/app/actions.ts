@@ -126,6 +126,7 @@ export async function createApplication(formData: FormData) {
       return { error: error.message || 'Failed to create application' }
     }
 
+    revalidatePath('/console')
     revalidatePath('/')
     return { success: true }
   } catch (error) {
@@ -161,25 +162,56 @@ export async function runProvisioner() {
       method: 'POST',
       headers,
     });
+    revalidatePath('/console');
     revalidatePath('/');
   } catch (error) {
     console.error(error);
   }
 }
 
-export async function generateOpsInsight() {
+export async function redeployApplication(id: string) {
   const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
   if (!headers) return { error: 'Unauthorized' };
 
   try {
+    const res = await fetch(`${API_URL}/v1/applications/${id}/redeploy`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'Failed to trigger redeploy' };
+    }
+
+    const data = await res.json();
+    revalidatePath('/console');
+    revalidatePath('/');
+    return { success: true, data };
+  } catch (error) {
+    return { error: 'Network error communicating with API' };
+  }
+}
+
+export async function generateOpsInsight(applicationId?: string) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const payload: Record<string, string> = {};
+    if (applicationId && applicationId !== 'all') {
+      payload.applicationId = applicationId;
+    }
+
     const res = await fetch(`${API_URL}/v1/ai/insights/ops`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({})
+      body: JSON.stringify(payload),
     });
     
     if (!res.ok) {
-      const error = await res.json();
+      const error = await res.json().catch(() => ({}));
       return { error: error.message || 'Failed to generate insight' };
     }
     
@@ -206,10 +238,11 @@ export async function promptApplication(formData: FormData) {
     });
 
     if (!res.ok) {
-      const error = await res.json();
+      const error = await res.json().catch(() => ({}));
       return { error: error.message || 'Failed to parse prompt' };
     }
 
+    revalidatePath('/console');
     revalidatePath('/');
     return { success: true };
   } catch (error) {
@@ -229,7 +262,7 @@ export async function iterateApplicationWithAi(appId: string, prompt: string) {
     });
 
     if (!res.ok) {
-      const error = await res.json();
+      const error = await res.json().catch(() => ({}));
       return { error: error.message || 'Failed to iterate on application' };
     }
 
@@ -256,6 +289,7 @@ export async function deleteApplication(id: string) {
       return { error: 'Failed to delete application' };
     }
 
+    revalidatePath('/console');
     revalidatePath('/');
     return { success: true };
   } catch (error) {
@@ -281,23 +315,31 @@ export async function getApplicationLogs(id: string) {
   }
 }
 
-export async function debugWithAi(id: string, logContent: string) {
-  const { userId, getToken } = await auth();
-  if (!userId) return { error: 'Unauthorized' };
-  const token = await getToken();
+export async function debugWithAi(id: string, logContent?: string) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
 
   try {
-    const prompt = `My application deployment failed with the following log:\\n\\n${logContent}\\n\\nPlease explain what went wrong and how I can fix it.`;
+    const logSnippet = logContent?.trim()
+      ? `My application deployment failed with the following log:\n\n${logContent}\n\nPlease explain what went wrong and how I can fix it.`
+      : `My application deployment is currently in a failed state with no stdout logs captured. Please inspect its runtime, configuration, and source files to explain why it failed and how to recover it.`;
+
     const res = await fetch(`${API_URL}/v1/ai/insights/ops`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({ customPrompt: prompt })
+      headers,
+      body: JSON.stringify({
+        applicationId: id,
+        customPrompt: logSnippet,
+      }),
     });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'Failed to analyze failure with AI' };
+    }
+
     return { data: await res.json() };
   } catch (error) {
-    return { error: 'Network error' };
+    return { error: 'Network error communicating with AI service' };
   }
 }

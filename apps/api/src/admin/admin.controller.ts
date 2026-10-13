@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Query,
@@ -18,6 +19,8 @@ import { SuspendDto } from './dto/suspend.dto';
 @Controller('v1/admin')
 @UseGuards(ClerkAuthGuard)
 export class AdminController {
+  private readonly logger = new Logger(AdminController.name);
+
   constructor(private readonly adminService: AdminService) {}
 
   private checkAdmin(actorId: string) {
@@ -26,7 +29,9 @@ export class AdminController {
       .map((id) => id.trim())
       .filter((id) => id.length > 0);
     if (!admins.includes(actorId)) {
-      console.log(`[AdminController] Access denied for actorId: "${actorId}". Allowed:`, admins);
+      this.logger.warn(
+        `Access denied for actorId: "${actorId}". Allowed count: ${admins.length}`,
+      );
       throw new UnauthorizedException('Admin access restricted');
     }
   }

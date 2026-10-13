@@ -1,7 +1,19 @@
 import { LayoutGrid, Settings, Server, Shield } from 'lucide-react'
 import Link from 'next/link'
 
-export default function Sidebar({ usage, limit, activePath, planId }: { usage: number, limit: number, activePath: string, planId?: string }) {
+export default function Sidebar({
+  usage,
+  limit,
+  activePath,
+  planId,
+  isAdmin = false,
+}: {
+  usage: number
+  limit: number
+  activePath: string
+  planId?: string
+  isAdmin?: boolean
+}) {
   const percentUsed = Math.min((usage / limit) * 100, 100)
 
   return (
@@ -27,12 +39,14 @@ export default function Sidebar({ usage, limit, activePath, planId }: { usage: n
         >
           <Settings className="w-4 h-4" /> Settings
         </Link>
-        <Link 
-          href="/admin" 
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${activePath === '/admin' ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
-        >
-          <Shield className="w-4 h-4" /> Admin Console
-        </Link>
+        {isAdmin && (
+          <Link 
+            href="/admin" 
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${activePath === '/admin' ? 'bg-primary/10 text-primary border border-primary/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}
+          >
+            <Shield className="w-4 h-4" /> Admin Console
+          </Link>
+        )}
       </nav>
       
       {/* Quota Mini-card */}

@@ -111,6 +111,7 @@ export class EntitlementsService {
 
     const result = {
       planId: isAdmin ? 'max' : tenant.planId,
+      isAdmin,
       subscriptionStatus: tenant.subscriptionStatus,
       limits: isAdmin 
         ? {
