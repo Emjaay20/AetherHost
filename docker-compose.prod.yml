@@ -224,6 +224,7 @@ services:
       - API_URL=http://api:3000
       - NEXT_PUBLIC_API_URL=https://api.${BASE_DOMAIN}
       - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
+      - ADMIN_TENANT_IDS=${ADMIN_TENANT_IDS}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
       interval: 15s
