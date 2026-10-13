@@ -367,7 +367,7 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 		}
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port %d%s...", time.Now().Format("15:04:05"), containerName, port, path))
 		for i := 0; i < 90; i++ {
-			if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) == nil {
+			if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) == nil || (path != "/" && probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d/", port)) == nil) {
 				appLog.Info("container ready", slog.String("container", containerName), slog.Int("port", port))
 				return true
 			}

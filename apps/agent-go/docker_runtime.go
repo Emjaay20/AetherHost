@@ -24,9 +24,6 @@ func fileExists(path string) bool {
 // explicit app.Port, the Traefik port label in the AI-generated compose, an
 // EXPOSE line in the Dockerfile, then 3000.
 func detectAppPort(app Application, appDir string) int {
-	if validPort(app.Port) {
-		return app.Port
-	}
 	if m := composePortLabel.FindStringSubmatch(app.DockerCompose); m != nil {
 		if p, err := strconv.Atoi(m[1]); err == nil && validPort(p) {
 			return p
@@ -38,6 +35,9 @@ func detectAppPort(app Application, appDir string) int {
 				return p
 			}
 		}
+	}
+	if validPort(app.Port) {
+		return app.Port
 	}
 	return 3000
 }
