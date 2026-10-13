@@ -115,6 +115,22 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		}
 	}
 
+	// Ensure Cargo.lock exists and is not excluded by .dockerignore if Cargo.toml is present
+	if _, err := os.Stat(filepath.Join(appDir, "Cargo.toml")); err == nil {
+		if _, err := os.Stat(filepath.Join(appDir, "Cargo.lock")); os.IsNotExist(err) {
+			_ = os.WriteFile(filepath.Join(appDir, "Cargo.lock"), []byte(""), 0644)
+		}
+		dockerignore := filepath.Join(appDir, ".dockerignore")
+		if b, err := os.ReadFile(dockerignore); err == nil {
+			content := string(b)
+			if strings.Contains(content, "Cargo.lock") {
+				newContent := strings.ReplaceAll(content, "Cargo.lock\n", "")
+				newContent = strings.ReplaceAll(newContent, "Cargo.lock", "")
+				_ = os.WriteFile(dockerignore, []byte(newContent), 0644)
+			}
+		}
+	}
+
 	safeCompose := renderRuntimeCompose(app, safeName, hostPwd, baseDomain, dbPass)
 	if safeCompose != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
