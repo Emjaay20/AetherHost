@@ -14,8 +14,9 @@ git reset --hard origin/main
 echo "🏗️ [CI/CD] Building updated container images..."
 docker compose -f docker-compose.prod.yml build
 
-# 3. Rolling update containers (zero-downtime via Traefik)
-echo "🔄 [CI/CD] Performing zero-downtime container rollout..."
+# 3. Recreate changed containers (brief restart window per service).
+#    The API container runs `prisma db push` on start to sync the DB schema.
+echo "🔄 [CI/CD] Recreating updated containers..."
 docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
 # 4. Cleanup old dangling images to preserve NVMe disk space

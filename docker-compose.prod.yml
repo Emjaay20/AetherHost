@@ -263,7 +263,10 @@ services:
     depends_on:
       - api
       - docker-socket-proxy
+    # Must match the host owner of ${HOST_PWD}/deployments (engineer = 1001 on the VPS).
+    user: "${AGENT_UID:-1001}:${AGENT_GID:-1001}"
     environment:
+      - HOME=/tmp
       - CONTROL_PLANE_URL=http://api:3000
       - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
