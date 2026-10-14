@@ -4,6 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { clerkClient } from '@clerk/clerk-sdk-node';
@@ -26,7 +27,7 @@ export class ClerkAuthGuard implements CanActivate {
 
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -57,6 +58,9 @@ export class ClerkAuthGuard implements CanActivate {
     const token = authHeader.split(' ')[1];
 
     if (token.startsWith('aeth_')) {
+      if (!this.prisma) {
+        throw new UnauthorizedException('API Key authentication unavailable');
+      }
       const keyHash = createHash('sha256').update(token).digest('hex');
       const apiKey = await this.prisma.apiKey.findUnique({
         where: { keyHash },

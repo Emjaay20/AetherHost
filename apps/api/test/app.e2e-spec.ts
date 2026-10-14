@@ -17,6 +17,7 @@ import { ApplicationsService } from '../src/applications/applications.service';
 import { BillingController } from '../src/billing/billing.controller';
 import { BillingService } from '../src/billing/billing.service';
 import { ClerkAuthGuard } from '../src/auth/clerk-auth.guard';
+import { PrismaService } from '../src/prisma/prisma.service';
 import { AllExceptionsFilter } from '../src/common/http-exception.filter';
 import { PLANS } from '@aetherhost/domain';
 import { Queue } from 'bullmq';
@@ -72,6 +73,7 @@ describe('AetherHost API Critical Paths (e2e)', () => {
       providers: [
         AppService,
         ClerkAuthGuard,
+        { provide: PrismaService, useValue: { apiKey: { findUnique: jest.fn() } } },
         { provide: ApplicationsService, useValue: mockApplicationsService },
         { provide: BillingService, useValue: mockBillingService },
         { provide: Queue, useValue: mockWebhooksQueue },
