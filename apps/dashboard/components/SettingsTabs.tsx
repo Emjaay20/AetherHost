@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Shield, Key, CreditCard, Building2, Bell } from 'lucide-react'
+import ApiKeyManager from './ApiKeyManager'
 
 export default function SettingsTabs() {
   const [activeTab, setActiveTab] = useState('general')
@@ -108,7 +109,13 @@ export default function SettingsTabs() {
           </div>
         )}
 
-        {(activeTab === 'security' || activeTab === 'keys' || activeTab === 'notifications') && (
+        {activeTab === 'keys' && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <ApiKeyManager />
+          </div>
+        )}
+
+        {(activeTab === 'security' || activeTab === 'notifications') && (
           <div className="p-12 text-center border border-border/50 border-dashed rounded-2xl bg-card/30 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <h3 className="text-lg font-medium text-foreground mb-1">Coming Soon</h3>
             <p className="text-sm text-muted-foreground">This settings pane is currently under development.</p>

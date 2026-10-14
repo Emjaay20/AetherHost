@@ -16,6 +16,7 @@ import { ProvisioningModule } from './provisioning/provisioning.module';
 import { AiProxyModule } from './ai/ai-proxy.module';
 import { BillingModule } from './billing/billing.module';
 import { AuthModule } from './auth/auth.module';
+import { ApiKeysModule } from './api-keys/api-keys.module';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -77,7 +78,8 @@ const redisConfig = getRedisConfig();
     ProvisioningModule, 
     AiProxyModule, 
     BillingModule, 
-    AuthModule
+    AuthModule,
+    ApiKeysModule,
   ],
   controllers: [AppController, TelemetryController],
   providers: [
