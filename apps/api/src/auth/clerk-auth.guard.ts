@@ -7,9 +7,10 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { clerkClient } from '@clerk/clerk-sdk-node';
-import { timingSafeEqual } from 'crypto';
+import { timingSafeEqual, createHash } from 'crypto';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { SYSTEM_TENANT_ID } from './tenant.decorator';
+import { PrismaService } from '../prisma/prisma.service';
 
 function safeCompare(a: string, b: string): boolean {
   try {
@@ -23,7 +24,10 @@ function safeCompare(a: string, b: string): boolean {
 export class ClerkAuthGuard implements CanActivate {
   private readonly logger = new Logger(ClerkAuthGuard.name);
 
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -51,6 +55,28 @@ export class ClerkAuthGuard implements CanActivate {
     }
 
     const token = authHeader.split(' ')[1];
+
+    if (token.startsWith('aeth_')) {
+      const keyHash = createHash('sha256').update(token).digest('hex');
+      const apiKey = await this.prisma.apiKey.findUnique({
+        where: { keyHash },
+      });
+
+      if (!apiKey) {
+        throw new UnauthorizedException('Invalid or revoked API Key');
+      }
+
+      this.prisma.apiKey
+        .update({
+          where: { id: apiKey.id },
+          data: { lastUsedAt: new Date() },
+        })
+        .catch(() => {});
+
+      request.actorTenantId = apiKey.tenantId;
+      request.tenantId = apiKey.tenantId;
+      return true;
+    }
 
     try {
       const decoded = await clerkClient.verifyToken(token, {

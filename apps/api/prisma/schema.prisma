@@ -19,6 +19,7 @@ model Tenant {
   entitlements       TenantEntitlement?
   invoices           Invoice[]
   auditLogs          AuditLog[]
+  apiKeys            ApiKey[]
 }
 
 model Application {
@@ -125,4 +126,17 @@ model DeploymentLog {
   application   Application @relation(fields: [applicationId], references: [id])
 
   @@index([applicationId])
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  tenantId   String
+  name       String    @default("CLI Key")
+  keyHash    String    @unique
+  keyPrefix  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

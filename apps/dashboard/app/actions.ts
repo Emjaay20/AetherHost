@@ -343,3 +343,64 @@ export async function debugWithAi(id: string, logContent?: string) {
     return { error: 'Network error communicating with AI service' };
   }
 }
+
+export async function listApiKeys() {
+  const headers = await getAuthHeaders();
+  if (!headers) return [];
+
+  try {
+    const res = await fetch(`${API_URL}/v1/api-keys`, {
+      headers,
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    return res.json();
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+export async function createApiKey(name?: string) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/api-keys`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { error: err.message || 'Failed to create API key' };
+    }
+
+    revalidatePath('/settings');
+    return { data: await res.json() };
+  } catch (error) {
+    return { error: 'Failed to create API key' };
+  }
+}
+
+export async function revokeApiKey(id: string) {
+  const headers = await getAuthHeaders();
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/api-keys/${id}`, {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!res.ok) {
+      return { error: 'Failed to revoke API key' };
+    }
+
+    revalidatePath('/settings');
+    return { success: true };
+  } catch (error) {
+    return { error: 'Failed to revoke API key' };
+  }
+}
