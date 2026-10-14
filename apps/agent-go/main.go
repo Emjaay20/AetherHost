@@ -44,10 +44,12 @@ type Application struct {
 	Port                  int               `json:"port,omitempty"`
 	HealthPath            string            `json:"healthPath,omitempty"`
 	CommitMessage         string            `json:"commitMessage,omitempty"`
-	AiFiles               []struct {
-		Path    string `json:"path"`
-		Content string `json:"content"`
-	} `json:"aiFiles,omitempty"`
+	AiFiles               []AiFile          `json:"aiFiles,omitempty"`
+}
+
+type AiFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 func randomPassword() string {

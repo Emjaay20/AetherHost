@@ -81,6 +81,14 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 
 	shouldWriteAiFiles := len(app.AiFiles) > 0
 	if shouldWriteAiFiles {
+		sanitized, sanitizeErr := sanitizeAiFiles(app.AiFiles)
+		if sanitizeErr != nil {
+			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Refusing to deploy invalid AI files: %v", time.Now().Format("15:04:05"), sanitizeErr))
+			appLog.Error("invalid ai files", slog.String("error", sanitizeErr.Error()))
+			updateAppStatus(controlPlaneURL, app.ID, "failed")
+			return
+		}
+		app.AiFiles = sanitized
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Writing %d application source files...", time.Now().Format("15:04:05"), len(app.AiFiles)))
 		for _, f := range app.AiFiles {
 			if strings.Contains(f.Path, "..") || strings.HasPrefix(f.Path, "/") {

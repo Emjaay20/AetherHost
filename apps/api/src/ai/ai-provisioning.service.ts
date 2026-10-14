@@ -3,6 +3,7 @@ import { AiProxyService } from './ai-proxy.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { Runtime } from '@aetherhost/domain';
 import { getGithubToken } from '../applications/github-utils';
+import { AI_FILE_RULES, normalizeFileContent, sanitizeAiFiles } from './ai-file-sanitizer';
 
 
 @Injectable()
@@ -81,7 +82,8 @@ labels:
   - "traefik.http.routers.APP_NAME.rule=Host(\`APP_NAME.localhost\`)"
   - "traefik.http.services.APP_NAME.loadbalancer.server.port=80" (adjust port to match what the app listens on, e.g. 8080 or 8000)
 Crucially, generate the actual minimal application code files needed (e.g. src/main.rs, app.py, requirements.txt, Cargo.toml, index.html) and put them in the 'files' array. Include a clean HTML UI or index.html so the live preview looks great. Keep code concise to avoid cutting off the JSON.
-The runtime field should be "docker".
+    ${AI_FILE_RULES}
+    The runtime field should be "docker".
 ${generateDesc ? '\nAlso generate a short engaging repository description based on the prompt in the "description" field.' : ''}
 
 User Request: "${userPrompt}"
@@ -90,39 +92,42 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
 {"name": "generated-name", "runtime": "docker", "dockerCompose": "version: '3'\\n...", "files": [{"path": "src/app.py", "content": "print('hello')"}]${generateDesc ? ', "description": "generated description"' : ''}}
     `.trim();
 
-    const response = await this.aiProxy.complete(tenantId, prompt, 'infrastructure-provisioning');
-    
+    let parsed: any;
+    let usage: any;
     try {
-      const parsed = this.extractJson(response.output);
-      
-      if (!parsed.name || !parsed.runtime || !parsed.dockerCompose) {
-        throw new Error('Invalid JSON structure returned by LLM');
-      }
-
-      const finalRepoName = repoName || parsed.name;
-      const finalRepoDesc = repoDesc || parsed.description || '';
-      
-      const githubRepoUrl = undefined;
-      
-      const app = await this.appsService.create(
-        tenantId,
-        parsed.name,
-        parsed.runtime as Runtime,
-        githubRepoUrl,
-        parsed.dockerCompose,
-        parsed.files,
-        finalRepoName,
-        finalRepoDesc,
-      );
-
-      return {
-        success: true,
-        application: app,
-        aiUsage: response.usage,
-      };
+      const generated = await this.generateChecked(tenantId, 'infrastructure-provisioning', prompt, undefined, (candidate) => {
+        if (!candidate.name || !candidate.runtime || !candidate.dockerCompose) {
+          throw new Error('Invalid JSON structure returned by LLM');
+        }
+        candidate.dockerCompose = normalizeFileContent(String(candidate.dockerCompose));
+        candidate.files = sanitizeAiFiles(Array.isArray(candidate.files) ? candidate.files : []);
+      });
+      parsed = generated.parsed;
+      usage = generated.usage;
     } catch (err: any) {
       throw new BadRequestException('Failed to parse AI response into infrastructure: ' + err.message);
     }
+
+    const finalRepoName = repoName || parsed.name;
+    const finalRepoDesc = repoDesc || parsed.description || '';
+    const githubRepoUrl = undefined;
+
+    const app = await this.appsService.create(
+      tenantId,
+      parsed.name,
+      parsed.runtime as Runtime,
+      githubRepoUrl,
+      parsed.dockerCompose,
+      parsed.files,
+      finalRepoName,
+      finalRepoDesc,
+    );
+
+    return {
+      success: true,
+      application: app,
+      aiUsage: usage,
+    };
   }
 
   async iterateOnApplication(
@@ -140,8 +145,12 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
       currentFiles = app.aiFiles as unknown as { path: string; content: string }[];
     }
 
-    const filesOverview = currentFiles.length > 0
-      ? currentFiles.map(f => `--- File: ${f.path} ---\n${f.content}\n--- End of ${f.path} ---`).join('\n\n')
+    const previewFiles = currentFiles.map((file) => ({
+      path: file.path,
+      content: normalizeFileContent(file.content),
+    }));
+    const filesOverview = previewFiles.length > 0
+      ? previewFiles.map(f => `--- File: ${f.path} ---\n${f.content}\n--- End of ${f.path} ---`).join('\n\n')
       : `No current source files stored. Create standard minimal files for runtime: ${app.runtime}`;
 
     const prompt = `
@@ -160,8 +169,9 @@ User Change Request:
 
 Instructions:
 1. Carefully update, improve, or add files to satisfy the user's request.
-2. Return complete, working file contents for every modified or new file. Keep code concise and well-structured so the JSON output is never truncated.
-3. Ensure the root "/" route or an "index.html" file renders a clean, interactive HTML UI reflecting the new features so the Live Preview updates visibly, and ensure "/health" returns HTTP 200.
+    2. Return complete, working file contents for every modified or new file. Keep code concise and well-structured so the JSON output is never truncated.
+    ${AI_FILE_RULES}
+    3. Ensure the root "/" route or an "index.html" file renders a clean, interactive HTML UI reflecting the new features so the Live Preview updates visibly, and ensure "/health" returns HTTP 200.
 4. Generate a concise, conventional git commit message (e.g. "feat: add /api/users endpoint").
 5. Provide a brief 1-2 sentence human summary of changes.
 
@@ -175,25 +185,32 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
 }
 `.trim();
 
-    const response = await this.aiProxy.complete(tenantId, prompt, 'application-iteration', app.id);
-
+    let parsed: any;
+    let usage: any;
+    let mergedFiles: { path: string; content: string }[] = [];
     try {
-      const parsed = this.extractJson(response.output);
-      if (!parsed.files || !Array.isArray(parsed.files)) {
-        throw new Error('LLM response must contain a "files" array');
-      }
-
-      const fileMap = new Map<string, string>();
-      for (const f of currentFiles) {
-        fileMap.set(f.path, f.content);
-      }
-      for (const f of parsed.files) {
-        if (f.path && f.content !== undefined) {
+      const generated = await this.generateChecked(tenantId, 'application-iteration', prompt, app.id, (candidate) => {
+        if (!candidate.files || !Array.isArray(candidate.files)) {
+          throw new Error('LLM response must contain a "files" array');
+        }
+        const fileMap = new Map<string, string>();
+        for (const f of currentFiles) {
           fileMap.set(f.path, f.content);
         }
-      }
+        for (const f of candidate.files) {
+          if (f.path && f.content !== undefined) {
+            fileMap.set(f.path, f.content);
+          }
+        }
+        mergedFiles = sanitizeAiFiles(Array.from(fileMap.entries()).map(([path, content]) => ({ path, content })));
+      });
+      parsed = generated.parsed;
+      usage = generated.usage;
+    } catch (err: any) {
+      throw new BadRequestException('Failed to process AI changes: ' + err.message);
+    }
 
-      const mergedFiles = Array.from(fileMap.entries()).map(([path, content]) => ({ path, content }));
+    try {
       const commitMsg = parsed.commitMessage || `AI Architect: ${userPrompt.slice(0, 50)}`;
 
       let finalGithubRepo = app.githubRepo;
@@ -264,10 +281,37 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
         commitMessage: commitMsg,
         files: mergedFiles,
         githubRepo: finalGithubRepo,
-        aiUsage: response.usage,
+        aiUsage: usage,
       };
     } catch (err: any) {
       throw new BadRequestException('Failed to process AI changes: ' + err.message);
     }
+  }
+
+  private async generateChecked(
+    tenantId: string,
+    purpose: string,
+    basePrompt: string,
+    applicationId: string | undefined,
+    accept: (parsed: any) => void,
+  ) {
+    let rejection = '';
+    let usage: any;
+    let parsed: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const prompt = rejection
+        ? `${basePrompt}\n\nYour previous output was rejected and was NOT deployed:\n${rejection}\nReturn corrected JSON only. File contents must be raw source, not escaped text.`
+        : basePrompt;
+      const response = await this.aiProxy.complete(tenantId, prompt, purpose, applicationId);
+      usage = response.usage;
+      try {
+        parsed = this.extractJson(response.output);
+        accept(parsed);
+        return { parsed, usage };
+      } catch (err) {
+        rejection = err instanceof Error ? err.message : String(err);
+      }
+    }
+    throw new Error(rejection || 'AI response was not valid JSON');
   }
 }
