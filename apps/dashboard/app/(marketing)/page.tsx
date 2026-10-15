@@ -56,6 +56,7 @@ export default function LandingPage() {
           <nav className="nav-links" aria-label="Page">
             <a href="#use">What it is</a>
             <a href="#plans">Plans</a>
+            <Link href="/docs">Docs</Link>
             <Show when="signed-out">
               <Link href="/sign-in">Sign in</Link>
             </Show>
@@ -395,6 +396,9 @@ export default function LandingPage() {
         <a href="https://github.com/Emjaay20/AetherHost" target="_blank" rel="noopener noreferrer">
           GitHub Repository
         </a>
+        <Link href="/docs">
+          Documentation & Architecture
+        </Link>
         <span>
           Built by <a href="https://yusufsaka.dev/" target="_blank" rel="noopener noreferrer">Yusuf</a>
         </span>

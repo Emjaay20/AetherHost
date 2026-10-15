@@ -1,6 +1,6 @@
 'use client'
 
-import { CreditCard, LayoutGrid, Settings, Server, Shield, X } from 'lucide-react'
+import { CreditCard, LayoutGrid, Settings, Server, Shield, X, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Sidebar({
@@ -67,6 +67,9 @@ export default function Sidebar({
           </Link>
           <Link href="/billing" onClick={onClose} className={itemClass('/billing')}>
             <CreditCard className="h-4 w-4" /> Billing
+          </Link>
+          <Link href="/docs" onClick={onClose} className={itemClass('/docs')}>
+            <BookOpen className="h-4 w-4" /> Docs & Architecture
           </Link>
           {isAdmin && (
             <Link href="/admin" onClick={onClose} className={itemClass('/admin')}>
