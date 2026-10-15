@@ -15,3 +15,11 @@ colored = "2.1"
 comfy-table = "7.1"
 indicatif = "0.17"
 dirs = "5.0"
+
+[[bin]]
+name = "aether"
+path = "src/main.rs"
+
+[[bin]]
+name = "aether-cli"
+path = "src/main.rs"
