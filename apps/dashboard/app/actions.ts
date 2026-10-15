@@ -146,7 +146,10 @@ export async function getEvents() {
         cache: 'no-store' 
       },
     );
-    if (!res.ok) throw new Error('Failed to load events');
+    if (!res.ok) {
+      console.warn(`[getEvents] API returned status ${res.status}`);
+      return [];
+    }
     return res.json();
   } catch (error) {
     console.error(error);
