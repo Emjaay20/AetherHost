@@ -87,44 +87,70 @@ export class BillingController {
       throw new BadRequestException('Only Bachs.io is supported for checkout');
     }
 
-    const baseUrl = process.env.BACHS_SECRET_KEY?.startsWith('sk_sandbox_') 
-      ? 'https://sandbox-api.bachs.io' 
-      : 'https://api.bachs.io';
+    const baseUrl =
+      process.env.BACHS_API_URL ||
+      (process.env.BACHS_SECRET_KEY?.startsWith('sk_sandbox_')
+        ? 'https://sandbox-api.bachs.io'
+        : 'https://api.bachs.io');
 
     const webhookUrl =
       process.env.BACHS_WEBHOOK_URL ||
       `${process.env.API_BASE_URL || 'http://localhost:3000'}/v1/billing/webhooks/bachs`;
 
+    const productMap: Record<string, string | undefined> = {
+      pro: process.env.BACHS_PRO_PRODUCT_ID,
+      max: process.env.BACHS_MAX_PRODUCT_ID,
+    };
+    const productId = productMap[body.planId];
+
+    const payload: Record<string, any> = {
+      customer: { email: `${tenantId}@aetherhost.com`, name: tenantId },
+      billing_currency: 'NGN',
+      payment_method_types: ['NGN_CARD'],
+      metadata: {
+        tenantId,
+        planId: body.planId,
+      },
+      reference: `${tenantId}:${body.planId}`,
+      success_url: `${process.env.FRONTEND_URL || 'https://aetherhost.com.ng'}/billing?success=true`,
+      cancel_url: `${process.env.FRONTEND_URL || 'https://aetherhost.com.ng'}/billing?canceled=true`,
+      webhook_url: webhookUrl,
+    };
+
+    if (productId) {
+      payload.product_cart = [
+        {
+          product_id: productId,
+          quantity: 1,
+        },
+      ];
+    } else {
+      payload.pricing = {
+        amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
+        currency: 'NGN',
+        productName: `AetherHost ${body.planId.toUpperCase()} Plan`,
+      };
+    }
+
     const res = await fetch(`${baseUrl}/v1/checkout-sessions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.BACHS_SECRET_KEY}`
+        Authorization: `Bearer ${process.env.BACHS_SECRET_KEY}`,
       },
-      body: JSON.stringify({
-        customer: { email: `${tenantId}@aetherhost.com`, name: tenantId },
-        pricing: {
-          amountCent: PLANS[body.planId]?.monthlyPriceCent || 0,
-          currency: 'USD',
-          productName: `AetherHost ${body.planId.toUpperCase()} Plan`
-        },
-        success_url: `${process.env.FRONTEND_URL || 'http://localtest.me:3002'}/billing?success=true`,
-        cancel_url: `${process.env.FRONTEND_URL || 'http://localtest.me:3002'}/billing?canceled=true`,
-        webhook_url: webhookUrl,
-        reference: `${tenantId}:${body.planId}`
-      })
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
       const errText = await res.text();
       this.logger.error(`Bachs API Error: ${errText}`);
-      throw new BadRequestException(`Failed to generate Bachs invoice. Error: ${errText}`);
+      throw new BadRequestException(`Failed to generate Bachs checkout. Error: ${errText}`);
     }
 
     const data = await res.json();
     return {
       message: 'Checkout initialized',
-      checkoutUrl: data.checkout_url
+      checkoutUrl: data.checkout_url,
     };
   }
 
@@ -162,24 +188,47 @@ export class BillingController {
     let action = 'process';
     let status = 'succeeded';
     
-    if (body.type === 'subscription.canceled') {
+    if (
+      body.type === 'subscription.canceled' ||
+      body.type === 'customer.subscription.deleted'
+    ) {
       action = 'cancel';
       status = 'canceled';
-    } else if (body.type === 'invoice.payment_failed') {
+    } else if (
+      body.type === 'invoice.payment_failed' ||
+      body.type === 'collection.failed'
+    ) {
       action = 'fail';
       status = 'payment_failed';
-    } else if (body.type !== 'checkout.completed') {
+    } else if (
+      body.type !== 'checkout.completed' &&
+      body.type !== 'collection.succeeded' &&
+      body.type !== 'customer.subscription.created' &&
+      body.type !== 'invoice.paid'
+    ) {
       return { message: 'Ignored non-success event' };
     }
     
-    const providerEventId = body.id;
-    let tenantId = body.data?.metadata?.tenantId;
+    const providerEventId = body.id || body.data?.id;
+    let tenantId =
+      body.data?.metadata?.tenantId ||
+      body.data?.customer?.metadata?.tenantId;
     let planId = body.data?.metadata?.planId;
 
     if (body.data?.reference) {
       const [tId, pId] = body.data.reference.split(':');
       if (tId) tenantId = tId;
       if (pId) planId = pId;
+    }
+
+    // Fallback: check product IDs if items array is present
+    if (!planId && body.data?.items?.[0]?.product_id) {
+      const prodId = body.data.items[0].product_id;
+      if (prodId === process.env.BACHS_MAX_PRODUCT_ID) {
+        planId = 'max';
+      } else if (prodId === process.env.BACHS_PRO_PRODUCT_ID) {
+        planId = 'pro';
+      }
     }
 
     planId = planId || 'starter'; // Default to starter if undefined

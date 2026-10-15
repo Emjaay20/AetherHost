@@ -23,7 +23,7 @@ export default async function BillingPage() {
         <div className="text-center space-y-4 max-w-2xl mx-auto">
           <h1 className="text-4xl font-extrabold tracking-tight">Plans & Billing</h1>
           <p className="text-muted-foreground text-lg">
-            Upgrade your AetherHost environment to handle more traffic, deploy more apps, and unlock advanced orchestration.
+            Upgrade your AetherHost environment to handle more traffic, deploy more apps, and unlock advanced orchestration. All subscriptions are billed in Nigerian Naira (NGN).
           </p>
         </div>
 
@@ -38,7 +38,7 @@ export default async function BillingPage() {
             )}
             <h2 className="text-2xl font-bold mb-2">Starter</h2>
             <div className="flex items-baseline gap-1 mb-6">
-              <span className="text-5xl font-black">$0</span>
+              <span className="text-5xl font-black">₦0</span>
               <span className="text-muted-foreground">/ month</span>
             </div>
             
@@ -65,7 +65,7 @@ export default async function BillingPage() {
             </div>
             
             <div className="flex items-baseline gap-1 mb-6">
-              <span className="text-5xl font-black">$10</span>
+              <span className="text-5xl font-black">₦15,000</span>
               <span className="text-muted-foreground">/ month</span>
             </div>
             
@@ -92,7 +92,7 @@ export default async function BillingPage() {
             </div>
             
             <div className="flex items-baseline gap-1 mb-6">
-              <span className="text-5xl font-black">$25</span>
+              <span className="text-5xl font-black">₦35,000</span>
               <span className="text-muted-foreground">/ month</span>
             </div>
             

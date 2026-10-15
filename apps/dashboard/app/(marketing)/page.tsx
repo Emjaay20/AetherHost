@@ -180,14 +180,14 @@ export default function LandingPage() {
           <div className="wrap">
             <h2>Pick how many client sites the agency can run.</h2>
             <p className="intro">
-              Starter is one site, free. Pro and Max are for a roster. Checkout
-              is Bachs. There is no fourth plan.
+              Starter is one site, free. Pro and Max are for a roster. Billed in
+              Nigerian Naira (NGN) via Bachs. There is no fourth plan.
             </p>
             <div className="plans">
               <article className="plan">
                 <h3 className="plan-name">Starter</h3>
                 <p className="plan-price">
-                  <span className="amount">$0</span>
+                  <span className="amount">₦0</span>
                   <span className="per">/ month</span>
                 </p>
                 <ul>
@@ -208,7 +208,7 @@ export default function LandingPage() {
                 <p className="plan-fit">For a client roster</p>
                 <h3 className="plan-name">Pro</h3>
                 <p className="plan-price">
-                  <span className="amount">$10</span>
+                  <span className="amount">₦15,000</span>
                   <span className="per">/ month</span>
                 </p>
                 <ul>
@@ -229,7 +229,7 @@ export default function LandingPage() {
               <article className="plan">
                 <h3 className="plan-name">Max</h3>
                 <p className="plan-price">
-                  <span className="amount">$25</span>
+                  <span className="amount">₦35,000</span>
                   <span className="per">/ month</span>
                 </p>
                 <ul>
@@ -286,7 +286,7 @@ export default function LandingPage() {
                 <span className="step-index">01</span>
                 <h3>Secure Checkout</h3>
                 <p>
-                  Payments are verified securely via Paystack webhooks, with cryptographic HMAC checks ensuring that every upgrade is authentic.
+                  Payments are verified securely via Bachs webhooks, with cryptographic HMAC checks ensuring that every upgrade is authentic.
                 </p>
               </li>
               <li className="step">
