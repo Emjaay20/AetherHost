@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import DocsClient from './DocsClient'
 
 export const metadata: Metadata = {
-  title: 'Documentation & Architecture | AetherHost',
-  description:
-    'Comprehensive technical documentation, developer CLI guide, systems architecture, and engineering trade-offs behind the AetherHost Autonomous Cloud Platform.',
+  title: 'Docs | AetherHost',
+  description: 'How AetherHost deploys apps, how the CLI works, and how plans are enforced.',
 }
 
 export default function DocsPage() {
