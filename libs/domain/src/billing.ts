@@ -15,6 +15,7 @@ export interface CatalogPlan {
   id: string;
   name: string;
   monthlyPriceCent: number;
+  currency?: string;
   entitlements: Entitlements;
 }
 
@@ -62,18 +63,21 @@ export const PLANS: Record<string, CatalogPlan> = {
     id: 'starter',
     name: 'Starter',
     monthlyPriceCent: 0,
+    currency: 'NGN',
     entitlements: STARTER_ENTITLEMENTS,
   },
   pro: {
     id: 'pro',
     name: 'Pro',
-    monthlyPriceCent: 1000, // $10.00
+    monthlyPriceCent: 1500000, // ₦15,000.00
+    currency: 'NGN',
     entitlements: PRO_ENTITLEMENTS,
   },
   max: {
     id: 'max',
     name: 'Max',
-    monthlyPriceCent: 2500, // $25.00
+    monthlyPriceCent: 3500000, // ₦35,000.00
+    currency: 'NGN',
     entitlements: MAX_ENTITLEMENTS,
   },
 };

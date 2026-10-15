@@ -29,7 +29,7 @@ export default function BillingClientForm({
   const weights: Record<string, number> = { starter: 0, pro: 1, max: 2 }
   const isDowngrade = weights[targetPlan] < weights[currentPlan]
 
-  const priceMap: Record<string, number> = { starter: 0, pro: 10, max: 25 }
+  const priceMap: Record<string, number> = { starter: 0, pro: 15000, max: 35000 }
 
   const handleUpgradeClick = async () => {
     setLoading(true)
@@ -42,9 +42,13 @@ export default function BillingClientForm({
       
       const data = await createCheckoutSession(targetPlan);
       if (data.checkoutUrl) {
-        setCheckoutUrl(data.checkoutUrl)
-        setPlanPrice(priceMap[targetPlan])
-        setShowModal(true)
+        if (data.checkoutUrl.includes('simulate=true')) {
+          setCheckoutUrl(data.checkoutUrl)
+          setPlanPrice(priceMap[targetPlan])
+          setShowModal(true)
+        } else {
+          window.location.href = data.checkoutUrl;
+        }
       } else {
         router.refresh()
       }
@@ -63,12 +67,12 @@ export default function BillingClientForm({
     }
 
     if (amount > planPrice) {
-      setPaymentError(`That's too much! The exact price is $${planPrice}.00.`);
+      setPaymentError(`That's too much! The exact price is ₦${planPrice.toLocaleString()}.`);
       return;
     }
     
     if (amount < planPrice) {
-      setPaymentError(`That's not enough. The exact price is $${planPrice}.00.`);
+      setPaymentError(`That's not enough. The exact price is ₦${planPrice.toLocaleString()}.`);
       return;
     }
 
@@ -123,11 +127,11 @@ export default function BillingClientForm({
             <h3 className="text-2xl font-bold mb-4">Complete Payment</h3>
             <p className="text-muted-foreground mb-4">
               You are upgrading to the <strong>{targetPlan.toUpperCase()}</strong> plan. 
-              The required amount is <strong>${planPrice}.00</strong>.
+              The required amount is <strong>₦{planPrice.toLocaleString()}</strong>.
             </p>
             
             <div className="bg-muted p-4 rounded-lg mb-4">
-              <label className="block text-sm font-medium mb-2">Enter payment amount ($):</label>
+              <label className="block text-sm font-medium mb-2">Enter payment amount (₦):</label>
               <input 
                 type="number"
                 value={enteredAmount}

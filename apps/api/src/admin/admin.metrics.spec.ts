@@ -7,6 +7,7 @@ import {
   tenantSignal,
   type TenantInput,
 } from './admin.metrics';
+import { PLANS } from '@aetherhost/domain';
 
 function tenant(overrides: Partial<TenantInput> = {}): TenantInput {
   return {
@@ -90,7 +91,7 @@ describe('admin metrics', () => {
         { planId: 'max', subscriptionStatus: 'cancelled' },
         { planId: 'starter', subscriptionStatus: 'past_due' },
       ]),
-    ).toBe(1000);
+    ).toBe(PLANS.pro.monthlyPriceCent);
   });
 
   it('drops prompt and model output from event payloads', () => {
