@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, Copy, Menu, X } from 'lucide-react'
 
-const NAV = [
+type DocLink = { id: string; label: string }
+
+const NAV: { label: string; items: DocLink[] }[] = [
   {
     label: 'Getting started',
     items: [
@@ -21,9 +23,9 @@ const NAV = [
       { id: 'billing', label: 'Billing' },
     ],
   },
-] as const
+]
 
-const TOC = NAV.flatMap((group) => group.items)
+const TOC: DocLink[] = NAV.flatMap((group) => group.items)
 
 const COMMANDS = [
   ['aether status', 'Check that the control plane is reachable.'],
