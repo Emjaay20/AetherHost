@@ -24,7 +24,7 @@ export default function SettingsTabs({ planId = 'starter' }: { planId?: string }
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
       {/* Settings Nav */}
-      <nav className="space-y-1">
+      <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 md:mx-0 md:flex-col md:overflow-visible md:px-0 md:pb-0">
         {tabs.map(tab => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -33,7 +33,7 @@ export default function SettingsTabs({ planId = 'starter' }: { planId?: string }
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
+              className={`flex w-auto shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors md:w-full ${
                 isActive 
                   ? 'bg-muted text-foreground' 
                   : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'

@@ -117,7 +117,7 @@ export default function OverviewBoard({
 
       <Section kicker="Entitlements" title="Quota saturation">
         <Panel className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <tr className="border-b border-border/50">
                 <th className="p-3 font-medium">Tenant</th>
@@ -203,17 +203,17 @@ export default function OverviewBoard({
         action={<SyncDirectory />}
       >
         <Panel>
-          <div className="p-4 border-b border-border/50 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <form action="/admin" className="relative">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/50 p-4">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+              <form action="/admin" className="relative w-full sm:w-64">
                 <input
                   name="q"
                   defaultValue={q}
                   placeholder="Search name or id"
-                  className="w-64 pl-3 pr-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="w-full rounded-lg border border-border bg-background py-2 pl-3 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </form>
-              <div className="hidden md:flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Link href="/admin" className={`px-3 py-1.5 text-xs rounded-full border ${!q ? 'bg-primary/10 text-primary border-primary/30' : 'border-transparent text-muted-foreground hover:bg-muted'}`}>All</Link>
                 <Link href="/admin?q=growth" className={`px-3 py-1.5 text-xs rounded-full border ${q === 'growth' ? 'bg-primary/10 text-primary border-primary/30' : 'border-transparent text-muted-foreground hover:bg-muted'}`}>Growth Plan</Link>
                 <Link href="/admin?q=past_due" className={`px-3 py-1.5 text-xs rounded-full border ${q === 'past_due' ? 'bg-amber-500/10 text-amber-500 border-amber-500/30' : 'border-transparent text-muted-foreground hover:bg-muted'}`}>Past Due</Link>
@@ -222,7 +222,7 @@ export default function OverviewBoard({
             <p className="text-xs text-muted-foreground tabular-nums">{directory.meta.total} tenants</p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
                 <tr className="border-b border-border/50">
                   <th className="p-3 font-medium">Tenant</th>

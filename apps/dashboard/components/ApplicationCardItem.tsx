@@ -81,15 +81,15 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             <Box className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
               <h4 className="font-semibold text-sm">{app.name}</h4>
               <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
                 {app.runtime}
               </span>
             </div>
 
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-xs text-muted-foreground font-mono">{app.id}</p>
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <p className="max-w-full truncate font-mono text-xs text-muted-foreground">{app.id}</p>
               {app.githubRepo && (
                 <a
                   href={app.githubRepo.replace(/\.git$/, '')}
@@ -98,7 +98,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                   className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors"
                 >
                   <GitBranch className="w-3 h-3 text-zinc-500" />
-                  <span>{app.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
+                  <span className="max-w-[160px] truncate sm:max-w-[240px]">{app.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
                   <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
                 </a>
               )}
@@ -107,7 +107,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
         </div>
 
         {/* Right: Status & Actions */}
-        <div className="flex items-center gap-4 sm:gap-6">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-6">
           {/* Status Badge */}
           <div className="flex items-center gap-2">
             <div className="relative flex h-2 w-2">

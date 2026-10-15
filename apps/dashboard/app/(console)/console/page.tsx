@@ -5,12 +5,11 @@ import OpsInsightPanel from '../../../components/OpsInsightPanel'
 import AiProvisioningPrompt from '../../../components/AiProvisioningPrompt'
 import AutoRefresh from '../../../components/AutoRefresh'
 import ApplicationCardItem, { type ApplicationItem } from '../../../components/ApplicationCardItem'
-import Sidebar from '../../../components/Sidebar'
-import { Server, Activity, ArrowUpRight, Cpu, LayoutGrid, Settings, Box, Terminal, HardDrive } from 'lucide-react'
+import AppShell from '../../../components/AppShell'
+import { Server, Activity, Box, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { safeAppName } from '../../../lib/app-name';
 import { stopImpersonating } from '../../admin/actions';
 
 import { isCurrentUserAdmin } from '../../../lib/admin'
@@ -39,72 +38,73 @@ export default async function Dashboard() {
   const planId = entitlements?.planId || 'starter'
 
   return (
-    <div className="min-h-screen flex w-full">
-      <AutoRefresh interval={8000} />
-      <Sidebar usage={usage} limit={limit} activePath="/console" planId={planId} isAdmin={isAdmin} />
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {impersonateTenantId && (
-          <div className="bg-amber-500/15 border-b border-amber-500/30 px-8 py-2.5 flex items-center justify-between text-xs text-amber-300">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold uppercase tracking-wider text-[10px] bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40">
+    <AppShell
+      usage={usage}
+      limit={limit}
+      activePath="/console"
+      planId={planId}
+      isAdmin={isAdmin}
+      title="Overview"
+      crumb="workspace"
+      banner={
+        impersonateTenantId ? (
+          <div className="flex flex-col gap-2 border-b border-amber-500/30 bg-amber-500/15 px-4 py-2.5 text-xs text-amber-300 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="rounded border border-amber-500/40 bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
                 Impersonating
               </span>
-              <span>
+              <span className="min-w-0 break-all">
                 Operating as <strong>{impersonateTenantName || impersonateTenantId}</strong> ({impersonateTenantId})
               </span>
             </div>
             <form action={stopImpersonating}>
               <button
                 type="submit"
-                className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 text-xs font-medium transition-colors"
+                className="rounded-lg border border-amber-500/40 bg-amber-500/20 px-3 py-1 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/30"
               >
                 Exit Impersonation
               </button>
             </form>
           </div>
-        )}
-        <header className="h-16 flex items-center justify-between px-8 border-b border-border/40 bg-background/50 backdrop-blur-xl sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold">Overview</h1>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">workspace</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link 
-              href="/billing"
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+        ) : null
+      }
+      actions={
+        <>
+          <Link
+            href="/billing"
+            className="whitespace-nowrap rounded-lg border border-primary/20 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+          >
+            <span className="hidden sm:inline">Current Plan: </span>
+            {planId.toUpperCase()}
+          </Link>
+          <form action={runProvisioner}>
+            <button
+              type="submit"
+              className="whitespace-nowrap rounded-lg border border-border/50 bg-muted px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all duration-200 hover:bg-muted/80 hover:text-foreground active:scale-95"
             >
-              Current Plan: {planId.toUpperCase()}
-            </Link>
-            <form action={runProvisioner}>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 active:scale-95 shadow-sm bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-border/50"
-              >
-                Run Provisioner
+              <span className="sm:hidden">Provision</span>
+              <span className="hidden sm:inline">Run Provisioner</span>
+            </button>
+          </form>
+          <CreateAppForm limitReached={limitReached} />
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
+          <Show when="signed-out">
+            <SignInButton mode="modal">
+              <button className="rounded-lg border border-primary/50 bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-200 hover:bg-primary/90 active:scale-95">
+                Sign In
               </button>
-            </form>
-            <CreateAppForm limitReached={limitReached} />
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button className="px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 active:scale-95 shadow-sm bg-primary text-primary-foreground hover:bg-primary/90 border border-primary/50">
-                  Sign In
-                </button>
-              </SignInButton>
-            </Show>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+            </SignInButton>
+          </Show>
+        </>
+      }
+    >
+      <AutoRefresh interval={8000} />
+      <div className="mx-auto max-w-6xl space-y-8 animate-in fade-in duration-500">
             
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               
               <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
@@ -113,7 +113,7 @@ export default async function Dashboard() {
                   <h3 className="text-sm font-medium">Active Deployments</h3>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{apps.length} <span className="text-lg font-medium text-muted-foreground">/ {limit}</span></span>
+                  <span className="text-2xl font-bold sm:text-3xl">{apps.length} <span className="text-lg font-medium text-muted-foreground">/ {limit}</span></span>
                 </div>
               </div>
 
@@ -125,7 +125,7 @@ export default async function Dashboard() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-3xl font-bold">{storageUsage}<span className="text-lg text-muted-foreground font-normal ml-1">MB</span></span>
+                    <span className="text-2xl font-bold sm:text-3xl">{storageUsage}<span className="ml-1 text-lg font-normal text-muted-foreground">MB</span></span>
                     <span className="text-sm text-muted-foreground">/ {storageLimit} MB</span>
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
@@ -142,7 +142,7 @@ export default async function Dashboard() {
                 </div>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-3xl font-bold">{(entitlements?.usage?.bandwidthMb || 0).toFixed(1)}<span className="text-lg text-muted-foreground font-normal ml-1">MB</span></span>
+                    <span className="text-2xl font-bold sm:text-3xl">{(entitlements?.usage?.bandwidthMb || 0).toFixed(1)}<span className="ml-1 text-lg font-normal text-muted-foreground">MB</span></span>
                     <span className="text-sm text-muted-foreground">/ {(entitlements?.limits?.bandwidthMb || 10240) / 1024} GB</span>
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
@@ -158,7 +158,7 @@ export default async function Dashboard() {
                   <h3 className="text-sm font-medium">AI Orchestration</h3>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-3xl font-bold">{entitlements?.usage?.aiRequests || '0'} <span className="text-lg font-medium text-muted-foreground">/ {entitlements?.limits?.aiRequests || '0'} reqs</span></span>
+                  <span className="break-words text-2xl font-bold sm:text-3xl">{entitlements?.usage?.aiRequests || '0'} <span className="text-lg font-medium text-muted-foreground">/ {entitlements?.limits?.aiRequests || '0'} reqs</span></span>
                 </div>
               </div>
             </div>
@@ -203,8 +203,6 @@ export default async function Dashboard() {
             <AiProvisioningPrompt apps={apps} />
 
           </div>
-        </div>
-      </main>
-    </div>
+    </AppShell>
   );
 }

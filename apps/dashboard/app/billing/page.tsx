@@ -1,28 +1,39 @@
 import { auth } from '@clerk/nextjs/server'
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
+import { UserButton } from '@clerk/nextjs'
 import { getEntitlements } from '../actions'
-import { ArrowLeft, Check, Zap, Rocket } from 'lucide-react'
+import { Check, Zap, Rocket } from 'lucide-react'
 import BillingClientForm from './BillingClientForm'
+import AppShell from '../../components/AppShell'
+import { isCurrentUserAdmin } from '../../lib/admin'
 
 export default async function BillingPage() {
   const { userId } = await auth();
   if (!userId) redirect('/login');
   
-  const entitlements = await getEntitlements()
+  const [entitlements, isAdmin] = await Promise.all([
+    getEntitlements(),
+    isCurrentUserAdmin(),
+  ])
   const planId = entitlements?.planId || 'starter'
+  const usage = entitlements?.usage?.applications || 0
+  const limit = entitlements?.limits?.applications || 3
 
   return (
-    <div className="min-h-screen bg-background p-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-        
-        <Link href="/console" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
-        </Link>
-        
-        <div className="text-center space-y-4 max-w-2xl mx-auto">
-          <h1 className="text-4xl font-extrabold tracking-tight">Plans & Billing</h1>
-          <p className="text-muted-foreground text-lg">
+    <AppShell
+      usage={usage}
+      limit={limit}
+      activePath="/billing"
+      planId={planId}
+      isAdmin={isAdmin}
+      title="Billing"
+      crumb="plans"
+      actions={<UserButton />}
+    >
+      <div className="mx-auto max-w-6xl space-y-8 animate-in fade-in duration-500">
+        <div className="mx-auto max-w-2xl space-y-4 text-center">
+          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Plans & Billing</h2>
+          <p className="text-base text-muted-foreground sm:text-lg">
             Upgrade your AetherHost environment to handle more traffic, deploy more apps, and unlock advanced orchestration. All subscriptions are billed in Nigerian Naira (NGN).
           </p>
         </div>
@@ -37,8 +48,8 @@ export default async function BillingPage() {
               </div>
             )}
             <h2 className="text-2xl font-bold mb-2">Starter</h2>
-            <div className="flex items-baseline gap-1 mb-6">
-              <span className="text-5xl font-black">₦0</span>
+            <div className="mb-6 flex flex-wrap items-baseline gap-1">
+              <span className="text-3xl font-black sm:text-5xl">₦0</span>
               <span className="text-muted-foreground">/ month</span>
             </div>
             
@@ -64,8 +75,8 @@ export default async function BillingPage() {
               <Zap className="w-6 h-6 text-blue-400" />
             </div>
             
-            <div className="flex items-baseline gap-1 mb-6">
-              <span className="text-5xl font-black">₦15,000</span>
+            <div className="mb-6 flex flex-wrap items-baseline gap-1">
+              <span className="text-3xl font-black sm:text-5xl">₦15,000</span>
               <span className="text-muted-foreground">/ month</span>
             </div>
             
@@ -91,8 +102,8 @@ export default async function BillingPage() {
               <Rocket className="w-6 h-6 text-purple-400" />
             </div>
             
-            <div className="flex items-baseline gap-1 mb-6">
-              <span className="text-5xl font-black">₦35,000</span>
+            <div className="mb-6 flex flex-wrap items-baseline gap-1">
+              <span className="text-3xl font-black sm:text-5xl">₦35,000</span>
               <span className="text-muted-foreground">/ month</span>
             </div>
             
@@ -108,6 +119,6 @@ export default async function BillingPage() {
 
         </div>
       </div>
-    </div>
+    </AppShell>
   )
 }

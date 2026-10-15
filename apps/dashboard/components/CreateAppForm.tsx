@@ -56,14 +56,15 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
         onClick={() => setIsOpen(true)}
         disabled={limitReached}
         className={cn(
-          "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 active:scale-95 shadow-sm shadow-black/50 border border-primary/20",
+          "flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm rounded-lg font-medium transition-all duration-200 active:scale-95 shadow-sm shadow-black/50 border border-primary/20 sm:px-4",
           limitReached 
             ? "bg-muted text-muted-foreground cursor-not-allowed border-muted/50" 
             : "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-primary/25 hover:border-primary/40"
         )}
       >
         <Plus className="w-4 h-4" />
-        New Application
+        <span className="sm:hidden">New</span>
+        <span className="hidden sm:inline">New Application</span>
       </button>
 
       {mounted && createPortal(

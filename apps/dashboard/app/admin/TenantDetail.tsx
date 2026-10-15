@@ -53,7 +53,7 @@ export default function TenantDetailView({ detail }: { detail: TenantDetail }) {
 
       <Section kicker="Workloads" title="Applications">
         <Panel className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <tr className="border-b border-border/50">
                 <th className="p-3 font-medium">App</th>
