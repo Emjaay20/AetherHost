@@ -1,19 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { Shield, Key, CreditCard, Building2, Bell } from 'lucide-react'
+import Link from 'next/link'
+import { Shield, Key, CreditCard, Building2, Bell, ExternalLink, Zap } from 'lucide-react'
+import { useUser } from '@clerk/nextjs'
 import ApiKeyManager from './ApiKeyManager'
 
-export default function SettingsTabs() {
+export default function SettingsTabs({ planId = 'starter' }: { planId?: string }) {
   const [activeTab, setActiveTab] = useState('general')
+  const { user } = useUser()
 
   const tabs = [
     { id: 'general', label: 'General', icon: Building2 },
-    { id: 'security', label: 'Security', icon: Shield },
     { id: 'keys', label: 'API Keys', icon: Key },
     { id: 'billing', label: 'Billing', icon: CreditCard },
+    { id: 'security', label: 'Security', icon: Shield },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ]
+
+  const userDisplayName = user?.fullName || user?.username || 'My Organization'
+  const userEmail = user?.primaryEmailAddress?.emailAddress || ''
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -49,40 +55,24 @@ export default function SettingsTabs() {
               <h3 className="font-semibold text-lg mb-4">Organization Profile</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Organization Name</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Organization / Developer Name</label>
                   <input 
                     type="text" 
-                    defaultValue="demo-agency" 
-                    className="w-full max-w-md bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={userDisplayName} 
+                    readOnly
+                    className="w-full max-w-md bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">Managed automatically via your Clerk account profile.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Support Email</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Primary Email</label>
                   <input 
                     type="email" 
-                    defaultValue="admin@demo-agency.com" 
-                    className="w-full max-w-md bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    value={userEmail} 
+                    readOnly
+                    className="w-full max-w-md bg-muted/40 border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none"
                   />
                 </div>
-                <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors">
-                  Save Changes
-                </button>
-              </div>
-            </section>
-
-            {/* Danger Zone */}
-            <section className="p-6 rounded-2xl border border-red-500/20 bg-card shadow-sm mt-8">
-              <h3 className="font-semibold text-lg text-red-500 mb-1">Danger Zone</h3>
-              <p className="text-sm text-muted-foreground mb-4">Irreversible and destructive actions.</p>
-              
-              <div className="flex items-center justify-between py-4 border-t border-border/50">
-                <div>
-                  <h4 className="font-medium text-foreground">Delete Organization</h4>
-                  <p className="text-sm text-muted-foreground">Permanently delete this organization and all applications.</p>
-                </div>
-                <button className="px-4 py-2 rounded-lg border border-red-500/50 text-red-500 font-medium text-sm hover:bg-red-500/10 transition-colors">
-                  Delete Organization
-                </button>
               </div>
             </section>
           </div>
@@ -93,17 +83,38 @@ export default function SettingsTabs() {
             {/* Plan Details */}
             <section className="p-6 rounded-2xl border border-border/50 bg-card shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-10 -mt-10" />
-              <h3 className="font-semibold text-lg mb-1">Current Plan</h3>
-              <p className="text-sm text-muted-foreground mb-4">You are currently on the Starter plan.</p>
-              
-              <div className="bg-muted/30 border border-border/50 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h4 className="font-medium text-foreground">Starter Tier</h4>
-                  <p className="text-sm text-muted-foreground mt-1">Up to 3 applications, 1000 AI requests.</p>
+                  <h3 className="font-semibold text-lg text-foreground">Active Subscription</h3>
+                  <p className="text-sm text-muted-foreground">
+                    You are currently on the <strong className="text-foreground uppercase">{planId}</strong> plan.
+                  </p>
                 </div>
-                <button className="px-4 py-2 rounded-lg bg-white text-black font-medium text-sm hover:bg-gray-100 transition-colors">
-                  Upgrade to Pro
-                </button>
+                <div className="px-3 py-1 bg-primary/10 text-primary text-xs font-bold rounded-full uppercase tracking-wider">
+                  {planId}
+                </div>
+              </div>
+              
+              <div className="bg-muted/30 border border-border/50 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h4 className="font-medium text-foreground flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-primary" />
+                    {planId === 'max' ? 'Max Plan' : planId === 'pro' ? 'Pro Plan' : 'Starter Plan (Free)'}
+                  </h4>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {planId === 'max'
+                      ? '20 Applications • 200 AI Requests • 10 GB Storage • Custom Domains & Priority Support'
+                      : planId === 'pro'
+                        ? '5 Applications • 50 AI Requests • 2 GB Storage • Custom Domains'
+                        : '1 Application • 10 AI Requests • 512 MB Storage'}
+                  </p>
+                </div>
+                <Link
+                  href="/billing"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors shrink-0"
+                >
+                  Manage Plans & Invoices <ExternalLink className="w-4 h-4" />
+                </Link>
               </div>
             </section>
           </div>

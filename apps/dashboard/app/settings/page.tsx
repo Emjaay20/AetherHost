@@ -40,7 +40,7 @@ export default async function SettingsPage() {
               <p className="text-muted-foreground mt-1">Manage your team, billing, and API preferences.</p>
             </div>
 
-            <SettingsTabs />
+            <SettingsTabs planId={entitlements?.planId || 'starter'} />
           </div>
         </div>
       </main>
