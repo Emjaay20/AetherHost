@@ -171,8 +171,8 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
         </div>
 
         {/* Project Selector + Generate Button */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 z-10">
-          <div className="relative min-w-[230px] flex-1 sm:flex-initial">
+        <div className="z-10 flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
+          <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[230px] sm:flex-1">
             <select
               value={selectedScope}
               onChange={(e) => setSelectedScope(e.target.value)}

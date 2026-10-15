@@ -48,6 +48,11 @@ export default function LandingPage() {
           <Link href="/" className="brand">
             AetherHost
           </Link>
+          <input id="nav-toggle" className="nav-toggle" type="checkbox" />
+          <label htmlFor="nav-toggle" className="nav-toggle-btn">
+            <span className="nav-open-label">Menu</span>
+            <span className="nav-close-label">Close</span>
+          </label>
           <nav className="nav-links" aria-label="Page">
             <a href="#use">What it is</a>
             <a href="#plans">Plans</a>

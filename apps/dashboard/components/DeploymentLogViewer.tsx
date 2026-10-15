@@ -125,11 +125,11 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
 
   return (
     <div className="w-full mt-3 pt-3 border-t border-border/30">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <button 
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className={`flex items-center gap-2 text-xs font-medium transition-colors ${
+          className={`flex items-start gap-2 text-left text-xs font-medium transition-colors ${
             status === 'failed' 
               ? 'text-red-400 hover:text-red-300' 
               : status === 'pending' || redeploying
