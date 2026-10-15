@@ -39,9 +39,8 @@ export default function Sidebar({
       />
       <aside
         id="app-sidebar"
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r border-border/40 bg-background/95 backdrop-blur-xl transition-transform duration-200 lg:static lg:z-auto lg:h-screen lg:max-w-none lg:translate-x-0 lg:bg-background/50 ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        data-open={open ? 'true' : 'false'}
+        className="app-sidebar fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r border-border/40 bg-background/95 backdrop-blur-xl lg:static lg:z-auto lg:h-screen lg:max-w-none lg:translate-x-0 lg:bg-background/50"
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-border/40 px-6">
           <Link href="/console" onClick={onClose} className="flex items-center gap-3">
