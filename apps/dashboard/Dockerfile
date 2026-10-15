@@ -28,6 +28,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+COPY --from=builder --chown=node:node /app/apps/dashboard/public ./public
 COPY --from=builder --chown=node:node /app/apps/dashboard/public ./apps/dashboard/public
 COPY --from=builder --chown=node:node /app/apps/dashboard/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/dashboard/.next/static ./apps/dashboard/.next/static
