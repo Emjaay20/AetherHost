@@ -25,3 +25,20 @@
     background-attachment: fixed;
   }
 }
+
+@media (max-width: 1023px) {
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: min(16rem, 85vw);
+    transform: translateX(-110%);
+    transition: transform 200ms ease;
+  }
+
+  .app-sidebar[data-open="true"] {
+    transform: translateX(0);
+  }
+}
