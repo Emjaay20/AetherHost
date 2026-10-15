@@ -41,4 +41,12 @@
   .app-sidebar[data-open="true"] {
     transform: translateX(0);
   }
+
+  .docs-sidebar {
+    transform: translateX(-110%);
+  }
+
+  .docs-sidebar[data-open="true"] {
+    transform: translateX(0);
+  }
 }
