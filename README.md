@@ -167,24 +167,43 @@ Visit the dashboard at [http://localhost:3002](http://localhost:3002) and explor
 
 ---
 
-## 🦀 Rust Toolchain Quickstart
+## 🦀 Rust Developer CLI & Systems Toolchain
 
-AetherHost includes three production Rust crates in `crates/`:
-
+### 1-Line CLI Quick Install
+Install the official `aether` binary directly to your terminal:
 ```bash
-# Compile all crates in release mode
-cd crates
-cargo build --release --workspace
+curl -fsSL https://console.aetherhost.com.ng/install.sh | bash
+```
+*(Or install via Cargo from source: `cargo install --git https://github.com/Emjaay20/AetherHost.git aether-cli`)*
 
-# 1. Test the Developer CLI
-./target/release/aether-cli status
-AETHER_AGENT_KEY=aether-secret ./target/release/aether-cli list
+### CLI Usage
+```bash
+# 1. Log in with your Personal API Key (generated in Settings > API Keys)
+aether login --token aeth_...
 
-# 2. Run the WebSocket Log Daemon
-PORT=4001 ./target/release/aether-logd
+# 2. Verify connection to the production cloud
+aether status
 
-# 3. Run the Edge Reverse Proxy & Bandwidth Meter
-ROUTER_PORT=8080 DEFAULT_BACKEND=http://127.0.0.1:3000 ./target/release/aether-router
+# 3. List your active applications
+aether list
+
+# 4. Provision a new application
+aether create my-app --runtime nodejs
+
+# 5. Stream container build & runtime logs
+aether logs <app-id>
+
+# 6. Prompt the AI Architect to synthesize code and push to Git
+aether ai <app-id> "Add a REST endpoint /api/health that returns uptime"
+```
+
+AetherHost also includes two backend Rust system daemons:
+```bash
+# Run the WebSocket Log Ingestion Daemon (zero-GC real-time logs)
+PORT=4001 cargo run --release -p aether-logd
+
+# Run the Edge Reverse Proxy & Bandwidth Meter
+ROUTER_PORT=8080 DEFAULT_BACKEND=http://127.0.0.1:3000 cargo run --release -p aether-router
 ```
 
 ---

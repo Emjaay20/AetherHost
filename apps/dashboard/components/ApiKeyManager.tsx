@@ -20,6 +20,7 @@ export default function ApiKeyManager() {
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [commandCopied, setCommandCopied] = useState(false)
+  const [installerCopied, setInstallerCopied] = useState(false)
 
   const loadKeys = async () => {
     setLoading(true)
@@ -97,6 +98,26 @@ export default function ApiKeyManager() {
           </div>
         </div>
 
+        {/* Quick Install Snippet */}
+        <div className="mt-4 p-3 bg-muted/40 border border-border/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 font-mono text-xs text-foreground overflow-x-auto">
+            <Terminal className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span>curl -fsSL https://console.aetherhost.com.ng/install.sh | bash</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText('curl -fsSL https://console.aetherhost.com.ng/install.sh | bash')
+              setInstallerCopied(true)
+              setTimeout(() => setInstallerCopied(false), 2000)
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border text-xs font-sans font-medium hover:bg-muted transition-colors shrink-0 text-muted-foreground hover:text-foreground self-start sm:self-auto"
+          >
+            {installerCopied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+            {installerCopied ? 'Copied' : 'Copy Install Command'}
+          </button>
+        </div>
+
         {/* Create Key Form */}
         <form onSubmit={handleCreate} className="mt-6 flex gap-3">
           <input
@@ -142,10 +163,10 @@ export default function ApiKeyManager() {
             </p>
             <div className="flex items-center justify-between bg-black/60 rounded-xl p-3 font-mono text-xs text-emerald-400">
               <span className="truncate pr-4 select-all">
-                aether login --url https://api.aetherhost.com.ng --token {newKey}
+                aether login --token {newKey}
               </span>
               <button
-                onClick={() => copyToClipboard(`aether login --url https://api.aetherhost.com.ng --token ${newKey}`, true)}
+                onClick={() => copyToClipboard(`aether login --token ${newKey}`, true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 text-xs font-sans font-medium transition-colors shrink-0"
               >
                 {commandCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
