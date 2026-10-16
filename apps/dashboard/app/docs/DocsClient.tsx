@@ -179,6 +179,7 @@ export default function DocsClient() {
                 </thead>
                 <tbody className="text-zinc-300">
                   {[
+                    ['WordPress', 'wordpress', 'PHP 8.2, Nginx, MariaDB'],
                     ['Node.js', 'nodejs', 'Node 18–22, Express, Next.js'],
                     ['Python', 'python', 'Python 3.11, Flask, FastAPI'],
                     ['Go', 'go', 'Go 1.22 binaries'],
