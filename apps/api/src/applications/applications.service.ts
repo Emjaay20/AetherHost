@@ -91,7 +91,13 @@ export class ApplicationsService {
       }
 
       let generatedAiFiles = aiFiles;
-      if (!generatedAiFiles && !githubRepo && runtime !== 'wordpress') {
+      if (
+        !generatedAiFiles &&
+        !githubRepo &&
+        runtime !== 'wordpress' &&
+        runtime !== 'github' &&
+        runtime !== 'docker'
+      ) {
         generatedAiFiles = this.getBoilerplateFiles(runtime);
       }
 
@@ -514,7 +520,10 @@ if __name__ == '__main__':
     const aiFilesToSave =
       existingFiles.length > 0
         ? existingFiles
-        : app.runtime !== 'wordpress'
+        : app.runtime !== 'wordpress' &&
+            !app.githubRepo &&
+            app.runtime !== 'github' &&
+            app.runtime !== 'docker'
           ? this.getBoilerplateFiles(app.runtime)
           : null;
 

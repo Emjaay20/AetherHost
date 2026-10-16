@@ -79,7 +79,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		}
 	}
 
-	shouldWriteAiFiles := len(app.AiFiles) > 0
+	shouldWriteAiFiles := len(app.AiFiles) > 0 && (app.Runtime != "github" || app.CommitMessage != "")
 	if shouldWriteAiFiles {
 		sanitized, sanitizeErr := sanitizeAiFiles(app.AiFiles)
 		if sanitizeErr != nil {
@@ -126,7 +126,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	}
 
 	// Commit and push without embedding token in URL
-	if app.GithubRepo != "" && app.GithubToken != "" && len(app.AiFiles) > 0 {
+	if app.GithubRepo != "" && app.GithubToken != "" && len(app.AiFiles) > 0 && (app.Runtime != "github" || app.CommitMessage != "") {
 		msg := app.CommitMessage
 		if msg == "" {
 			msg = "Update application files by AetherHost"
