@@ -365,40 +365,54 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 	}
 
 	containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
+	appDir := filepath.Join("deployments", safeName)
+	port := detectAppPort(app, appDir)
+	if port == 0 {
+		port = 3000
+	}
 
-	if app.Runtime == "docker" {
-		appDir := filepath.Join("deployments", safeName)
-		_, port := dockerRuntimeService(appDir, "", detectAppPort(app, appDir))
-		path := "/"
-		if app.HealthPath != "" && healthPathPattern.MatchString(app.HealthPath) {
-			path = app.HealthPath
+	candidatePaths := []string{}
+	if app.HealthPath != "" && healthPathPattern.MatchString(app.HealthPath) {
+		candidatePaths = append(candidatePaths, app.HealthPath)
+	}
+	for _, p := range []string{"/health", "/ready", "/", "/api/health"} {
+		if app.HealthPath != p {
+			candidatePaths = append(candidatePaths, p)
 		}
-		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port %d%s...", time.Now().Format("15:04:05"), containerName, port, path))
-		for i := 0; i < 90; i++ {
-			if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) == nil || (path != "/" && probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d/", port)) == nil) {
-				appLog.Info("container ready", slog.String("container", containerName), slog.Int("port", port))
+	}
+
+	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port %d...", time.Now().Format("15:04:05"), containerName, port))
+	appLog.Info("probing readiness for container", slog.String("container", containerName), slog.Int("port", port))
+
+	maxAttempts := 45
+	if app.Runtime == "docker" || app.Runtime == "github" {
+		maxAttempts = 60
+	}
+
+	for i := 0; i < maxAttempts; i++ {
+		// Method 1: probeContainer via alpine:3.20 (netns attached, zero dependency on target container tools)
+		for _, path := range candidatePaths {
+			if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) == nil {
+				appLog.Info("container ready via probeContainer", slog.String("container", containerName), slog.Int("port", port), slog.String("path", path))
 				return true
 			}
-			time.Sleep(2 * time.Second)
-		}
-		return false
-	}
-	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port 3000...", time.Now().Format("15:04:05"), containerName))
-	appLog.Info("probing readiness for container", slog.String("container", containerName))
-	for i := 0; i < 30; i++ {
-		var probeCmd *exec.Cmd
-		if app.Runtime == "python" {
-			probeCmd = exec.Command("docker", "exec", containerName, "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/')")
-		} else if app.Runtime == "nodejs" {
-			probeCmd = exec.Command("docker", "exec", containerName, "node", "-e", "fetch('http://localhost:3000/').then(r => process.exit(0)).catch(() => process.exit(1))")
-		} else {
-			probeCmd = exec.Command("docker", "exec", containerName, "wget", "-q", "-O", "-", "http://localhost:3000/")
 		}
 
-		if probeCmd.Run() == nil {
-			appLog.Info("container ready and serving requests on port 3000", slog.String("container", containerName))
+		// Method 2: node fetch fallback inside container
+		if exec.Command("docker", "exec", containerName, "node", "-e", fmt.Sprintf("fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))", port)).Run() == nil ||
+		   exec.Command("docker", "exec", containerName, "node", "-e", fmt.Sprintf("fetch('http://127.0.0.1:%d/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))", port)).Run() == nil {
+			appLog.Info("container ready via internal node fetch", slog.String("container", containerName))
 			return true
 		}
+
+		// Method 3: python fallback inside container
+		if app.Runtime == "python" {
+			if exec.Command("docker", "exec", containerName, "python", "-c", fmt.Sprintf("import urllib.request; urllib.request.urlopen('http://127.0.0.1:%d/')", port)).Run() == nil {
+				appLog.Info("container ready via python urlopen", slog.String("container", containerName))
+				return true
+			}
+		}
+
 		time.Sleep(2 * time.Second)
 	}
 	return false
