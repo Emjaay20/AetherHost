@@ -1,6 +1,6 @@
 'use client'
 
-import { CreditCard, LayoutGrid, Settings, Server, Shield, X, BookOpen } from 'lucide-react'
+import { CreditCard, LayoutGrid, Settings, Server, Shield, X, BookOpen, Activity, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Sidebar({
@@ -77,25 +77,52 @@ export default function Sidebar({
             </Link>
           )}
         </nav>
-        <div className="mt-auto p-4">
-          <div className="relative overflow-hidden rounded-xl border border-border/50 bg-card p-4 shadow-inner">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan Usage</h4>
-              <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                {planId ? planId.toUpperCase() : 'Starter'}
-              </span>
+        <div className="mt-auto p-4 space-y-2">
+          {activePath.startsWith('/admin') ? (
+            <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-inner">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">System Live</span>
+                </div>
+                <span className="rounded-full border border-primary/30 bg-primary/20 px-2 py-0.5 text-[10px] font-mono font-semibold text-primary">
+                  OPERATOR
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Control plane active. Multi-tenant fleet telemetry.
+              </p>
+              <Link
+                href="/console"
+                onClick={onClose}
+                className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+              >
+                <ArrowLeft className="h-3 w-3" /> Back to Console
+              </Link>
             </div>
-            <div className="mb-2 flex items-end gap-1">
-              <span className="text-2xl font-bold">{usage}</span>
-              <span className="mb-1 text-sm text-muted-foreground">/ {limit} apps</span>
+          ) : (
+            <div className="relative overflow-hidden rounded-xl border border-border/50 bg-card p-4 shadow-inner">
+              <div className="mb-3 flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan Usage</h4>
+                <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  {planId ? planId.toUpperCase() : 'Starter'}
+                </span>
+              </div>
+              <div className="mb-2 flex items-end gap-1">
+                <span className="text-2xl font-bold">{usage}</span>
+                <span className="mb-1 text-sm text-muted-foreground">/ {limit} apps</span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                  style={{ width: `${percentUsed}%` }}
+                />
+              </div>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
-                style={{ width: `${percentUsed}%` }}
-              />
-            </div>
-          </div>
+          )}
         </div>
       </aside>
     </>

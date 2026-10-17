@@ -35,7 +35,12 @@ export default async function AdminPage({
   }
   if (!overview.ok || !directory.ok || !isOverview(overview.data) || !isDirectory(directory.data)) {
     return (
-      <AdminShell usage={entitlements?.usage?.applications || 0} limit={entitlements?.limits?.applications || 1} crumb="unreachable">
+      <AdminShell
+        usage={entitlements?.usage?.applications || 0}
+        limit={entitlements?.limits?.applications || 1}
+        planId={entitlements?.planId}
+        crumb="unreachable"
+      >
         <h1 className="text-2xl font-semibold">Control plane unreachable</h1>
         <p className="text-sm text-muted-foreground">The admin API did not return a readable snapshot.</p>
       </AdminShell>
@@ -46,6 +51,7 @@ export default async function AdminPage({
     <AdminShell
       usage={entitlements?.usage?.applications || 0}
       limit={entitlements?.limits?.applications || 1}
+      planId={entitlements?.planId}
       crumb="operator"
     >
       <AutoRefresh interval={8000} />

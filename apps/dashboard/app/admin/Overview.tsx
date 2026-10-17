@@ -6,6 +6,7 @@ import { AdminTenantActions } from './AdminTenantActions'
 import { GlobalConfigPanel } from './GlobalConfigPanel'
 import { MeterBar, Panel, PlanPill, Section, StatusPill, TenantLink } from './ui'
 import { age, clock, money, pageHref, pct, when } from './format'
+import { ProvisioningTimeline } from './ProvisioningTimeline'
 import type { Overview, TenantPage } from './types'
 
 const FLEET = ['running', 'pending', 'failed', 'suspended', 'terminating'] as const
@@ -131,20 +132,30 @@ export default function OverviewBoard({
               </tr>
             </thead>
             <tbody>
-              {overview.saturation.map((tenant) => (
-                <tr key={tenant.id} className="border-b border-border/40 last:border-0">
-                  <td className="p-3"><TenantLink id={tenant.id} name={tenant.name} /></td>
-                  <td className="p-3"><PlanPill planId={tenant.planId} /></td>
-                  <td className="p-3 tabular-nums">{pct(tenant.score)}</td>
-                  <td className="p-3"><MeterBar meter={tenant.meters.applications} counted={tenant.meters.applications.counted} /></td>
-                  <td className="p-3"><MeterBar meter={tenant.meters.aiRequests} /></td>
-                  <td className="p-3"><MeterBar meter={tenant.meters.storageMb} /></td>
-                  <td className="p-3"><MeterBar meter={tenant.meters.bandwidthGb} /></td>
-                  <td className="p-3">
-                    <Drift drift={tenant.drift} counter={tenant.counterDrift} />
-                  </td>
-                </tr>
-              ))}
+              {[...overview.saturation]
+                .sort((a, b) => b.score - a.score)
+                .map((tenant) => (
+                  <tr key={tenant.id} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
+                    <td className="p-3"><TenantLink id={tenant.id} name={tenant.name} /></td>
+                    <td className="p-3"><PlanPill planId={tenant.planId} /></td>
+                    <td className="p-3 tabular-nums font-medium">
+                      {tenant.score >= 0.8 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          {pct(tenant.score)} &uarr; High
+                        </span>
+                      ) : (
+                        <span>{pct(tenant.score)}</span>
+                      )}
+                    </td>
+                    <td className="p-3"><MeterBar meter={tenant.meters.applications} counted={tenant.meters.applications.counted} /></td>
+                    <td className="p-3"><MeterBar meter={tenant.meters.aiRequests} /></td>
+                    <td className="p-3"><MeterBar meter={tenant.meters.storageMb} /></td>
+                    <td className="p-3"><MeterBar meter={tenant.meters.bandwidthGb} /></td>
+                    <td className="p-3">
+                      <Drift drift={tenant.drift} counter={tenant.counterDrift} />
+                    </td>
+                  </tr>
+                ))}
               {overview.saturation.length === 0 && (
                 <tr><td colSpan={8} className="p-6 text-sm text-muted-foreground">No tenants in Postgres. Reads do not import Clerk users.</td></tr>
               )}
@@ -153,28 +164,14 @@ export default function OverviewBoard({
         </Panel>
       </Section>
 
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 gap-4 items-start">
         <Section kicker="Events" title="Provisioning timeline">
-          <Panel className="divide-y divide-border/40">
-            {overview.timeline.length === 0 && <p className="p-4 text-sm text-muted-foreground">No domain events.</p>}
-            {overview.timeline.map((event) => (
-              <div key={event.id} className="px-4 py-3 flex gap-3">
-                <span className="w-14 shrink-0 text-[11px] font-mono text-muted-foreground">{age(secondsSince(event.createdAt))}</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-mono truncate">{event.eventName}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    {event.tenantName}
-                    {event.applicationName ? ` · ${event.applicationName}` : ''}
-                    {event.payload?.from && event.payload?.to ? ` · ${event.payload.from} → ${event.payload.to}` : ''}
-                    {event.payload?.planId ? ` · ${event.payload.planId}` : ''}
-                  </p>
-                </div>
-              </div>
-            ))}
+          <Panel className="overflow-hidden shadow-sm">
+            <ProvisioningTimeline timeline={overview.timeline} />
           </Panel>
         </Section>
         <Section kicker="Agent" title="Unclaimed and failed">
-          <Panel className="p-4 space-y-4">
+          <Panel className="p-4 flex flex-col h-[380px] overflow-y-auto space-y-4 shadow-sm scrollbar-thin scrollbar-thumb-border">
             <WorkList
               title="Pending > 5m"
               empty="No stuck deploys."
@@ -184,15 +181,17 @@ export default function OverviewBoard({
                 meta: `${app.tenantName} · ${app.runtime} · ${age(app.ageSeconds)}`,
               }))}
             />
-            <WorkList
-              title="Health probe failed"
-              empty="No failed workloads. Probe errors are not stored, only status."
-              rows={overview.fleet.recentFailed.map((app) => ({
-                href: `/admin/tenants/${app.tenantId}`,
-                title: app.name,
-                meta: `${app.tenantName} · ${app.runtime} · ${app.healthPath}`,
-              }))}
-            />
+            <div className="pt-3 border-t border-border/40">
+              <WorkList
+                title="Health probe failed"
+                empty="No failed workloads. Probe errors are not stored, only status."
+                rows={overview.fleet.recentFailed.map((app) => ({
+                  href: `/admin/tenants/${app.tenantId}`,
+                  title: app.name,
+                  meta: `${app.tenantName} · ${app.runtime} · ${app.healthPath}`,
+                }))}
+              />
+            </div>
           </Panel>
         </Section>
       </div>
@@ -286,19 +285,53 @@ export default function OverviewBoard({
 
 function Signal({ ok, label }: { ok: boolean; label: string }) {
   return (
-    <span className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border ${ok ? 'border-green-500/20 text-green-400' : 'border-amber-500/20 text-amber-400'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-green-400' : 'bg-amber-400'}`} />
+    <span
+      className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-[11px] font-medium transition-all ${
+        ok
+          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
+          : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+      }`}
+    >
+      <span className="relative flex h-2 w-2">
+        {ok && (
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        )}
+        <span
+          className={`relative inline-flex rounded-full h-2 w-2 ${ok ? 'bg-emerald-400' : 'bg-amber-400'}`}
+        ></span>
+      </span>
       {label}
     </span>
   )
 }
 
 function FleetCell({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
+  const getAccent = (status: string) => {
+    switch (status) {
+      case 'running':
+        return 'text-emerald-400 border-l-2 border-l-emerald-500/50 bg-emerald-500/[0.03]'
+      case 'pending':
+        return 'text-amber-400 border-l-2 border-l-amber-500/50 bg-amber-500/[0.03]'
+      case 'failed':
+        return 'text-rose-400 border-l-2 border-l-rose-500/50 bg-rose-500/[0.03]'
+      case 'suspended':
+        return 'text-slate-400 border-l-2 border-l-slate-500/50'
+      case 'terminating':
+        return 'text-purple-400 border-l-2 border-l-purple-500/50'
+      default:
+        return 'text-foreground border-l-2 border-l-blue-500/30'
+    }
+  }
+
   return (
-    <div className="p-4 border-b xl:border-b-0 border-r border-border/40 last:border-r-0">
-      <p className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
-      {hint && <p className="mt-1 text-[11px] text-muted-foreground truncate">{hint}</p>}
+    <div
+      className={`p-4 border-b md:border-b-0 border-r border-border/40 last:border-r-0 hover:bg-muted/30 transition-colors ${getAccent(
+        label
+      )}`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight">{value}</p>
+      {hint && <p className="mt-1 text-[11px] text-muted-foreground truncate font-mono">{hint}</p>}
     </div>
   )
 }
