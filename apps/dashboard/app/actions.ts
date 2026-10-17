@@ -172,7 +172,7 @@ export async function runProvisioner() {
   }
 }
 
-export async function redeployApplication(id: string) {
+export async function redeployApplication(id: string, envVars?: Record<string, string>) {
   const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
   if (!headers) return { error: 'Unauthorized' };
 
@@ -180,12 +180,63 @@ export async function redeployApplication(id: string) {
     const res = await fetch(`${API_URL}/v1/applications/${id}/redeploy`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({}),
+      body: JSON.stringify(envVars !== undefined ? { envVars } : {}),
     });
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       return { error: error.message || 'Failed to trigger redeploy' };
+    }
+
+    const data = await res.json();
+    revalidatePath('/console');
+    revalidatePath('/');
+    return { success: true, data };
+  } catch (error) {
+    return { error: 'Network error communicating with API' };
+  }
+}
+
+export async function getApplicationEnvVars(id: string) {
+  const headers = await getAuthHeaders();
+  if (!headers) return { error: 'Unauthorized', envVars: {} };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/${id}/env`, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'Failed to get environment variables', envVars: {} };
+    }
+
+    const data = await res.json();
+    return { success: true, envVars: data.envVars || {} };
+  } catch (error) {
+    return { error: 'Network error communicating with API', envVars: {} };
+  }
+}
+
+export async function updateApplicationEnvVars(
+  id: string,
+  envVars: Record<string, string>,
+  redeploy = true,
+) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/${id}/env`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ envVars, redeploy }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'Failed to update environment variables' };
     }
 
     const data = await res.json();
