@@ -15,6 +15,8 @@ import { CreateApplicationDto } from './dto/create-application.dto';
 import {
   AddApplicationLogDto,
   UpdateApplicationStatusDto,
+  UpdateEnvVarsDto,
+  RedeployApplicationDto,
 } from './dto/update-application.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { Public } from '../auth/public.decorator';
@@ -105,13 +107,31 @@ export class ApplicationsController {
     return this.applicationsService.addLog(id, body.log);
   }
 
-  @Get(':id/logs')
-  getLogs(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.applicationsService.getLogs(id, tenantId);
+  @Get(':id/env')
+  getEnvVars(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.getEnvVars(id, tenantId);
+  }
+
+  @Patch(':id/env')
+  updateEnvVars(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: UpdateEnvVarsDto,
+  ) {
+    return this.applicationsService.updateEnvVars(
+      id,
+      tenantId,
+      body.envVars || {},
+      body.redeploy ?? true,
+    );
   }
 
   @Post(':id/redeploy')
-  redeploy(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.applicationsService.redeploy(id, tenantId);
+  redeploy(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body?: RedeployApplicationDto,
+  ) {
+    return this.applicationsService.redeploy(id, tenantId, body?.envVars);
   }
 }

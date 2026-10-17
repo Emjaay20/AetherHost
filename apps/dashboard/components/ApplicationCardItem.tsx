@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2 } from 'lucide-react'
+import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound } from 'lucide-react'
 import { safeAppName } from '../lib/app-name'
 import { getAppUrl } from '../lib/domain'
 import { redeployApplication } from '../app/actions'
 import DeploymentLogViewer from './DeploymentLogViewer'
 import AiProjectModal from './AiProjectModal'
+import EnvVarsModal from './EnvVarsModal'
 
 export interface ApplicationItem {
   id: string
@@ -18,6 +19,7 @@ export interface ApplicationItem {
   customDomain?: string | null
   dockerImage?: string | null
   aiFiles?: { path: string; content: string }[] | null
+  envVars?: Record<string, string> | null
 }
 
 interface ApplicationCardItemProps {
@@ -28,6 +30,7 @@ interface ApplicationCardItemProps {
 export default function ApplicationCardItem({ app, deleteAction }: ApplicationCardItemProps) {
   const router = useRouter()
   const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [envModalOpen, setEnvModalOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRedeploying, setIsRedeploying] = useState(false)
   const [localStatus, setLocalStatus] = useState(app.status)
@@ -163,6 +166,17 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
               <span>{isRedeploying ? 'Deploying...' : 'Redeploy'}</span>
             </button>
 
+            {/* Env Vars Button */}
+            <button
+              type="button"
+              onClick={() => setEnvModalOpen(true)}
+              className="text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors px-3 py-1.5 rounded-lg border border-amber-500/30 hover:bg-amber-500/10 flex items-center gap-1.5 shadow-sm"
+              title="Configure Environment Variables & Secrets"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Env</span>
+            </button>
+
             {/* AI Architect Button */}
             <button
               type="button"
@@ -231,6 +245,26 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
         onClose={() => {
           setAiModalOpen(false)
           router.refresh()
+        }}
+      />
+
+      {/* Environment Variables Modal */}
+      <EnvVarsModal
+        appId={app.id}
+        appName={app.name}
+        initialEnvVars={app.envVars}
+        isOpen={envModalOpen}
+        onClose={() => {
+          setEnvModalOpen(false)
+          router.refresh()
+        }}
+        onRedeployStarted={() => {
+          setLocalStatus('pending')
+          router.refresh()
+          setTimeout(() => {
+            setLocalStatus('running')
+            router.refresh()
+          }, 3000)
         }}
       />
     </div>

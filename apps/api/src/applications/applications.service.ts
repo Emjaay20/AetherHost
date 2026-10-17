@@ -513,8 +513,49 @@ if __name__ == '__main__':
     return updated;
   }
 
-  async redeploy(id: string, tenantId: string) {
+  async getEnvVars(id: string, tenantId: string) {
     const app = await this.assertOwned(id, tenantId);
+    return {
+      envVars: (app.envVars as Record<string, string>) || {},
+    };
+  }
+
+  async updateEnvVars(
+    id: string,
+    tenantId: string,
+    envVars: Record<string, string>,
+    shouldRedeploy = true,
+  ) {
+    const app = await this.assertOwned(id, tenantId);
+
+    assertWorkloadSpec({
+      runtime: app.runtime,
+      envVars,
+    });
+
+    const updated = await this.prisma.application.update({
+      where: { id },
+      data: {
+        envVars: JSON.parse(JSON.stringify(envVars)),
+      },
+    });
+
+    if (shouldRedeploy) {
+      return this.redeploy(id, tenantId, envVars);
+    }
+
+    return { success: true, envVars: updated.envVars };
+  }
+
+  async redeploy(id: string, tenantId: string, envVars?: Record<string, string>) {
+    const app = await this.assertOwned(id, tenantId);
+
+    if (envVars !== undefined) {
+      assertWorkloadSpec({
+        runtime: app.runtime,
+        envVars,
+      });
+    }
 
     const existingFiles = Array.isArray(app.aiFiles) ? app.aiFiles : [];
     const aiFilesToSave =
@@ -527,14 +568,19 @@ if __name__ == '__main__':
           ? this.getBoilerplateFiles(app.runtime)
           : null;
 
+    const data: any = {
+      status: 'pending',
+      ...(aiFilesToSave
+        ? { aiFiles: JSON.parse(JSON.stringify(aiFilesToSave)) }
+        : {}),
+      ...(envVars !== undefined
+        ? { envVars: JSON.parse(JSON.stringify(envVars)) }
+        : {}),
+    };
+
     const updated = await this.prisma.application.update({
       where: { id },
-      data: {
-        status: 'pending',
-        ...(aiFilesToSave
-          ? { aiFiles: JSON.parse(JSON.stringify(aiFilesToSave)) }
-          : {}),
-      },
+      data,
     });
 
     await this.eventsService.publish(

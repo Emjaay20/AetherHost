@@ -3,7 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 const IMAGE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,200}$/;
 const HEALTH_RE = /^\/[A-Za-z0-9._/-]{0,80}$/;
 const WORKER_RE = /^[A-Za-z0-9_ ./:=@,-]{1,200}$/;
-const ENV_KEY_RE = /^[A-Z_][A-Z0-9_]{0,63}$/;
+const ENV_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/;
 
 const RESERVED_ENV_KEYS = new Set([
   'DATABASE_URL',
@@ -85,7 +85,7 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
     const value = input.envVars[key];
     if (
       typeof value !== 'string' ||
-      value.length > 500 ||
+      value.length > 4096 ||
       /[\r\n\0]/.test(value)
     ) {
       throw new BadRequestException(`invalid env value for ${key}`);
