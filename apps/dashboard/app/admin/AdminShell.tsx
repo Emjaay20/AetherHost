@@ -6,11 +6,13 @@ export default function AdminShell({
   usage,
   limit,
   crumb,
+  planId,
   children,
 }: {
   usage: number
   limit: number
   crumb: string
+  planId?: string
   children: ReactNode
 }) {
   return (
@@ -18,6 +20,7 @@ export default function AdminShell({
       usage={usage}
       limit={Math.max(limit, 1)}
       activePath="/admin"
+      planId={planId}
       isAdmin
       title="Control plane"
       titleHref="/admin"
