@@ -12,7 +12,9 @@ import { ApplicationsService } from '../applications/applications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { verifyGithubSignature } from './github-signature';
 import { normalizeRepoFullName } from '../applications/github-utils';
+import { Public } from '../auth/public.decorator';
 
+@Public()
 @Controller('v1/webhooks/github')
 export class GithubWebhookController {
   private readonly logger = new Logger(GithubWebhookController.name);
