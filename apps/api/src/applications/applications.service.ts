@@ -18,7 +18,7 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
-import { getGithubToken } from './github-utils';
+import { getGithubToken, ensureGithubWebhook } from './github-utils';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -194,6 +194,10 @@ export class ApplicationsService {
           newApp.runtime,
           'Initial deployment',
         );
+      }
+
+      if (finalGithubRepo) {
+        void ensureGithubWebhook(tenantId, finalGithubRepo);
       }
 
       return newApp as unknown as Application;
@@ -595,6 +599,10 @@ if __name__ == '__main__':
         app.runtime,
         'Manual redeploy triggered',
       );
+    }
+
+    if (app.githubRepo) {
+      void ensureGithubWebhook(app.tenantId, app.githubRepo);
     }
 
     return updated;

@@ -56,26 +56,9 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	}
 
 	if app.GithubRepo != "" {
-		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cloning repository: %s", time.Now().Format("15:04:05"), app.GithubRepo))
-		appLog.Info("cloning github repository", slog.String("repo", app.GithubRepo))
-		_ = exec.Command("rm", "-rf", appDir).Run()
-
-		out, err := runGitWithToken(app.GithubToken, "clone", app.GithubRepo, appDir)
-		if err != nil {
-			appLog.Warn("git clone failed or repository was empty", slog.String("output", out))
-		}
-
-		var envBuilder strings.Builder
-		for k, v := range app.EnvVars {
-			envBuilder.WriteString(fmt.Sprintf("%s=%s\n", k, v))
-		}
-		_ = os.WriteFile(fmt.Sprintf("%s/.env", appDir), []byte(envBuilder.String()), 0600)
-	}
-
-	if app.GithubRepo != "" {
-		if _, err := os.Stat(filepath.Join(appDir, ".git")); os.IsNotExist(err) {
-			_ = exec.Command("git", "-C", appDir, "init", "-b", "main").Run()
-			_ = exec.Command("git", "-C", appDir, "remote", "add", "origin", app.GithubRepo).Run()
+		if err := syncApplicationRepo(app, appDir, safeName, appLog, controlPlaneURL); err != nil {
+			updateAppStatus(controlPlaneURL, app.ID, "failed")
+			return
 		}
 	}
 
@@ -146,7 +129,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Building and starting container via Docker Compose...", time.Now().Format("15:04:05")))
 	_ = exec.Command("docker", "network", "create", "aetherhost-net").Run()
-	cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d", "--build")
+	cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d", "--build", "--force-recreate")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		errMsg := fmt.Sprintf("[%s] Docker compose failed:\n%s", time.Now().Format("15:04:05"), string(output))

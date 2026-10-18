@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Headers,
+  Logger,
   Post,
   Req,
   UnauthorizedException,
@@ -9,16 +10,16 @@ import {
 import { Request } from 'express';
 import { ApplicationsService } from '../applications/applications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { DomainEventsService } from '../events/domain-events.service';
-import { ApplicationProvisioningRequested } from '@aetherhost/domain';
 import { verifyGithubSignature } from './github-signature';
+import { normalizeRepoFullName } from '../applications/github-utils';
 
 @Controller('v1/webhooks/github')
 export class GithubWebhookController {
+  private readonly logger = new Logger(GithubWebhookController.name);
+
   constructor(
     private readonly appsService: ApplicationsService,
     private readonly prisma: PrismaService,
-    private readonly eventsService: DomainEventsService,
   ) {}
 
   @Post()
@@ -28,36 +29,74 @@ export class GithubWebhookController {
     @Req() request: Request & { rawBody?: Buffer },
     @Body() payload: any,
   ) {
-    if (
-      !verifyGithubSignature(
-        request.rawBody ?? Buffer.from(''),
-        signature,
-        process.env.GITHUB_WEBHOOK_SECRET,
-      )
-    ) {
-      throw new UnauthorizedException('Invalid GitHub webhook signature');
+    const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      if (
+        !verifyGithubSignature(
+          request.rawBody ?? Buffer.from(''),
+          signature,
+          webhookSecret,
+        )
+      ) {
+        throw new UnauthorizedException('Invalid GitHub webhook signature');
+      }
+    }
+
+    if (event === 'ping') {
+      this.logger.log('GitHub webhook ping received successfully');
+      return { status: 'ok', zen: payload?.zen };
     }
 
     if (event === 'push') {
-      const repoUrl = payload.repository?.html_url || payload.repository?.clone_url;
-      if (!repoUrl) return { status: 'ignored' };
+      const repoFullName =
+        payload.repository?.full_name ||
+        payload.repository?.html_url ||
+        payload.repository?.clone_url;
+      if (!repoFullName) return { status: 'ignored', reason: 'no_repository_in_payload' };
 
-      // Find apps with this repo
+      const targetNormalized = normalizeRepoFullName(repoFullName);
+      if (!targetNormalized) {
+        return { status: 'ignored', reason: 'invalid_repository_format' };
+      }
+
+      // Find all apps with a githubRepo
       const apps = await this.prisma.application.findMany({
-        where: { githubRepo: repoUrl }
+        where: { githubRepo: { not: null } },
       });
 
-      for (const app of apps) {
-        // Reset status to pending so agent picks it up and rebuilds
-        await this.appsService.updateStatus(app.id, 'pending');
-        
-        await this.eventsService.publish(
-          new ApplicationProvisioningRequested(app.tenantId, app.id),
-          this.prisma,
-        );
+      const matchedApps = apps.filter((app) => {
+        if (!app.githubRepo) return false;
+        const appNormalized = normalizeRepoFullName(app.githubRepo);
+        return appNormalized === targetNormalized;
+      });
+
+      if (matchedApps.length === 0) {
+        this.logger.warn(`No application found matching GitHub repository: ${targetNormalized}`);
+        return { status: 'ignored', reason: 'no_matching_application' };
       }
-      return { status: 'rebuilding', count: apps.length };
+
+      const branch = payload.ref ? payload.ref.replace('refs/heads/', '') : 'main';
+      const commitSha = payload.head_commit?.id?.slice(0, 7) || 'latest';
+      const commitMsg = payload.head_commit?.message?.split('\n')[0] || `Push to ${branch}`;
+      const author = payload.head_commit?.author?.name || payload.pusher?.name || 'GitHub';
+
+      this.logger.log(
+        `GitHub push received for ${targetNormalized} on branch ${branch} (${commitSha}: ${commitMsg}). Triggering redeploy for ${matchedApps.length} app(s).`,
+      );
+
+      for (const app of matchedApps) {
+        const timeStr = new Date().toTimeString().split(' ')[0];
+        await this.appsService.addLog(
+          app.id,
+          `[${timeStr}] GitHub push received on branch '${branch}' (${commitSha}: ${commitMsg} by ${author}). Initiating automatic redeployment...`,
+        );
+
+        await this.appsService.redeploy(app.id, app.tenantId);
+      }
+
+      return { status: 'rebuilding', count: matchedApps.length, commit: commitSha };
     }
-    return { status: 'ignored' };
+
+    return { status: 'ignored', event };
   }
 }

@@ -64,8 +64,12 @@ export class BandwidthService {
           data: { usageBandwidthMb: totalMb }
         }).catch(() => {});
       }
-    } catch (e) {
-      this.logger.error('Failed to aggregate bandwidth from Prometheus', e);
+    } catch (e: any) {
+      if (e?.code === 'EAI_AGAIN' || e?.code === 'ENOTFOUND' || e?.cause?.code === 'EAI_AGAIN') {
+        this.logger.debug('Prometheus endpoint unreachable; skipping bandwidth aggregation');
+      } else {
+        this.logger.warn(`Failed to aggregate bandwidth from Prometheus: ${e?.message || e}`);
+      }
     }
   }
 }

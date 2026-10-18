@@ -37,7 +37,18 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
 
   useEffect(() => {
     setLocalStatus(app.status)
+    if (app.status !== 'pending') {
+      setIsRedeploying(false)
+    }
   }, [app.status])
+
+  useEffect(() => {
+    if (localStatus !== 'pending') return
+    const interval = setInterval(() => {
+      router.refresh()
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [localStatus, router])
 
   async function handleDelete() {
     if (!confirm(`Are you sure you want to delete ${app.name}?`)) return
@@ -56,21 +67,16 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
     setLocalStatus('pending')
     try {
       const res = await redeployApplication(app.id)
-      if (!res.error) {
-        router.refresh()
-        setTimeout(() => {
-          setLocalStatus('running')
-          router.refresh()
-          setIsRedeploying(false)
-        }, 2800)
-        return
-      } else {
+      if (res?.error) {
         setLocalStatus(app.status)
+        setIsRedeploying(false)
+      } else {
+        router.refresh()
       }
     } catch {
       setLocalStatus(app.status)
+      setIsRedeploying(false)
     }
-    setIsRedeploying(false)
   }
 
   const safeName = safeAppName(app.name)
