@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { Prisma } from '@prisma/client';
 import { ApplicationsService } from '../applications/applications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { verifyGithubSignature } from './github-signature';
@@ -98,6 +99,13 @@ export class GithubWebhookController {
           app.id,
           `[${timeStr}] GitHub push received on branch '${branch}' (${commitSha}: ${commitMsg} by ${author}). Initiating automatic redeployment...`,
         );
+
+        // A human pushed: the repo is now the source of truth. Drop the stored AI
+        // snapshot so the agent doesn't overwrite the user's fix with stale files.
+        await this.prisma.application.update({
+          where: { id: app.id },
+          data: { aiFiles: Prisma.DbNull, commitMessage: null },
+        });
 
         await this.appsService.redeploy(app.id, app.tenantId);
       }
