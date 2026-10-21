@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { timingSafeEqual } from 'crypto';
+import { safeAppName } from '@aetherhost/common';
 import { PrismaService } from './prisma/prisma.service';
 
 function safeCompare(a: string, b: string): boolean {
@@ -24,21 +25,28 @@ export class TelemetryController {
   async reportMetrics(
     @Headers('x-agent-key') agentKey: string,
     @Body()
-    body: { metrics: Array<{ applicationName: string; memoryMb: number; storageMb: number }> },
+    body: { metrics: Array<{
+      applicationName: string;
+      memoryMb: number;
+      storageMb: number;
+      bandwidthDeltaMb?: number;
+    }> },
   ) {
     const expected = process.env.AGENT_SECRET_KEY;
     if (!expected || !safeCompare(agentKey, expected)) {
       throw new UnauthorizedException('Invalid agent key');
     }
 
-    const apps = await this.prisma.application.findMany();
+    const apps = await this.prisma.application.findMany({
+      where: { status: { notIn: ['terminated', 'failed'] } },
+    });
+    const tenantBandwidth = new Map<string, number>();
     const tenantMemory = new Map<string, number>();
     const tenantStorage = new Map<string, number>();
 
     for (const metric of body.metrics) {
       const app = apps.find(
-        (a) =>
-          a.name.toLowerCase().replace(/ /g, '-') === metric.applicationName,
+        (a) => safeAppName(a.name) === metric.applicationName,
       );
       if (app) {
         const currentMem = tenantMemory.get(app.tenantId) || 0;
@@ -46,6 +54,12 @@ export class TelemetryController {
         
         const currentStore = tenantStorage.get(app.tenantId) || 0;
         tenantStorage.set(app.tenantId, currentStore + metric.storageMb);
+
+        const currentBw = tenantBandwidth.get(app.tenantId) || 0;
+        tenantBandwidth.set(
+          app.tenantId,
+          currentBw + Math.max(0, metric.bandwidthDeltaMb ?? 0),
+        );
       }
     }
 
@@ -55,7 +69,8 @@ export class TelemetryController {
           where: { tenantId },
           data: { 
             currentMemoryMb: totalMb,
-            usageStorageMb: tenantStorage.get(tenantId) || 0
+            usageStorageMb: tenantStorage.get(tenantId) || 0,
+            usageBandwidthMb: { increment: tenantBandwidth.get(tenantId) || 0 },
           },
         })
         .catch(() => {});
