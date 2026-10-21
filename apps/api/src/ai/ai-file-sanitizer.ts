@@ -12,6 +12,7 @@ export const AI_FILE_RULES = `File rules:
 - package.json must include a start script. Do not use npm ci unless package-lock.json is also in files. Use npm install.
 - In a Dockerfile, COPY source (src, public, tsconfig) before any RUN that compiles (npm run build, tsc).
 - NestJS 10 or newer must depend on @nestjs/platform-express at the same version as @nestjs/core, and must use @nestjs/serve-static ^4 or newer. Never pair @nestjs/serve-static 3 with NestJS 10.
+- Next.js projects: any component using framer-motion, useState, useEffect or event handlers must start with 'use client'. Provide next.config.js with typescript.ignoreBuildErrors and eslint.ignoreDuringBuilds set to true, and add an app/health/route.ts returning HTTP 200.
 - Listen on process.env.PORT and answer GET /health with HTTP 200.`;
 
 export function sanitizeAiFiles(files: AiSourceFile[]): AiSourceFile[] {
@@ -45,8 +46,19 @@ function repairProject(files: AiSourceFile[]): AiSourceFile[] {
     /(^|\/)(package-lock\.json|npm-shrinkwrap\.json)$/.test(file.path),
   );
   const usesNest = files.some((file) => file.content.includes('@nestjs/'));
+  const usesNext = files.some(
+    (file) => isPackageJson(file.path) && /"next"\s*:/.test(file.content),
+  );
 
-  return files.map((file) => {
+  const mapped = files.map((file) => {
+    if (usesNext) {
+      if (/(^|\/)next\.config\.(js|mjs|cjs)$/.test(file.path)) {
+        return { ...file, content: repairNextConfig(file.content) };
+      }
+      if (/\.(tsx|jsx)$/.test(file.path)) {
+        return { ...file, content: repairUseClient(file.content) };
+      }
+    }
     if (isPackageJson(file.path)) {
       return { ...file, content: repairPackageJson(file.content) };
     }
@@ -64,6 +76,45 @@ function repairProject(files: AiSourceFile[]): AiSourceFile[] {
     }
     return file;
   });
+
+  if (usesNext && !mapped.some((f) => /(^|\/)next\.config\.(js|mjs|cjs)$/.test(f.path))) {
+    mapped.push({ path: 'next.config.js', content: repairNextConfig('') });
+  }
+  return mapped;
+}
+
+/** Next.js builds must never fail on AI-generated type/lint nits. */
+function repairNextConfig(content: string): string {
+  if (/ignoreBuildErrors\s*:\s*true/.test(content) && /ignoreDuringBuilds\s*:\s*true/.test(content)) {
+    return content;
+  }
+  const isEsm = /\bexport\s+default\b/.test(content);
+  const base = `{\n  typescript: { ignoreBuildErrors: true },\n  eslint: { ignoreDuringBuilds: true },\n}`;
+  if (!content.trim()) {
+    return `/** @type {import('next').NextConfig} */\nmodule.exports = ${base};\n`;
+  }
+  // Merge into an existing simple config rather than discarding user options.
+  const match = content.match(/(?:module\.exports\s*=|export\s+default)\s*(\w+)?\s*(\{[\s\S]*\})\s*;?\s*$/);
+  if (match && !match[1]) {
+    const merged = match[2].replace(
+      /^\{/,
+      '{\n  typescript: { ignoreBuildErrors: true },\n  eslint: { ignoreDuringBuilds: true },',
+    );
+    return content.replace(match[2], merged);
+  }
+  return isEsm
+    ? `${content}\n`
+    : `${content}\nmodule.exports.typescript = { ...(module.exports.typescript || {}), ignoreBuildErrors: true };\nmodule.exports.eslint = { ...(module.exports.eslint || {}), ignoreDuringBuilds: true };\n`;
+}
+
+/** Add 'use client' to client-only components (framer-motion, hooks, handlers). */
+function repairUseClient(content: string): string {
+  if (/^\s*['"]use (client|server)['"]/.test(content)) return content;
+  const needsClient =
+    /from\s+['"]framer-motion['"]/.test(content) ||
+    /\buse(State|Effect|Ref|Reducer|Context|Router|Pathname)\s*\(/.test(content) ||
+    /\bon(Click|Change|Submit)\s*=/.test(content);
+  return needsClient ? `'use client';\n\n${content}` : content;
 }
 
 function unwrapJsonString(content: string): string {

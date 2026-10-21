@@ -112,3 +112,17 @@ describe('sanitizeAiFiles', () => {
     ).toThrow(/Unsafe file path/);
   });
 });
+
+describe('Next.js repairs', () => {
+  it('adds use client, config, and ignores build errors', () => {
+    const out = sanitizeAiFiles([
+      { path: 'package.json', content: '{"dependencies":{"next":"13.5.6"}}' },
+      { path: 'app/page.tsx', content: "import { motion } from 'framer-motion';\nexport default function P(){return <motion.h1/>}\n" },
+      { path: 'next.config.js', content: "module.exports = { reactStrictMode: true };\n" },
+    ]);
+    expect(out.find((f) => f.path === 'app/page.tsx')!.content.startsWith("'use client'")).toBe(true);
+    const cfg = out.find((f) => f.path === 'next.config.js')!.content;
+    expect(cfg).toContain('ignoreBuildErrors: true');
+    expect(cfg).toContain('reactStrictMode');
+  });
+});

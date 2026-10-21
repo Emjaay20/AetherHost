@@ -82,6 +82,12 @@ export class GithubWebhookController {
       const commitMsg = payload.head_commit?.message?.split('\n')[0] || `Push to ${branch}`;
       const author = payload.head_commit?.author?.name || payload.pusher?.name || 'GitHub';
 
+      // The agent pushes AI-generated files itself while it is already building them;
+      // reacting to that push would start a second, racing deployment.
+      if (author === 'AetherHost Agent') {
+        return { status: 'ignored', reason: 'agent_push' };
+      }
+
       this.logger.log(
         `GitHub push received for ${targetNormalized} on branch ${branch} (${commitSha}: ${commitMsg}). Triggering redeploy for ${matchedApps.length} app(s).`,
       );
