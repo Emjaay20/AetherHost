@@ -14,6 +14,31 @@ import { stopImpersonating } from '../../admin/actions';
 
 import { isCurrentUserAdmin } from '../../../lib/admin'
 
+const UNLIMITED_LIMIT = 999_999
+
+function numericValue(value: number | undefined) {
+  return Number.isFinite(value) ? Math.max(value || 0, 0) : 0
+}
+
+function formatMegabytes(value: number) {
+  const megabytes = numericValue(value)
+  const displayValue = megabytes >= 1024 ? megabytes / 1024 : megabytes
+  const unit = megabytes >= 1024 ? 'GB' : 'MB'
+
+  return `${new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 1,
+  }).format(displayValue)} ${unit}`
+}
+
+function formatLimit(value: number) {
+  return value >= UNLIMITED_LIMIT ? 'Unlimited' : formatMegabytes(value)
+}
+
+function formatPercent(value: number) {
+  if (value > 0 && value < 0.1) return '<0.1%'
+  return `${value.toFixed(1)}%`
+}
+
 export default async function Dashboard() {
   const cookieStore = await cookies();
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
@@ -29,11 +54,14 @@ export default async function Dashboard() {
   const usage = Math.max(apps.length, entitlements?.usage?.applications || 0)
   const limit = entitlements?.limits?.applications || 3
   const limitReached = usage >= limit
-  const percentUsed = Math.min((usage / limit) * 100, 100)
   
-  const storageUsage = entitlements?.usage?.storageMb || 0
-  const storageLimit = entitlements?.limits?.storageMb || 512
+  const storageUsage = numericValue(entitlements?.usage?.storageMb)
+  const storageLimit = numericValue(entitlements?.limits?.storageMb) || 512
   const storagePercent = Math.min((storageUsage / storageLimit) * 100, 100)
+
+  const bandwidthUsage = numericValue(entitlements?.usage?.bandwidthMb)
+  const bandwidthLimit = numericValue(entitlements?.limits?.bandwidthMb) || 10240
+  const bandwidthPercent = Math.min((bandwidthUsage / bandwidthLimit) * 100, 100)
 
   const planId = entitlements?.planId || 'starter'
 
@@ -106,27 +134,34 @@ export default async function Dashboard() {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               
-              <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
+              <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
-                <div className="flex items-center gap-3 text-muted-foreground mb-4">
+                <div className="mb-5 flex items-center gap-3 text-muted-foreground">
                   <Server className="w-4 h-4" />
                   <h3 className="text-sm font-medium">Active Deployments</h3>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold sm:text-3xl">{apps.length} <span className="text-lg font-medium text-muted-foreground">/ {limit}</span></span>
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="block text-3xl font-bold leading-none tracking-tight tabular-nums">{apps.length}</span>
+                    <span className="mt-2 block text-xs text-muted-foreground">of {limit >= UNLIMITED_LIMIT ? 'Unlimited' : limit} deployments</span>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-green-500/20 bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-500">Active</span>
                 </div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
+              <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
-                <div className="flex items-center gap-3 text-muted-foreground mb-4">
+                <div className="mb-5 flex items-center gap-3 text-muted-foreground">
                   <HardDrive className="w-4 h-4" />
                   <h3 className="text-sm font-medium">Storage Usage</h3>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold sm:text-3xl">{storageUsage}<span className="ml-1 text-lg font-normal text-muted-foreground">MB</span></span>
-                    <span className="text-sm text-muted-foreground">/ {storageLimit} MB</span>
+                <div className="space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="block truncate text-3xl font-bold leading-none tracking-tight tabular-nums">{formatMegabytes(storageUsage)}</span>
+                      <span className="mt-2 block text-xs text-muted-foreground">of {formatLimit(storageLimit)}</span>
+                    </div>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{formatPercent(storagePercent)} used</span>
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${storagePercent > 90 ? 'bg-red-500' : 'bg-orange-500'}`} style={{ width: `${storagePercent}%` }} />
@@ -134,31 +169,38 @@ export default async function Dashboard() {
                 </div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
+              <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
-                <div className="flex items-center gap-3 text-muted-foreground mb-4">
+                <div className="mb-5 flex items-center gap-3 text-muted-foreground">
                   <Activity className="w-4 h-4" />
                   <h3 className="text-sm font-medium">Bandwidth (30d)</h3>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl font-bold sm:text-3xl">{(entitlements?.usage?.bandwidthMb || 0).toFixed(1)}<span className="ml-1 text-lg font-normal text-muted-foreground">MB</span></span>
-                    <span className="text-sm text-muted-foreground">/ {(entitlements?.limits?.bandwidthMb || 10240) / 1024} GB</span>
+                <div className="space-y-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="block truncate text-3xl font-bold leading-none tracking-tight tabular-nums">{formatMegabytes(bandwidthUsage)}</span>
+                      <span className="mt-2 block text-xs text-muted-foreground">of {formatLimit(bandwidthLimit)}</span>
+                    </div>
+                    <span className="shrink-0 text-xs font-medium text-muted-foreground">{formatPercent(bandwidthPercent)} used</span>
                   </div>
                   <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full ${((entitlements?.usage?.bandwidthMb || 0) / (entitlements?.limits?.bandwidthMb || 10240)) * 100 > 90 ? 'bg-red-500' : 'bg-cyan-500'}`} style={{ width: `${Math.min(((entitlements?.usage?.bandwidthMb || 0) / (entitlements?.limits?.bandwidthMb || 10240)) * 100, 100)}%` }} />
+                    <div className={`h-full rounded-full ${bandwidthPercent > 90 ? 'bg-red-500' : 'bg-cyan-500'}`} style={{ width: `${bandwidthPercent}%` }} />
                   </div>
                 </div>
               </div>
 
-              <div className="p-5 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
+              <div className="relative min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card p-5 shadow-sm">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -mr-10 -mt-10" />
-                <div className="flex items-center gap-3 text-muted-foreground mb-4">
+                <div className="mb-5 flex items-center gap-3 text-muted-foreground">
                   <Box className="w-4 h-4" />
                   <h3 className="text-sm font-medium">AI Orchestration</h3>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="break-words text-2xl font-bold sm:text-3xl">{entitlements?.usage?.aiRequests || '0'} <span className="text-lg font-medium text-muted-foreground">/ {entitlements?.limits?.aiRequests || '0'} reqs</span></span>
+                <div className="flex items-end justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="block text-3xl font-bold leading-none tracking-tight tabular-nums">{entitlements?.usage?.aiRequests || 0}</span>
+                    <span className="mt-2 block text-xs text-muted-foreground">of {(entitlements?.limits?.aiRequests || 0) >= UNLIMITED_LIMIT ? 'Unlimited' : entitlements?.limits?.aiRequests || 0} requests</span>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-purple-500/20 bg-purple-500/10 px-2 py-1 text-[11px] font-medium text-purple-400">This month</span>
                 </div>
               </div>
             </div>
