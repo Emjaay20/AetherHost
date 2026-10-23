@@ -1,7 +1,7 @@
 const { Webhook } = require('svix');
 
 async function test() {
-  const secret = 'whsec_dummy_secret_for_testing_123';
+  const secret = 'test-webhook-signing-secret';
   const payload = {
     data: {
       id: 'user_2TestSimulation123',

@@ -58,7 +58,7 @@ func TestRandomPassword(t *testing.T) {
 }
 
 func TestGitAuthEnvAndRedaction(t *testing.T) {
-	token := "ghp_superSecretTokenValue123"
+	token := "test-token-not-a-secret"
 	env := gitAuthEnv(token)
 	foundHeader := false
 	for _, entry := range env {
@@ -73,7 +73,7 @@ func TestGitAuthEnvAndRedaction(t *testing.T) {
 		t.Fatal("expected GIT_CONFIG_VALUE_0 auth header in environment")
 	}
 
-	leakedOutput := "fatal: unable to access https://ghp_superSecretTokenValue123@github.com/org/repo.git"
+	leakedOutput := "fatal: unable to access https://test-token-not-a-secret@github.com/org/repo.git"
 	redacted := redactSecrets(leakedOutput, token)
 	if strings.Contains(redacted, token) {
 		t.Fatalf("expected token to be redacted, got: %s", redacted)
