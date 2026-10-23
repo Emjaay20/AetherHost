@@ -169,6 +169,7 @@ func main() {
 		provisionPendingApps(controlPlaneURL, hostPwd, baseDomain)
 		terminateApps(controlPlaneURL)
 		suspendApps(controlPlaneURL)
+		watchRunningApps(controlPlaneURL)
 
 		select {
 		case <-ctx.Done():
@@ -177,6 +178,36 @@ func main() {
 		case <-time.After(5 * time.Second):
 		}
 	}
+}
+
+// requestAutoFix asks the control plane to have the AI repair a failed build.
+// On success the API re-queues the app itself, so the caller must not mark it failed.
+func requestAutoFix(controlPlaneURL, appID, buildOutput string) bool {
+	body, err := json.Marshal(map[string]string{"error": buildOutput})
+	if err != nil {
+		return false
+	}
+	url := fmt.Sprintf("%s/v1/ai/applications/%s/auto-fix", controlPlaneURL, appID)
+	client := &http.Client{Timeout: 150 * time.Second} // model call can be slow
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-agent-key", os.Getenv("AGENT_SECRET_KEY"))
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Fixed bool `json:"fixed"`
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	return result.Fixed
 }
 
 func probeContainer(container, rawURL string) error {

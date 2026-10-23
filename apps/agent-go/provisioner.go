@@ -135,6 +135,10 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		errMsg := fmt.Sprintf("[%s] Docker compose failed:\n%s", time.Now().Format("15:04:05"), string(output))
 		sendAppLog(controlPlaneURL, app.ID, errMsg)
 		appLog.Error("docker compose up failed", slog.String("error", err.Error()), slog.String("output", string(output)))
+		if len(app.AiFiles) > 0 && requestAutoFix(controlPlaneURL, app.ID, string(output)) {
+			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Build failed. AI auto-fix applied; redeploying with corrected files...", time.Now().Format("15:04:05")))
+			return
+		}
 		updateAppStatus(controlPlaneURL, app.ID, "failed")
 		return
 	}
@@ -144,7 +148,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
 	if !healthPass {
 		cLogs, _ := exec.Command("docker", "logs", "--tail", "50", containerName).CombinedOutput()
-		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Readiness check timed out after 60s.\nContainer output:\n%s", time.Now().Format("15:04:05"), string(cLogs)))
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Readiness check timed out.\nContainer output:\n%s", time.Now().Format("15:04:05"), string(cLogs)))
 		appLog.Warn("readiness check timed out; tearing down container")
 		_ = exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "down").Run()
 		statusStr = "failed"
@@ -375,7 +379,7 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 
 	maxAttempts := 45
 	if app.Runtime == "docker" || app.Runtime == "github" {
-		maxAttempts = 60
+		maxAttempts = 120 // up to ~4 min: apps that boot a database first need it
 	}
 
 	for i := 0; i < maxAttempts; i++ {

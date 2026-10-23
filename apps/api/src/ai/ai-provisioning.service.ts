@@ -3,6 +3,7 @@ import { AiProxyService } from './ai-proxy.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { Runtime } from '@aetherhost/domain';
 import { getGithubToken } from '../applications/github-utils';
+import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { AI_FILE_RULES, normalizeFileContent, sanitizeAiFiles } from './ai-file-sanitizer';
 
 
@@ -14,6 +15,43 @@ export class AiProvisioningService {
     private readonly aiProxy: AiProxyService,
     private readonly appsService: ApplicationsService,
   ) {}
+
+  private readonly autoFixAttempts = new Map<string, number[]>();
+
+  /**
+   * Called by the agent when an AI-generated app fails to build. Feeds the build
+   * error back to the model once or twice so users rarely see a raw "failed".
+   */
+  async autoFixBuildFailure(applicationId: string, buildError: string) {
+    const app = await this.appsService.findOne(applicationId, SYSTEM_TENANT_ID);
+    const files = Array.isArray(app.aiFiles) ? app.aiFiles : [];
+    if (files.length === 0) {
+      return { fixed: false, reason: 'not_ai_generated' };
+    }
+
+    const windowMs = 6 * 60 * 60 * 1000;
+    const recent = (this.autoFixAttempts.get(applicationId) ?? []).filter(
+      (t) => Date.now() - t < windowMs,
+    );
+    if (recent.length >= 2) {
+      return { fixed: false, reason: 'attempt_limit_reached' };
+    }
+    this.autoFixAttempts.set(applicationId, [...recent, Date.now()]);
+
+    const trimmed = buildError.slice(-3500);
+    try {
+      await this.iterateOnApplication(
+        app.tenantId,
+        applicationId,
+        `The last deployment failed to build. Fix the source files so the build and start succeed. ` +
+          `Change only what is necessary.\nBuild/runtime error output:\n${trimmed}`,
+      );
+      return { fixed: true };
+    } catch (err: any) {
+      this.logger.warn(`Auto-fix failed for ${applicationId}: ${err?.message ?? err}`);
+      return { fixed: false, reason: 'ai_error' };
+    }
+  }
 
   private extractJson(rawOutput: string): any {
     let cleaned = rawOutput

@@ -74,6 +74,18 @@ export class AiProxyController {
     );
   }
 
+  @Post('applications/:id/auto-fix')
+  autoFix(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: { error?: string },
+  ) {
+    if (tenantId !== SYSTEM_TENANT_ID) {
+      throw new ForbiddenException('Only the agent can trigger auto-fix');
+    }
+    return this.aiProvisioningService.autoFixBuildFailure(id, String(body?.error ?? ''));
+  }
+
   private assertTenant(tenantId: string) {
     if (tenantId === SYSTEM_TENANT_ID) {
       throw new ForbiddenException('Agent cannot consume AI quota');
