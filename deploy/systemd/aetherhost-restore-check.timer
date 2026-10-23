@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AetherHost restore drill every Sunday
+
+[Timer]
+OnCalendar=Sun *-*-* 04:15:00
+Persistent=true
+Unit=aetherhost-restore-check.service
+
+[Install]
+WantedBy=timers.target

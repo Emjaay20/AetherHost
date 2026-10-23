@@ -111,6 +111,7 @@ export async function createApplication(formData: FormData) {
     if (healthPath) body.healthPath = healthPath
     if (portRaw) body.port = Number(portRaw)
     body.withPostgres = formData.get('withPostgres') === 'true'
+    body.withMariaDb = formData.get('withMariaDb') === 'true'
     body.withRedis = formData.get('withRedis') === 'true'
   }
 

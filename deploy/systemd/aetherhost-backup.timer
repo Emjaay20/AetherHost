@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AetherHost backup every day
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+Unit=aetherhost-backup.service
+
+[Install]
+WantedBy=timers.target

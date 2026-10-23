@@ -70,3 +70,14 @@ This document outlines the four critical request flows within the AetherHost con
 4. The agent writes credentials into env files, probes the health path, then sets `running`. A failed probe tears the stack down and sets `failed`.
 
 *Key takeaway:* The hosted app does not import AetherHost. The platform owns the process graph and the datastore URLs.
+
+## 6. Reliability Foundation → Backup, Recovery and Capacity Bound
+
+**Trigger:** systemd schedules the platform operational jobs outside the request path.
+
+1. The daily cache job bounds Docker BuildKit storage to 10GB and prunes only unused images older than seven days. It does not prune volumes.
+2. The backup job takes a logical control-plane PostgreSQL dump, archives AetherHost data volumes and configuration, then sends it through restic encryption to an rclone-backed Google Drive repository.
+3. The weekly restore job runs `restic check` and restores the newest snapshot to a temporary directory. It verifies the recovered PostgreSQL dump without touching the live database or any live volume.
+4. A failed backup or restore drill is an operational incident: preserve the output, correct credentials or repository access, and rerun before relying on the next scheduled job.
+
+*Key takeaway:* Recovery is a tested, off-host process—not an assumption based on an unverified backup job. See [Reliability & Security Architecture](RELIABILITY_PLATFORM.md) and the [Operations Runbook](../OPERATIONS.md).

@@ -86,9 +86,33 @@ jobs:
         run: |
           cargo test --workspace
 
+  security:
+    name: Security and Dependency Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect accidentally committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan source dependencies and configuration
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          # Start in reporting mode so existing dependency debt does not block
+          # a safe deployment. Promote this to a blocking gate after findings
+          # are triaged and documented.
+          exit-code: '0'
+
   deploy:
     name: Continuous Deployment (Contabo VPS)
-    needs: [typescript, go-agent, rust-crates]
+    needs: [typescript, go-agent, rust-crates, security]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

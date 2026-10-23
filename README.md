@@ -34,6 +34,22 @@ Agencies, developers, and enterprises use AetherHost to:
 
 ## 🏛️ System Architecture
 
+The current production design, trust boundaries, recovery path, and compatibility rules are documented in [Reliability & Security Architecture](docs/architecture/RELIABILITY_PLATFORM.md).
+
+```mermaid
+flowchart LR
+  user["Developer"] --> dashboard["AetherHost dashboard"]
+  dashboard --> api["Control plane API"]
+  api --> agent["Go agent"]
+  agent --> workloads["Secure tenant workloads"]
+  internet["Internet"] --> edge["Traefik TLS edge"]
+  edge --> workloads
+  workloads --> data["Private Postgres / MariaDB / Redis"]
+  backup["Encrypted Google Drive backup"] -. "daily backup + restore drill" .-> data
+```
+
+### Core control-plane map
+
 ```
                              Internet Traffic (Wildcard DNS)
                                             │
@@ -112,6 +128,7 @@ Built with modern, memory-safe Rust:
 * **Database & Port Isolation**: PostgreSQL 5432 and Redis 6379 are bound strictly to `127.0.0.1` and internal network `aetherhost-net`.
 * **Turnkey Ubuntu Bootstrap**: [deploy/setup-contabo.sh](deploy/setup-contabo.sh) configures 4GB NVMe swap space, Docker CE, UFW firewall rules (ports 22, 80, 443 only), and Fail2Ban in one command.
 * **Production Manual**: Complete step-by-step runbook in [docs/CONTABO_DEPLOYMENT.md](docs/CONTABO_DEPLOYMENT.md).
+* **Operational Recovery**: Encrypted off-host backup scripts, a non-destructive weekly restore drill, and bounded Docker cache maintenance. See [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ---
 

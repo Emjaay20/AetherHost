@@ -178,16 +178,21 @@ export default function CreateAppForm({ limitReached }: { limitReached: boolean 
                               />
                             </div>
                           </div>
-                          <div className="flex gap-4 text-sm">
+                          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
                             <label className="flex items-center gap-2">
                               <input type="checkbox" name="withPostgres" value="true" defaultChecked />
                               Postgres
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input type="checkbox" name="withMariaDb" value="true" />
+                              MariaDB
                             </label>
                             <label className="flex items-center gap-2">
                               <input type="checkbox" name="withRedis" value="true" defaultChecked />
                               Redis
                             </label>
                           </div>
+                          <p className="text-xs text-muted-foreground">Data services are private, credentialed automatically, and never publish host ports.</p>
                           <div className="space-y-2">
                             <label htmlFor="envVars" className="text-sm font-medium text-foreground/80">Env</label>
                             <textarea

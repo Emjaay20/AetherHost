@@ -71,6 +71,8 @@ func isReservedEnv(key string) bool {
 	switch key {
 	case "DATABASE_URL", "REDIS_URL", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "AETHERHOST_WORKER_COMMAND":
 		return true
+	case "MYSQL_URL", "MARIADB_USER", "MARIADB_PASSWORD", "MARIADB_DATABASE", "REDIS_PASSWORD":
+		return true
 	default:
 		return false
 	}
@@ -96,12 +98,14 @@ type WorkloadPlan struct {
 	Compose     string
 	AppEnv      string
 	PostgresEnv string
+	MariaDbEnv  string
+	RedisEnv    string
 	Alias       string
 	Port        int
 	HealthPath  string
 }
 
-func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
+func buildWorkload(app Application, postgresPass, mariaDbPass, redisPass string) (WorkloadPlan, error) {
 	if app.Runtime == "wordpress" {
 		return WorkloadPlan{}, fmt.Errorf("wordpress is not a workload")
 	}
@@ -127,8 +131,9 @@ func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
 	if worker != "" && !workerCommandPattern.MatchString(worker) {
 		return WorkloadPlan{}, fmt.Errorf("invalid worker command")
 	}
-	if dbPass == "" || strings.ContainsAny(dbPass, "\r\n") {
-		return WorkloadPlan{}, fmt.Errorf("invalid database password")
+	if postgresPass == "" || mariaDbPass == "" || redisPass == "" ||
+		strings.ContainsAny(postgresPass+mariaDbPass+redisPass, "\r\n") {
+		return WorkloadPlan{}, fmt.Errorf("invalid datastore password")
 	}
 	if !validCustomDomain(app.CustomDomain) {
 		return WorkloadPlan{}, fmt.Errorf("invalid custom domain")
@@ -138,16 +143,20 @@ func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
 	apiName := "aetherhost-" + name + "-api"
 	workerName := "aetherhost-" + name + "-worker"
 	pgName := "aetherhost-" + name + "-postgres"
+	mariaDbName := "aetherhost-" + name + "-mariadb"
 	redisName := "aetherhost-" + name + "-redis"
 
 	var b strings.Builder
 	b.WriteString("services:\n")
-	writeAPI(&b, apiName, image, name, port, app.WithPostgres, app.WithRedis, pgName, redisName, app.CustomDomain)
+	writeAPI(&b, apiName, image, name, port, app.WithPostgres, app.WithMariaDb, app.WithRedis, pgName, mariaDbName, redisName, app.CustomDomain)
 	if worker != "" {
-		writeWorker(&b, workerName, image, app.WithPostgres, app.WithRedis, pgName, redisName)
+		writeWorker(&b, workerName, image, app.WithPostgres, app.WithMariaDb, app.WithRedis, pgName, mariaDbName, redisName)
 	}
 	if app.WithPostgres {
 		writePostgres(&b, pgName)
+	}
+	if app.WithMariaDb {
+		writeMariaDb(&b, mariaDbName)
 	}
 	if app.WithRedis {
 		writeRedis(&b, redisName)
@@ -155,35 +164,48 @@ func buildWorkload(app Application, dbPass string) (WorkloadPlan, error) {
 	b.WriteString("\nnetworks:\n")
 	b.WriteString("  aetherhost-net:\n    external: true\n")
 	b.WriteString("  private:\n")
-	if app.WithPostgres || app.WithRedis {
+	if app.WithPostgres || app.WithMariaDb || app.WithRedis {
 		b.WriteString("\nvolumes:\n")
 		if app.WithPostgres {
 			b.WriteString("  pgdata:\n")
+		}
+		if app.WithMariaDb {
+			b.WriteString("  mariadbdata:\n")
 		}
 		if app.WithRedis {
 			b.WriteString("  redisdata:\n")
 		}
 	}
 
-	appEnv, err := buildAppEnv(app, dbPass, pgName, redisName, worker)
+	appEnv, err := buildAppEnv(app, postgresPass, mariaDbPass, redisPass, pgName, mariaDbName, redisName, worker)
 	if err != nil {
 		return WorkloadPlan{}, err
 	}
 	pgEnv := ""
 	if app.WithPostgres {
-		pgEnv = fmt.Sprintf("POSTGRES_USER=app\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=app\n", dbPass)
+		pgEnv = fmt.Sprintf("POSTGRES_USER=app\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=app\n", postgresPass)
+	}
+	mariaDbEnv := ""
+	if app.WithMariaDb {
+		mariaDbEnv = fmt.Sprintf("MARIADB_DATABASE=app\nMARIADB_USER=app\nMARIADB_PASSWORD=%s\nMARIADB_RANDOM_ROOT_PASSWORD=1\n", mariaDbPass)
+	}
+	redisEnv := ""
+	if app.WithRedis {
+		redisEnv = fmt.Sprintf("REDIS_PASSWORD=%s\n", redisPass)
 	}
 	return WorkloadPlan{
 		Compose:     b.String(),
 		AppEnv:      appEnv,
 		PostgresEnv: pgEnv,
+		MariaDbEnv:  mariaDbEnv,
+		RedisEnv:    redisEnv,
 		Alias:       apiName,
 		Port:        port,
 		HealthPath:  healthPath,
 	}, nil
 }
 
-func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPostgres, withRedis bool, pgName, redisName, customDomain string) {
+func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPostgres, withMariaDb, withRedis bool, pgName, mariaDbName, redisName, customDomain string) {
 	fmt.Fprintf(b, "  %s:\n", apiName)
 	fmt.Fprintf(b, "    image: %s\n", image)
 	fmt.Fprintf(b, "    container_name: %s\n", apiName)
@@ -191,7 +213,10 @@ func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPos
 	b.WriteString("    init: true\n")
 	b.WriteString("    stop_grace_period: 30s\n")
 	b.WriteString("    mem_limit: 512m\n")
+	b.WriteString("    pids_limit: 256\n")
 	b.WriteString("    restart: unless-stopped\n")
+	b.WriteString("    security_opt:\n      - no-new-privileges:true\n")
+	b.WriteString("    cap_drop:\n      - ALL\n")
 	b.WriteString("    labels:\n")
 	b.WriteString("      - \"traefik.enable=true\"\n")
 	b.WriteString("      - \"traefik.docker.network=aetherhost-net\"\n")
@@ -213,10 +238,13 @@ func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPos
 	b.WriteString("      private: {}\n")
 	b.WriteString("      aetherhost-net:\n")
 	fmt.Fprintf(b, "        aliases:\n          - %s\n", apiName)
-	if withPostgres || withRedis {
+	if withPostgres || withMariaDb || withRedis {
 		b.WriteString("    depends_on:\n")
 		if withPostgres {
 			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", pgName)
+		}
+		if withMariaDb {
+			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", mariaDbName)
 		}
 		if withRedis {
 			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", redisName)
@@ -224,7 +252,7 @@ func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPos
 	}
 }
 
-func writeWorker(b *strings.Builder, workerName, image string, withPostgres, withRedis bool, pgName, redisName string) {
+func writeWorker(b *strings.Builder, workerName, image string, withPostgres, withMariaDb, withRedis bool, pgName, mariaDbName, redisName string) {
 	fmt.Fprintf(b, "  %s:\n", workerName)
 	fmt.Fprintf(b, "    image: %s\n", image)
 	fmt.Fprintf(b, "    container_name: %s\n", workerName)
@@ -234,13 +262,19 @@ func writeWorker(b *strings.Builder, workerName, image string, withPostgres, wit
 	b.WriteString("    init: true\n")
 	b.WriteString("    stop_grace_period: 30s\n")
 	b.WriteString("    mem_limit: 512m\n")
+	b.WriteString("    pids_limit: 256\n")
 	b.WriteString("    restart: unless-stopped\n")
+	b.WriteString("    security_opt:\n      - no-new-privileges:true\n")
+	b.WriteString("    cap_drop:\n      - ALL\n")
 	b.WriteString("    networks:\n")
 	b.WriteString("      private: {}\n")
-	if withPostgres || withRedis {
+	if withPostgres || withMariaDb || withRedis {
 		b.WriteString("    depends_on:\n")
 		if withPostgres {
 			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", pgName)
+		}
+		if withMariaDb {
+			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", mariaDbName)
 		}
 		if withRedis {
 			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", redisName)
@@ -255,7 +289,9 @@ func writePostgres(b *strings.Builder, pgName string) {
 	b.WriteString("    env_file:\n      - postgres.env\n")
 	b.WriteString("    volumes:\n      - pgdata:/var/lib/postgresql/data\n")
 	b.WriteString("    mem_limit: 256m\n")
+	b.WriteString("    pids_limit: 128\n")
 	b.WriteString("    restart: unless-stopped\n")
+	b.WriteString("    security_opt:\n      - no-new-privileges:true\n")
 	b.WriteString("    networks:\n")
 	b.WriteString("      private:\n")
 	fmt.Fprintf(b, "        aliases:\n          - %s\n", pgName)
@@ -266,25 +302,48 @@ func writePostgres(b *strings.Builder, pgName string) {
 	b.WriteString("      retries: 20\n")
 }
 
-func writeRedis(b *strings.Builder, redisName string) {
-	fmt.Fprintf(b, "  %s:\n", redisName)
-	b.WriteString("    image: redis:7-alpine\n")
-	fmt.Fprintf(b, "    container_name: %s\n", redisName)
-	b.WriteString("    command: [\"redis-server\", \"--appendonly\", \"yes\"]\n")
-	b.WriteString("    volumes:\n      - redisdata:/data\n")
-	b.WriteString("    mem_limit: 128m\n")
+func writeMariaDb(b *strings.Builder, mariaDbName string) {
+	fmt.Fprintf(b, "  %s:\n", mariaDbName)
+	b.WriteString("    image: mariadb:11.4\n")
+	fmt.Fprintf(b, "    container_name: %s\n", mariaDbName)
+	b.WriteString("    env_file:\n      - mariadb.env\n")
+	b.WriteString("    volumes:\n      - mariadbdata:/var/lib/mysql\n")
+	b.WriteString("    mem_limit: 384m\n")
+	b.WriteString("    pids_limit: 128\n")
 	b.WriteString("    restart: unless-stopped\n")
+	b.WriteString("    security_opt:\n      - no-new-privileges:true\n")
 	b.WriteString("    networks:\n")
 	b.WriteString("      private:\n")
-	fmt.Fprintf(b, "        aliases:\n          - %s\n", redisName)
+	fmt.Fprintf(b, "        aliases:\n          - %s\n", mariaDbName)
 	b.WriteString("    healthcheck:\n")
-	b.WriteString("      test: [\"CMD\", \"redis-cli\", \"ping\"]\n")
+	b.WriteString("      test: [\"CMD-SHELL\", \"mariadb-admin ping -h localhost -u \\\"$$MARIADB_USER\\\" -p\\\"$$MARIADB_PASSWORD\\\" --silent\"]\n")
 	b.WriteString("      interval: 5s\n")
 	b.WriteString("      timeout: 3s\n")
 	b.WriteString("      retries: 20\n")
 }
 
-func buildAppEnv(app Application, dbPass, pgName, redisName, worker string) (string, error) {
+func writeRedis(b *strings.Builder, redisName string) {
+	fmt.Fprintf(b, "  %s:\n", redisName)
+	b.WriteString("    image: redis:7-alpine\n")
+	fmt.Fprintf(b, "    container_name: %s\n", redisName)
+	b.WriteString("    env_file:\n      - redis.env\n")
+	b.WriteString("    command: [\"sh\", \"-c\", \"exec redis-server --appendonly yes --requirepass \\\"$$REDIS_PASSWORD\\\"\"]\n")
+	b.WriteString("    volumes:\n      - redisdata:/data\n")
+	b.WriteString("    mem_limit: 128m\n")
+	b.WriteString("    pids_limit: 128\n")
+	b.WriteString("    restart: unless-stopped\n")
+	b.WriteString("    security_opt:\n      - no-new-privileges:true\n")
+	b.WriteString("    networks:\n")
+	b.WriteString("      private:\n")
+	fmt.Fprintf(b, "        aliases:\n          - %s\n", redisName)
+	b.WriteString("    healthcheck:\n")
+	b.WriteString("      test: [\"CMD-SHELL\", \"redis-cli -a \\\"$$REDIS_PASSWORD\\\" ping | grep PONG\"]\n")
+	b.WriteString("      interval: 5s\n")
+	b.WriteString("      timeout: 3s\n")
+	b.WriteString("      retries: 20\n")
+}
+
+func buildAppEnv(app Application, postgresPass, mariaDbPass, redisPass, pgName, mariaDbName, redisName, worker string) (string, error) {
 	var b strings.Builder
 	for key, value := range app.EnvVars {
 		if isReservedEnv(key) {
@@ -299,10 +358,13 @@ func buildAppEnv(app Application, dbPass, pgName, redisName, worker string) (str
 		fmt.Fprintf(&b, "%s=%s\n", key, value)
 	}
 	if app.WithPostgres {
-		fmt.Fprintf(&b, "DATABASE_URL=postgresql://app:%s@%s:5432/app\n", dbPass, pgName)
+		fmt.Fprintf(&b, "DATABASE_URL=postgresql://app:%s@%s:5432/app\n", postgresPass, pgName)
+	}
+	if app.WithMariaDb {
+		fmt.Fprintf(&b, "MYSQL_URL=mysql://app:%s@%s:3306/app\n", mariaDbPass, mariaDbName)
 	}
 	if app.WithRedis {
-		fmt.Fprintf(&b, "REDIS_URL=redis://%s:6379\n", redisName)
+		fmt.Fprintf(&b, "REDIS_URL=redis://:%s@%s:6379\n", redisPass, redisName)
 	}
 	if worker != "" {
 		fmt.Fprintf(&b, "AETHERHOST_WORKER_COMMAND=%s\n", worker)

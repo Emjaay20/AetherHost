@@ -38,6 +38,7 @@ model Application {
   envVars               Json?
   workerCommand         String?
   withPostgres          Boolean  @default(false)
+  withMariaDb           Boolean  @default(false)
   withRedis             Boolean  @default(false)
   port                  Int      @default(3000)
   healthPath            String   @default("/health")

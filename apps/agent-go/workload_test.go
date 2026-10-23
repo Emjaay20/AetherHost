@@ -12,6 +12,7 @@ func signaldeskApp() Application {
 		DockerImage:   "ghcr.io/acme/signaldesk:1.4.0",
 		WorkerCommand: "node dist/worker.js",
 		WithPostgres:  true,
+		WithMariaDb:   true,
 		WithRedis:     true,
 		Port:          3000,
 		HealthPath:    "/health",
@@ -41,7 +42,7 @@ func TestSignaldeskWorkload(t *testing.T) {
 	if !isWorkload(app) {
 		t.Fatal("expected an image deploy to be a workload")
 	}
-	plan, err := buildWorkload(app, "DbPass1234567890")
+	plan, err := buildWorkload(app, "PostgresPass123", "MariaDbPass123", "RedisPass123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestSignaldeskWorkload(t *testing.T) {
 	if strings.Contains(plan.Compose, "code-server") || strings.Contains(plan.Compose, "privileged:") || strings.Contains(plan.Compose, "docker.sock") || strings.Contains(plan.Compose, "ports:") {
 		t.Fatal("workload compose published a host port or an unsafe option")
 	}
-	if strings.Contains(plan.Compose, "DbPass1234567890") || strings.Contains(plan.Compose, "node dist/worker.js") {
+	if strings.Contains(plan.Compose, "PostgresPass123") || strings.Contains(plan.Compose, "MariaDbPass123") || strings.Contains(plan.Compose, "RedisPass123") || strings.Contains(plan.Compose, "node dist/worker.js") {
 		t.Fatal("secrets or the worker command leaked into the compose file")
 	}
 	if !strings.Contains(plan.Compose, "$$AETHERHOST_WORKER_COMMAND") {
@@ -67,27 +68,34 @@ func TestSignaldeskWorkload(t *testing.T) {
 	api := serviceBlock(t, plan.Compose, "aetherhost-signaldesk-api")
 	worker := serviceBlock(t, plan.Compose, "aetherhost-signaldesk-worker")
 	postgres := serviceBlock(t, plan.Compose, "aetherhost-signaldesk-postgres")
+	mariadb := serviceBlock(t, plan.Compose, "aetherhost-signaldesk-mariadb")
 	redis := serviceBlock(t, plan.Compose, "aetherhost-signaldesk-redis")
 	if !strings.Contains(api, "aetherhost-net") || !strings.Contains(api, "private:") {
 		t.Fatal("api must join ingress and the private network")
 	}
-	if strings.Contains(worker, "aetherhost-net") || strings.Contains(postgres, "aetherhost-net") || strings.Contains(redis, "aetherhost-net") {
+	if strings.Contains(worker, "aetherhost-net") || strings.Contains(postgres, "aetherhost-net") || strings.Contains(mariadb, "aetherhost-net") || strings.Contains(redis, "aetherhost-net") {
 		t.Fatal("worker and datastores must stay off the shared ingress network")
 	}
 	if !strings.Contains(plan.AppEnv, "NODE_ENV=production") {
 		t.Fatal("tenant env was dropped")
 	}
-	if !strings.Contains(plan.AppEnv, "DATABASE_URL=postgresql://app:DbPass1234567890@aetherhost-signaldesk-postgres:5432/app") {
+	if !strings.Contains(plan.AppEnv, "DATABASE_URL=postgresql://app:PostgresPass123@aetherhost-signaldesk-postgres:5432/app") {
 		t.Fatal("database url was not injected")
 	}
-	if !strings.Contains(plan.AppEnv, "REDIS_URL=redis://aetherhost-signaldesk-redis:6379") {
+	if !strings.Contains(plan.AppEnv, "MYSQL_URL=mysql://app:MariaDbPass123@aetherhost-signaldesk-mariadb:3306/app") {
+		t.Fatal("MariaDB url was not injected")
+	}
+	if !strings.Contains(plan.AppEnv, "REDIS_URL=redis://:RedisPass123@aetherhost-signaldesk-redis:6379") {
 		t.Fatal("redis url was not injected")
 	}
 	if !strings.Contains(plan.AppEnv, "AETHERHOST_WORKER_COMMAND=node dist/worker.js") {
 		t.Fatal("worker command was not injected")
 	}
-	if !strings.Contains(plan.PostgresEnv, "POSTGRES_PASSWORD=DbPass1234567890") {
+	if !strings.Contains(plan.PostgresEnv, "POSTGRES_PASSWORD=PostgresPass123") || !strings.Contains(plan.MariaDbEnv, "MARIADB_PASSWORD=MariaDbPass123") || !strings.Contains(plan.RedisEnv, "REDIS_PASSWORD=RedisPass123") {
 		t.Fatal("postgres env was not written")
+	}
+	if !strings.Contains(api, "cap_drop:") || !strings.Contains(api, "no-new-privileges:true") || !strings.Contains(plan.Compose, "--requirepass") {
+		t.Fatalf("workload hardening defaults were not rendered (api caps=%t, api no-new-privileges=%t, redis auth=%t)", strings.Contains(api, "cap_drop:"), strings.Contains(api, "no-new-privileges:true"), strings.Contains(plan.Compose, "--requirepass"))
 	}
 	if plan.Alias != "aetherhost-signaldesk-api" || plan.HealthPath != "/health" {
 		t.Fatal("probe target was wrong")
@@ -97,17 +105,17 @@ func TestSignaldeskWorkload(t *testing.T) {
 func TestWorkloadRejectsUnsafeSpec(t *testing.T) {
 	app := signaldeskApp()
 	app.DockerImage = "ghcr.io/acme/../signaldesk:1"
-	if _, err := buildWorkload(app, "DbPass1234567890"); err == nil {
+	if _, err := buildWorkload(app, "PostgresPass123", "MariaDbPass123", "RedisPass123"); err == nil {
 		t.Fatal("expected a path-traversal image to be rejected")
 	}
 	app = signaldeskApp()
 	app.WorkerCommand = "node dist/worker.js; curl evil"
-	if _, err := buildWorkload(app, "DbPass1234567890"); err == nil {
+	if _, err := buildWorkload(app, "PostgresPass123", "MariaDbPass123", "RedisPass123"); err == nil {
 		t.Fatal("expected a shell worker command to be rejected")
 	}
 	app = signaldeskApp()
 	app.EnvVars = map[string]string{"DATABASE_URL": "postgresql://evil@control-plane/aetherhost"}
-	if _, err := buildWorkload(app, "DbPass1234567890"); err == nil {
+	if _, err := buildWorkload(app, "PostgresPass123", "MariaDbPass123", "RedisPass123"); err == nil {
 		t.Fatal("expected a reserved env key to be rejected")
 	}
 	app = signaldeskApp()

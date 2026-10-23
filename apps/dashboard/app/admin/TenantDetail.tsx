@@ -77,6 +77,7 @@ export default function TenantDetailView({ detail }: { detail: TenantDetail }) {
                     {app.workerCommand && <p className="font-mono truncate max-w-xs">worker {app.workerCommand}</p>}
                     <p>
                       {app.withPostgres ? 'postgres ' : ''}
+                      {app.withMariaDb ? 'mariadb ' : ''}
                       {app.withRedis ? 'redis ' : ''}
                       {app.customDomain ?? app.githubRepo ?? app.dockerImage ?? 'no source'}
                     </p>

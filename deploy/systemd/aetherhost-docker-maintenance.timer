@@ -1,0 +1,10 @@
+[Unit]
+Description=Run AetherHost Docker maintenance every day
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+Unit=aetherhost-docker-maintenance.service
+
+[Install]
+WantedBy=timers.target

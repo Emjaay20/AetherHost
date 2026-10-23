@@ -1,0 +1,8 @@
+[Unit]
+Description=AetherHost non-destructive backup restore drill
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aetherhost/deploy/backup/restore-check.sh

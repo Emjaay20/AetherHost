@@ -57,6 +57,7 @@ export class ApplicationsController {
       body.envVars,
       body.workerCommand,
       body.withPostgres,
+      body.withMariaDb,
       body.withRedis,
       body.port,
       body.healthPath,

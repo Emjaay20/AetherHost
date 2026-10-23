@@ -118,6 +118,7 @@ export class AdminTenantService {
         dockerImage: app.dockerImage,
         workerCommand: app.workerCommand,
         withPostgres: app.withPostgres,
+        withMariaDb: app.withMariaDb,
         withRedis: app.withRedis,
         port: app.port,
         healthPath: app.healthPath,

@@ -1,0 +1,8 @@
+[Unit]
+Description=AetherHost encrypted off-host backup
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aetherhost/deploy/backup/backup.sh

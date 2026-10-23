@@ -41,7 +41,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	dbPass := randomPassword()
 
 	if isWorkload(app) {
-		provisionWorkloadApp(app, appLog, safeName, appDir, dbPass, controlPlaneURL)
+		provisionWorkloadApp(app, appLog, safeName, appDir, controlPlaneURL)
 		return
 	}
 
@@ -160,11 +160,11 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	appLog.Info("application provisioning finished", slog.String("final_status", statusStr))
 }
 
-func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir, dbPass, controlPlaneURL string) {
+func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir, controlPlaneURL string) {
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning Workload: %s", time.Now().Format("15:04:05"), app.DockerImage))
 	appLog.Info("provisioning custom docker workload", slog.String("image", app.DockerImage))
 
-	plan, err := buildWorkload(app, dbPass)
+	plan, err := buildWorkload(app, randomPassword(), randomPassword(), randomPassword())
 	if err != nil {
 		errMsg := fmt.Sprintf("[%s] Workload build failed: %v", time.Now().Format("15:04:05"), err)
 		sendAppLog(controlPlaneURL, app.ID, errMsg)
@@ -177,6 +177,12 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	_ = os.WriteFile(fmt.Sprintf("%s/workload.env", appDir), []byte(plan.AppEnv), 0600)
 	if plan.PostgresEnv != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/postgres.env", appDir), []byte(plan.PostgresEnv), 0600)
+	}
+	if plan.MariaDbEnv != "" {
+		_ = os.WriteFile(fmt.Sprintf("%s/mariadb.env", appDir), []byte(plan.MariaDbEnv), 0600)
+	}
+	if plan.RedisEnv != "" {
+		_ = os.WriteFile(fmt.Sprintf("%s/redis.env", appDir), []byte(plan.RedisEnv), 0600)
 	}
 
 	_ = exec.Command("docker", "network", "create", "aetherhost-net").Run()
@@ -383,7 +389,7 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 
 		// Method 2: node fetch fallback inside container
 		if exec.Command("docker", "exec", containerName, "node", "-e", fmt.Sprintf("fetch('http://127.0.0.1:%d/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))", port)).Run() == nil ||
-		   exec.Command("docker", "exec", containerName, "node", "-e", fmt.Sprintf("fetch('http://127.0.0.1:%d/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))", port)).Run() == nil {
+			exec.Command("docker", "exec", containerName, "node", "-e", fmt.Sprintf("fetch('http://127.0.0.1:%d/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))", port)).Run() == nil {
 			appLog.Info("container ready via internal node fetch", slog.String("container", containerName))
 			return true
 		}

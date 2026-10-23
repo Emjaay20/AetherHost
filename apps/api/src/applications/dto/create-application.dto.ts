@@ -64,6 +64,10 @@ export class CreateApplicationDto {
 
   @IsOptional()
   @IsBoolean()
+  withMariaDb?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   withRedis?: boolean;
 
   @IsOptional()

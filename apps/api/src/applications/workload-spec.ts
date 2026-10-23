@@ -20,6 +20,7 @@ export type WorkloadInput = {
   envVars?: Record<string, string>;
   workerCommand?: string;
   withPostgres?: boolean;
+  withMariaDb?: boolean;
   withRedis?: boolean;
   port?: number;
   healthPath?: string;
@@ -33,6 +34,7 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
     image ||
     worker ||
     input.withPostgres ||
+    input.withMariaDb ||
     input.withRedis ||
     hasEnv ||
     input.port ||

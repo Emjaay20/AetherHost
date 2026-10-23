@@ -40,6 +40,7 @@ type Application struct {
 	EnvVars               map[string]string `json:"envVars,omitempty"`
 	WorkerCommand         string            `json:"workerCommand,omitempty"`
 	WithPostgres          bool              `json:"withPostgres,omitempty"`
+	WithMariaDb           bool              `json:"withMariaDb,omitempty"`
 	WithRedis             bool              `json:"withRedis,omitempty"`
 	Port                  int               `json:"port,omitempty"`
 	HealthPath            string            `json:"healthPath,omitempty"`

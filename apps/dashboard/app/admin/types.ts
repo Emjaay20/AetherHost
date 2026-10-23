@@ -140,6 +140,7 @@ export type TenantDetail = {
     dockerImage: string | null
     workerCommand: string | null
     withPostgres: boolean
+    withMariaDb: boolean
     withRedis: boolean
     port: number
     healthPath: string

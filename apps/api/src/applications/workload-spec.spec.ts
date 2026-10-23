@@ -7,14 +7,25 @@ describe('assertWorkloadSpec', () => {
     dockerImage: 'ghcr.io/acme/signaldesk:1.4.0',
     workerCommand: 'node dist/worker.js',
     withPostgres: true,
+    withMariaDb: true,
     withRedis: true,
     port: 3000,
     healthPath: '/health',
     envVars: { NODE_ENV: 'production' },
   };
 
-  it('accepts an api, worker, postgres, and redis contract', () => {
+  it('accepts an api, worker, Postgres, MariaDB, and Redis contract', () => {
     expect(() => assertWorkloadSpec(signaldesk)).not.toThrow();
+  });
+
+  it('accepts a MariaDB-only image workload', () => {
+    expect(() =>
+      assertWorkloadSpec({
+        runtime: 'nodejs',
+        dockerImage: 'ghcr.io/acme/mariadb-client:1.0.0',
+        withMariaDb: true,
+      }),
+    ).not.toThrow();
   });
 
   it('ignores a simple runtime with no image', () => {

@@ -84,7 +84,9 @@ apt-get install -y \
     dnsutils \
     tcpdump \
     strace \
-    rsync
+    rsync \
+    restic \
+    rclone
 
 log_success "Base system upgraded and diagnostic toolchain installed."
 
@@ -354,15 +356,12 @@ chmod 700 /opt/aetherhost/backups
 # Shared Traefik Ingress Network
 docker network inspect aetherhost-net >/dev/null 2>&1 || docker network create aetherhost-net
 
-# Daily Maintenance Cron: Prunes dead containers, cleans build cache, rotates backups
-cat > /etc/cron.daily/aetherhost-maintenance << 'EOF'
-#!/usr/bin/env bash
-# Prune dangling images and build caches older than 7 days
-docker system prune -f --filter "until=168h" > /var/log/docker-prune.log 2>&1
-# Clean apt cache
-apt-get clean -y >/dev/null 2>&1
-EOF
-chmod +x /etc/cron.daily/aetherhost-maintenance
+# Additive operational timers: bounded BuildKit cache (10GB), encrypted
+# off-host backup, and a weekly non-destructive restore drill. Backup timers
+# remain inactive until /etc/aetherhost/backup.env is configured.
+if [ -x /opt/aetherhost/deploy/install-operations-timers.sh ]; then
+    /opt/aetherhost/deploy/install-operations-timers.sh
+fi
 
 echo ""
 echo -e "${BOLD}${GREEN}===================================================================${NC}"
