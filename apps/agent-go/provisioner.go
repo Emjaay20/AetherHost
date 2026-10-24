@@ -131,6 +131,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Building and starting container via Docker Compose...", time.Now().Format("15:04:05")))
 	_ = exec.Command("docker", "network", "create", "aetherhost-net").Run()
+	_ = exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "down", "--remove-orphans").Run()
 	cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d", "--build", "--force-recreate")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
