@@ -74,9 +74,10 @@ func renderDockerRuntimeCompose(app Application, safeName, hostPwd, hostRule, tl
 	return fmt.Sprintf(`
 services:
   app:
-%s    environment:
+%s    env_file: .env
+    environment:
       PORT: "%d"
-    mem_limit: 512m
+    mem_limit: 1024m
     restart: unless-stopped
     labels:
       - "traefik.enable=true"

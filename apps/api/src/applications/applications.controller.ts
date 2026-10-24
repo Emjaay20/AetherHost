@@ -96,6 +96,12 @@ export class ApplicationsController {
     return this.applicationsService.updateStatus(id, body.status);
   }
 
+  @Get(':id/logs')
+  @Header('Cache-Control', 'no-store')
+  getLogs(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.getLogs(id, tenantId);
+  }
+
   @Post(':id/logs')
   async addLog(
     @TenantId() tenantId: string,

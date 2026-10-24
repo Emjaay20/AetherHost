@@ -103,6 +103,8 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		}
 	}
 
+	writeEnvFile(app, appDir)
+
 	safeCompose := renderRuntimeCompose(app, safeName, hostPwd, baseDomain, dbPass)
 	if safeCompose != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
