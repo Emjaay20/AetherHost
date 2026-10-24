@@ -17,6 +17,7 @@ import {
   UpdateApplicationStatusDto,
   UpdateEnvVarsDto,
   RedeployApplicationDto,
+  UpdateCustomDomainDto,
 } from './dto/update-application.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { Public } from '../auth/public.decorator';
@@ -130,6 +131,19 @@ export class ApplicationsController {
       tenantId,
       body.envVars || {},
       body.redeploy ?? true,
+    );
+  }
+
+  @Patch(':id/domain')
+  updateCustomDomain(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: UpdateCustomDomainDto,
+  ) {
+    return this.applicationsService.updateCustomDomain(
+      id,
+      tenantId,
+      body.customDomain ?? null,
     );
   }
 

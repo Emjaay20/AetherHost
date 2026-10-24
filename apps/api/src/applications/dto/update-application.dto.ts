@@ -29,3 +29,9 @@ export class RedeployApplicationDto {
   @IsOptional()
   envVars?: Record<string, string>;
 }
+
+export class UpdateCustomDomainDto {
+  @IsString()
+  @IsOptional()
+  customDomain?: string | null;
+}

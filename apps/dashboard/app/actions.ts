@@ -249,6 +249,34 @@ export async function updateApplicationEnvVars(
   }
 }
 
+export async function updateApplicationCustomDomain(
+  id: string,
+  customDomain: string | null,
+) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/${id}/domain`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ customDomain }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'Failed to update custom domain' };
+    }
+
+    const data = await res.json();
+    revalidatePath('/console');
+    revalidatePath('/');
+    return { success: true, data };
+  } catch (error) {
+    return { error: 'Network error communicating with API' };
+  }
+}
+
 export async function generateOpsInsight(applicationId?: string) {
   const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
   if (!headers) return { error: 'Unauthorized' };

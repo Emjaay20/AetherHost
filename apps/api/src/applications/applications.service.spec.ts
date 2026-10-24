@@ -38,12 +38,12 @@ describe('ApplicationsService', () => {
     };
     service = new ApplicationsService(
       {} as EntitlementsService,
-      {} as DomainEventsService,
+      { publish: jest.fn().mockResolvedValue(undefined) } as unknown as DomainEventsService,
       prisma as unknown as PrismaService,
     );
   });
 
-  it('rejects unverified custom domains before provisioning', async () => {
+  it('rejects invalid custom domains before provisioning', async () => {
     await expect(
       service.create(
         'tenant-1',
@@ -54,22 +54,45 @@ describe('ApplicationsService', () => {
         undefined,
         undefined,
         undefined,
-        'app.example.com',
+        'not a domain',
       ),
-    ).rejects.toThrow(
-      'Custom domains require ownership verification before provisioning',
-    );
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('rejects unverified custom domains on update', async () => {
+  it('accepts and normalizes valid custom domains on update', async () => {
     prisma.application.findUnique.mockResolvedValue({
       id: 'app_1',
       tenantId: 'tenant-1',
     });
+    prisma.application.findFirst = jest.fn().mockResolvedValue(null);
+    prisma.application.update.mockResolvedValue({
+      id: 'app_1',
+      customDomain: 'app.example.com',
+    });
+
+    const res = await service.updateCustomDomain('app_1', 'tenant-1', 'https://App.Example.com/');
+    expect(res).toEqual({ success: true, customDomain: 'app.example.com' });
+    expect(prisma.application.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'app_1' },
+        data: expect.objectContaining({ customDomain: 'app.example.com' }),
+      }),
+    );
+  });
+
+  it('rejects colliding custom domains on update', async () => {
+    prisma.application.findUnique.mockResolvedValue({
+      id: 'app_1',
+      tenantId: 'tenant-1',
+    });
+    prisma.application.findFirst = jest.fn().mockResolvedValue({
+      id: 'app_other',
+      customDomain: 'app.example.com',
+    });
+
     await expect(
       service.updateCustomDomain('app_1', 'tenant-1', 'app.example.com'),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.application.update).not.toHaveBeenCalled();
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('rejects colliding normalized app names before consuming quota', async () => {

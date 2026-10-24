@@ -201,6 +201,7 @@ export default function LandingPage() {
                   <li>512 MB storage</li>
                   <li>10 AI requests</li>
                   <li>10 GB bandwidth</li>
+                  <li>Custom domains</li>
                 </ul>
                 <AccountLink
                   className="btn btn-primary"
@@ -222,7 +223,7 @@ export default function LandingPage() {
                   <li>2 GB storage</li>
                   <li>50 AI requests</li>
                   <li>50 GB bandwidth</li>
-                  <li>Custom domains flag</li>
+                  <li>Custom domains</li>
                 </ul>
                 <AccountLink
                   className="btn btn-primary"
@@ -243,7 +244,7 @@ export default function LandingPage() {
                   <li>10 GB storage</li>
                   <li>200 AI requests</li>
                   <li>500 GB bandwidth</li>
-                  <li>Custom domains flag</li>
+                  <li>Custom domains</li>
                   <li>Priority support flag</li>
                 </ul>
                 <AccountLink

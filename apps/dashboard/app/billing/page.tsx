@@ -57,6 +57,7 @@ export default async function BillingPage() {
               <li className="flex items-center gap-3"><Check className="w-5 h-5 text-green-500" /> <span><strong>1</strong> Application</span></li>
               <li className="flex items-center gap-3"><Check className="w-5 h-5 text-green-500" /> <span><strong>512 MB</strong> Storage</span></li>
               <li className="flex items-center gap-3"><Check className="w-5 h-5 text-green-500" /> <span><strong>10</strong> AI Requests</span></li>
+              <li className="flex items-center gap-3"><Check className="w-5 h-5 text-green-500" /> <span>Custom Domains</span></li>
               <li className="flex items-center gap-3 text-muted-foreground"><Check className="w-5 h-5 text-muted-foreground/30" /> <span>Shared Compute</span></li>
             </ul>
 

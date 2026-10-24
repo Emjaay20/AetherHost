@@ -19,6 +19,7 @@ import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { getGithubToken, ensureGithubWebhook } from './github-utils';
+import { validateCustomDomain } from './domain-validator';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -50,11 +51,7 @@ export class ApplicationsService {
     port?: number,
     healthPath?: string,
   ): Promise<Application> {
-    if (customDomain?.trim()) {
-      throw new BadRequestException(
-        'Custom domains require ownership verification before provisioning',
-      );
-    }
+    const validatedDomain = validateCustomDomain(customDomain);
     assertWorkloadSpec({
       runtime,
       dockerImage,
@@ -71,6 +68,20 @@ export class ApplicationsService {
       const tenant = await tx.tenant.findUnique({ where: { id: tenantId } });
       if (tenant?.subscriptionStatus === 'suspended') {
         throw new ForbiddenException('Tenant account is suspended');
+      }
+
+      if (validatedDomain) {
+        const domainInUse = await tx.application.findFirst({
+          where: {
+            customDomain: validatedDomain,
+            status: { notIn: ['terminated'] },
+          },
+        });
+        if (domainInUse) {
+          throw new ConflictException(
+            `Custom domain "${validatedDomain}" is already in use by another application`,
+          );
+        }
       }
 
       const activeApps =
@@ -171,7 +182,7 @@ export class ApplicationsService {
           githubRepo: finalGithubRepo,
           githubRepoName,
           githubRepoDescription,
-          customDomain,
+          customDomain: validatedDomain,
           dockerCompose,
           aiFiles: generatedAiFiles ? JSON.parse(JSON.stringify(generatedAiFiles)) : null,
           dockerImage: dockerImage?.trim() || null,
@@ -424,24 +435,36 @@ if __name__ == '__main__':
     }
   }
 
-  async updateCustomDomain(id: string, tenantId: string, customDomain: string | null): Promise<void> {
+  async updateCustomDomain(id: string, tenantId: string, customDomain: string | null): Promise<{ success: boolean; customDomain: string | null }> {
     await this.assertOwned(id, tenantId);
-    if (customDomain?.trim()) {
-      throw new BadRequestException(
-        'Custom domains require ownership verification before provisioning',
-      );
+    const validatedDomain = validateCustomDomain(customDomain);
+    if (validatedDomain) {
+      const domainInUse = await this.prisma.application.findFirst({
+        where: {
+          customDomain: validatedDomain,
+          id: { not: id },
+          status: { notIn: ['terminated'] },
+        },
+      });
+      if (domainInUse) {
+        throw new ConflictException(
+          `Custom domain "${validatedDomain}" is already in use by another application`,
+        );
+      }
     }
 
     await this.prisma.application.update({
       where: { id },
-      data: { customDomain },
+      data: { customDomain: validatedDomain, status: 'pending' },
     });
     
-    // Trigger reprovision so agent picks up new domain
+    // Trigger reprovision so agent updates Traefik routing and SSL
     await this.eventsService.publish(
       new ApplicationProvisioningRequested(tenantId, id),
       this.prisma,
     );
+
+    return { success: true, customDomain: validatedDomain };
   }
 
   async addLog(id: string, logContent: string): Promise<void> {

@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound } from 'lucide-react'
+import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound, Globe } from 'lucide-react'
 import { safeAppName } from '../lib/app-name'
 import { getAppUrl } from '../lib/domain'
 import { redeployApplication } from '../app/actions'
 import DeploymentLogViewer from './DeploymentLogViewer'
 import AiProjectModal from './AiProjectModal'
 import EnvVarsModal from './EnvVarsModal'
+import CustomDomainModal from './CustomDomainModal'
 
 export interface ApplicationItem {
   id: string
@@ -31,9 +32,15 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const router = useRouter()
   const [aiModalOpen, setAiModalOpen] = useState(false)
   const [envModalOpen, setEnvModalOpen] = useState(false)
+  const [domainModalOpen, setDomainModalOpen] = useState(false)
+  const [currentDomain, setCurrentDomain] = useState(app.customDomain || null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRedeploying, setIsRedeploying] = useState(false)
   const [localStatus, setLocalStatus] = useState(app.status)
+
+  useEffect(() => {
+    setCurrentDomain(app.customDomain || null)
+  }, [app.customDomain])
 
   useEffect(() => {
     setLocalStatus(app.status)
@@ -111,6 +118,19 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                   <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
                 </a>
               )}
+              {currentDomain && (
+                <a
+                  href={`https://${currentDomain}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"
+                  title="Connected Custom Domain"
+                >
+                  <Globe className="w-3 h-3 text-emerald-400" />
+                  <span className="max-w-[160px] truncate sm:max-w-[240px]">{currentDomain}</span>
+                  <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -181,6 +201,21 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             >
               <KeyRound className="w-3.5 h-3.5" />
               <span>Env</span>
+            </button>
+
+            {/* Custom Domain Button */}
+            <button
+              type="button"
+              onClick={() => setDomainModalOpen(true)}
+              className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-sm ${
+                currentDomain
+                  ? 'text-emerald-400 hover:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10'
+                  : 'text-indigo-400 hover:text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/10'
+              }`}
+              title="Connect or configure Custom Domain"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Domain</span>
             </button>
 
             {/* AI Architect Button */}
@@ -271,6 +306,20 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             setLocalStatus('running')
             router.refresh()
           }, 3000)
+        }}
+      />
+
+      {/* Custom Domain Modal */}
+      <CustomDomainModal
+        appId={app.id}
+        appName={app.name}
+        initialCustomDomain={currentDomain}
+        isOpen={domainModalOpen}
+        onClose={() => setDomainModalOpen(false)}
+        onDomainUpdated={(newDomain) => {
+          setCurrentDomain(newDomain)
+          setLocalStatus('pending')
+          router.refresh()
         }}
       />
     </div>

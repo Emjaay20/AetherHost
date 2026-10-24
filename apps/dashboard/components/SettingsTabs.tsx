@@ -106,7 +106,7 @@ export default function SettingsTabs({ planId = 'starter' }: { planId?: string }
                       ? '20 Applications • 200 AI Requests • 10 GB Storage • Custom Domains & Priority Support'
                       : planId === 'pro'
                         ? '5 Applications • 50 AI Requests • 2 GB Storage • Custom Domains'
-                        : '1 Application • 10 AI Requests • 512 MB Storage'}
+                        : '1 Application • 10 AI Requests • 512 MB Storage • Custom Domains'}
                   </p>
                 </div>
                 <Link

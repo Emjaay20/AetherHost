@@ -27,7 +27,7 @@ export const STARTER_ENTITLEMENTS: Entitlements = {
     bandwidthGb: 10,
   },
   features: {
-    customDomains: false,
+    customDomains: true,
     prioritySupport: false,
   },
 };
