@@ -30,6 +30,12 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	appLog.Info("starting application provisioning")
 
 	safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
+	if isWorkload(app) {
+		// Workloads use their immutable application ID for all runtime resources.
+		// The display name remains the public hostname, but can never collide with
+		// another workload's Compose project, databases, or credentials.
+		safeName = workloadDeploymentName(app)
+	}
 	appDir := fmt.Sprintf("./deployments/%s", safeName)
 	if err := os.MkdirAll(appDir, 0755); err != nil {
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cannot create deployment directory: %v", time.Now().Format("15:04:05"), err))
@@ -171,7 +177,15 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning Workload: %s", time.Now().Format("15:04:05"), app.DockerImage))
 	appLog.Info("provisioning custom docker workload", slog.String("image", app.DockerImage))
 
-	plan, err := buildWorkload(app, randomPassword(), randomPassword(), randomPassword())
+	credentials, err := workloadCredentialsFor(appDir)
+	if err != nil {
+		errMsg := fmt.Sprintf("[%s] Workload credential setup failed: %v", time.Now().Format("15:04:05"), err)
+		sendAppLog(controlPlaneURL, app.ID, errMsg)
+		appLog.Error("workload credential setup failed", slog.String("error", err.Error()))
+		updateAppStatus(controlPlaneURL, app.ID, "failed")
+		return
+	}
+	plan, err := buildWorkloadWithIdentity(app, safeName, credentials.PostgresPassword, credentials.MariaDbPassword, credentials.RedisPassword)
 	if err != nil {
 		errMsg := fmt.Sprintf("[%s] Workload build failed: %v", time.Now().Format("15:04:05"), err)
 		sendAppLog(controlPlaneURL, app.ID, errMsg)
@@ -210,7 +224,7 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	if plan.HealthPath != "" {
 		appLog.Info("waiting for workload health check", slog.String("health_path", plan.HealthPath))
 		healthPass = false
-		for i := 0; i < 30; i++ {
+		for i := 0; i < 120; i++ {
 			if probeContainer(plan.Alias, fmt.Sprintf("http://127.0.0.1:%d%s", plan.Port, plan.HealthPath)) == nil {
 				healthPass = true
 				break
@@ -222,9 +236,11 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	statusStr := "running"
 	if !healthPass {
 		appLog.Warn("workload health check failed; tearing down")
+		diagnostics := workloadDiagnostics(plan)
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Workload readiness check failed. Captured diagnostics before cleanup:\n%s", time.Now().Format("15:04:05"), diagnostics))
 		_ = exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "down").Run()
 		statusStr = "failed"
-		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Health check failed for workload. Container torn down.", time.Now().Format("15:04:05")))
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Health check failed for workload. Containers were removed after diagnostic capture.", time.Now().Format("15:04:05")))
 	} else {
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Workload is healthy and serving requests!", time.Now().Format("15:04:05")))
 	}

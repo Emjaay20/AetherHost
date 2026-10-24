@@ -102,6 +102,32 @@ func TestSignaldeskWorkload(t *testing.T) {
 	}
 }
 
+func TestWorkloadIdentitySeparatesRuntimeResourcesFromPublicHostname(t *testing.T) {
+	app := signaldeskApp()
+	app.ID = "app_smartcrawl-id_3dd62017"
+	identity := workloadDeploymentName(app)
+	if identity != "app-smartcrawl-id-3dd62017" {
+		t.Fatalf("unexpected workload identity: %s", identity)
+	}
+
+	plan, err := buildWorkloadWithIdentity(app, identity, "PostgresPass123", "MariaDbPass123", "RedisPass123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Alias != "aetherhost-app-smartcrawl-id-3dd62017-api" {
+		t.Fatalf("workload alias used a display name: %s", plan.Alias)
+	}
+	if !strings.Contains(plan.Compose, "aetherhost-app-smartcrawl-id-3dd62017_pgdata") && !strings.Contains(plan.Compose, "aetherhost-app-smartcrawl-id-3dd62017-postgres") {
+		t.Fatal("workload resources were not based on the immutable application identity")
+	}
+	if !strings.Contains(plan.Compose, "Host(`signaldesk.localhost`)") {
+		t.Fatal("public hostname must continue to use the display name")
+	}
+	if !strings.Contains(plan.Compose, "traefik.http.routers.app-smartcrawl-id-3dd62017-app") {
+		t.Fatal("traefik router identity must be unique per workload")
+	}
+}
+
 func TestWorkloadRejectsUnsafeSpec(t *testing.T) {
 	app := signaldeskApp()
 	app.DockerImage = "ghcr.io/acme/../signaldesk:1"

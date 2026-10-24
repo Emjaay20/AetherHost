@@ -101,13 +101,32 @@ type WorkloadPlan struct {
 	MariaDbEnv  string
 	RedisEnv    string
 	Alias       string
+	Containers  []string
 	Port        int
 	HealthPath  string
 }
 
 func buildWorkload(app Application, postgresPass, mariaDbPass, redisPass string) (WorkloadPlan, error) {
+	return buildWorkloadWithIdentity(app, safeAppName(app.Name), postgresPass, mariaDbPass, redisPass)
+}
+
+// workloadDeploymentName is deliberately based on the immutable application ID,
+// not the display name. Display names may be reused, while the deployment name
+// controls Compose project names, container names, and persistent volume names.
+func workloadDeploymentName(app Application) string {
+	if id := safeAppName(app.ID); id != "" && id != "app" {
+		return id
+	}
+	return safeAppName(app.Name)
+}
+
+func buildWorkloadWithIdentity(app Application, identity, postgresPass, mariaDbPass, redisPass string) (WorkloadPlan, error) {
 	if app.Runtime == "wordpress" {
 		return WorkloadPlan{}, fmt.Errorf("wordpress is not a workload")
+	}
+	identity = safeAppName(identity)
+	if identity == "" || identity == "app" {
+		return WorkloadPlan{}, fmt.Errorf("invalid workload identity")
 	}
 	image := strings.TrimSpace(app.DockerImage)
 	if !imagePattern.MatchString(image) || strings.Contains(image, "..") || strings.Contains(image, "://") {
@@ -139,27 +158,32 @@ func buildWorkload(app Application, postgresPass, mariaDbPass, redisPass string)
 		return WorkloadPlan{}, fmt.Errorf("invalid custom domain")
 	}
 
-	name := safeAppName(app.Name)
-	apiName := "aetherhost-" + name + "-api"
-	workerName := "aetherhost-" + name + "-worker"
-	pgName := "aetherhost-" + name + "-postgres"
-	mariaDbName := "aetherhost-" + name + "-mariadb"
-	redisName := "aetherhost-" + name + "-redis"
+	publicName := safeAppName(app.Name)
+	apiName := "aetherhost-" + identity + "-api"
+	workerName := "aetherhost-" + identity + "-worker"
+	pgName := "aetherhost-" + identity + "-postgres"
+	mariaDbName := "aetherhost-" + identity + "-mariadb"
+	redisName := "aetherhost-" + identity + "-redis"
 
 	var b strings.Builder
 	b.WriteString("services:\n")
-	writeAPI(&b, apiName, image, name, port, app.WithPostgres, app.WithMariaDb, app.WithRedis, pgName, mariaDbName, redisName, app.CustomDomain)
+	writeAPI(&b, apiName, image, identity, publicName, port, app.WithPostgres, app.WithMariaDb, app.WithRedis, pgName, mariaDbName, redisName, app.CustomDomain)
+	containers := []string{apiName}
 	if worker != "" {
 		writeWorker(&b, workerName, image, app.WithPostgres, app.WithMariaDb, app.WithRedis, pgName, mariaDbName, redisName)
+		containers = append(containers, workerName)
 	}
 	if app.WithPostgres {
 		writePostgres(&b, pgName)
+		containers = append(containers, pgName)
 	}
 	if app.WithMariaDb {
 		writeMariaDb(&b, mariaDbName)
+		containers = append(containers, mariaDbName)
 	}
 	if app.WithRedis {
 		writeRedis(&b, redisName)
+		containers = append(containers, redisName)
 	}
 	b.WriteString("\nnetworks:\n")
 	b.WriteString("  aetherhost-net:\n    external: true\n")
@@ -200,12 +224,13 @@ func buildWorkload(app Application, postgresPass, mariaDbPass, redisPass string)
 		MariaDbEnv:  mariaDbEnv,
 		RedisEnv:    redisEnv,
 		Alias:       apiName,
+		Containers:  containers,
 		Port:        port,
 		HealthPath:  healthPath,
 	}, nil
 }
 
-func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPostgres, withMariaDb, withRedis bool, pgName, mariaDbName, redisName, customDomain string) {
+func writeAPI(b *strings.Builder, apiName, image, identity, publicName string, port int, withPostgres, withMariaDb, withRedis bool, pgName, mariaDbName, redisName, customDomain string) {
 	fmt.Fprintf(b, "  %s:\n", apiName)
 	fmt.Fprintf(b, "    image: %s\n", image)
 	fmt.Fprintf(b, "    container_name: %s\n", apiName)
@@ -225,15 +250,15 @@ func writeAPI(b *strings.Builder, apiName, image, host string, port int, withPos
 		baseDomain = "localhost"
 	}
 	if customDomain != "" {
-		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`) || Host(`%s`)\"\n", host, host, baseDomain, customDomain)
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`) || Host(`%s`)\"\n", identity, publicName, baseDomain, customDomain)
 	} else {
-		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`)\"\n", host, host, baseDomain)
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`)\"\n", identity, publicName, baseDomain)
 	}
 	if baseDomain != "localhost" && baseDomain != "127.0.0.1" && !strings.HasSuffix(baseDomain, ".localhost") {
-		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.entrypoints=websecure\"\n", host)
-		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.tls.certresolver=letsencrypt\"\n", host)
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.entrypoints=websecure\"\n", identity)
+		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.tls.certresolver=letsencrypt\"\n", identity)
 	}
-	fmt.Fprintf(b, "      - \"traefik.http.services.%s-app.loadbalancer.server.port=%d\"\n", host, port)
+	fmt.Fprintf(b, "      - \"traefik.http.services.%s-app.loadbalancer.server.port=%d\"\n", identity, port)
 	b.WriteString("    networks:\n")
 	b.WriteString("      private: {}\n")
 	b.WriteString("      aetherhost-net:\n")
