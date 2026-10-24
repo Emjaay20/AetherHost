@@ -23,7 +23,9 @@ if [[ ! -r "$config_file" ]]; then
 fi
 
 # This file is root-owned and mode 600; it is never committed to Git.
+set -a
 source "$config_file"
+set +a
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is required}"
 : "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is required}"
 
@@ -57,6 +59,11 @@ tar \
   --exclude='deployments/*/target' \
   -czf "$work_dir/platform-config-and-source.tgz" \
   -C "$platform_dir" .env docker-compose.prod.yml deployments deploy
+
+if ! restic cat config >/dev/null 2>&1; then
+  echo "Initializing new restic repository at ${RESTIC_REPOSITORY}..."
+  restic init
+fi
 
 restic backup --tag aetherhost --tag production "$work_dir"
 restic forget --prune \

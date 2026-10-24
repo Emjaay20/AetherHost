@@ -20,7 +20,9 @@ if [[ ! -r "$config_file" ]]; then
   exit 1
 fi
 
+set -a
 source "$config_file"
+set +a
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is required}"
 : "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is required}"
 
