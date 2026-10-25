@@ -267,7 +267,7 @@ export default function DocsClient() {
                   Download the signed preview APK, open it on your Android device, and approve Android’s install prompt. The preview is delivered from this site, not Google Play.
                 </p>
                 <a
-                  href="https://expo.dev/artifacts/eas/rdcVqhytdHMIU6XvV-wzRGkTy1A6ScUs1dDhzIvXsp8.apk"
+                  href="https://expo.dev/artifacts/eas/f08oG8sst1--vd-BbP2a4JJiVbw4QUP_yJVY5C3I0UQ.apk"
                   className="mt-4 inline-flex rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-white"
                 >
                   Download AetherHost 1.0.0 APK

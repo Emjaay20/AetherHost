@@ -272,7 +272,7 @@ export default function LandingPage() {
                 <p className="mobile-platform">ANDROID</p>
                 <h3>Install the preview APK</h3>
                 <p>Download the AetherHost preview directly, then allow your browser to install apps from this source if Android asks.</p>
-                <a className="btn btn-primary" href="https://expo.dev/artifacts/eas/rdcVqhytdHMIU6XvV-wzRGkTy1A6ScUs1dDhzIvXsp8.apk">
+                <a className="btn btn-primary" href="https://expo.dev/artifacts/eas/f08oG8sst1--vd-BbP2a4JJiVbw4QUP_yJVY5C3I0UQ.apk">
                   Download Android APK
                 </a>
                 <p className="fine">Version 1.0.0 · Internal preview</p>

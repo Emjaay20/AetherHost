@@ -40,7 +40,7 @@ AetherHost now has a native companion app for operators who need to check a depl
 
 | Device | How to install | What to expect |
 |---|---|---|
-| **Android** | [Download the signed AetherHost 1.0.0 APK](https://expo.dev/artifacts/eas/rdcVqhytdHMIU6XvV-wzRGkTy1A6ScUs1dDhzIvXsp8.apk) on the device, then open the download and approve the Android install prompt. | A directly installable preview APK. It is not published through Google Play. |
+| **Android** | [Download the signed AetherHost 1.0.0 APK](https://expo.dev/artifacts/eas/f08oG8sst1--vd-BbP2a4JJiVbw4QUP_yJVY5C3I0UQ.apk) on the device, then open the download and approve the Android install prompt. | A directly installable preview APK. It is not published through Google Play. |
 | **iPhone / iPad** | Install [Expo Go](https://expo.dev/go), then open the AetherHost preview when the team provides its Expo link or QR code. | This is a preview inside Expo Go, not a standalone App Store app. |
 
 Android may show an “install unknown apps” confirmation because the APK is downloaded from AetherHost rather than an app store. Only install the release linked above from the official AetherHost site. The preview is deliberately store-free for now; no Play Store or App Store submission is required.
