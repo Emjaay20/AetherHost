@@ -29,31 +29,28 @@ export type WorkloadInput = {
 export function assertWorkloadSpec(input: WorkloadInput): void {
   const image = input.dockerImage?.trim();
   const worker = input.workerCommand?.trim();
-  const hasEnv = input.envVars && Object.keys(input.envVars).length > 0;
-  const wantsWorkload = Boolean(
-    image ||
-    worker ||
-    input.withPostgres ||
-    input.withMariaDb ||
-    input.withRedis ||
-    hasEnv ||
-    input.port ||
-    input.healthPath,
-  );
-  if (!wantsWorkload) {
+  if (input.runtime === 'wordpress') {
+    if (image || worker || input.withPostgres || input.withMariaDb || input.withRedis) {
+      throw new BadRequestException(
+        'WordPress does not accept a custom image or sidecar',
+      );
+    }
+    validateEnvironment(input.envVars);
     return;
   }
-  if (input.runtime === 'wordpress') {
+
+  // A GitHub/source deployment uses the repository's own Dockerfile and compose
+  // configuration. It still needs protected runtime environment variables, but
+  // it must not be forced into the separate pre-built-image workload contract.
+  const needsImage = Boolean(
+    worker || input.withPostgres || input.withMariaDb || input.withRedis || input.port || input.healthPath,
+  );
+  if (needsImage && !image) {
     throw new BadRequestException(
-      'WordPress does not accept a custom image or sidecar',
+      'dockerImage is required for a worker, datastore, port, or health-check contract',
     );
   }
-  if (!image) {
-    throw new BadRequestException(
-      'dockerImage is required for a worker, datastore, or env contract',
-    );
-  }
-  if (!IMAGE_RE.test(image) || image.includes('..') || image.includes('://')) {
+  if (image && (!IMAGE_RE.test(image) || image.includes('..') || image.includes('://'))) {
     throw new BadRequestException('dockerImage is not a valid image reference');
   }
   if (worker && !WORKER_RE.test(worker)) {
@@ -70,10 +67,14 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
   ) {
     throw new BadRequestException('healthPath must be a relative path');
   }
-  if (!input.envVars) {
+  validateEnvironment(input.envVars);
+}
+
+function validateEnvironment(envVars?: Record<string, string>): void {
+  if (!envVars) {
     return;
   }
-  const keys = Object.keys(input.envVars);
+  const keys = Object.keys(envVars);
   if (keys.length > 40) {
     throw new BadRequestException('envVars exceeds 40 keys');
   }
@@ -84,7 +85,7 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
     if (!ENV_KEY_RE.test(key)) {
       throw new BadRequestException(`invalid env key ${key}`);
     }
-    const value = input.envVars[key];
+    const value = envVars[key];
     if (
       typeof value !== 'string' ||
       value.length > 4096 ||

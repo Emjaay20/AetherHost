@@ -32,6 +32,15 @@ describe('assertWorkloadSpec', () => {
     expect(() => assertWorkloadSpec({ runtime: 'nodejs' })).not.toThrow();
   });
 
+  it('accepts protected environment variables for a GitHub/source deployment', () => {
+    expect(() =>
+      assertWorkloadSpec({
+        runtime: 'github',
+        envVars: { FIELD_SESSION_SECRET: 'server-only-secret' },
+      }),
+    ).not.toThrow();
+  });
+
   it('rejects a worker without an image', () => {
     expect(() =>
       assertWorkloadSpec({
