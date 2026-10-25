@@ -35,7 +35,7 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
         'WordPress does not accept a custom image or sidecar',
       );
     }
-    validateEnvironment(input.envVars);
+    validateEnvironment(input.envVars, false);
     return;
   }
 
@@ -67,10 +67,13 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
   ) {
     throw new BadRequestException('healthPath must be a relative path');
   }
-  validateEnvironment(input.envVars);
+  validateEnvironment(input.envVars, Boolean(image));
 }
 
-function validateEnvironment(envVars?: Record<string, string>): void {
+function validateEnvironment(
+  envVars?: Record<string, string>,
+  protectsPlatformConnections = false,
+): void {
   if (!envVars) {
     return;
   }
@@ -79,7 +82,7 @@ function validateEnvironment(envVars?: Record<string, string>): void {
     throw new BadRequestException('envVars exceeds 40 keys');
   }
   for (const key of keys) {
-    if (RESERVED_ENV_KEYS.has(key)) {
+    if (protectsPlatformConnections && RESERVED_ENV_KEYS.has(key)) {
       throw new BadRequestException(`${key} is owned by the platform`);
     }
     if (!ENV_KEY_RE.test(key)) {

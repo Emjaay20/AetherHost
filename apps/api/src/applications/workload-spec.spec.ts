@@ -41,6 +41,24 @@ describe('assertWorkloadSpec', () => {
     ).not.toThrow();
   });
 
+  it('allows a source deployment to supply its own isolated Redis connection', () => {
+    expect(() =>
+      assertWorkloadSpec({
+        runtime: 'github',
+        envVars: { REDIS_URL: 'redis://:private-password@resolvegrid-redis:6379' },
+      }),
+    ).not.toThrow();
+  });
+
+  it('still rejects a managed workload overriding its Redis connection', () => {
+    expect(() =>
+      assertWorkloadSpec({
+        ...signaldesk,
+        envVars: { REDIS_URL: 'redis://override@untrusted-host:6379' },
+      }),
+    ).toThrow(BadRequestException);
+  });
+
   it('rejects a worker without an image', () => {
     expect(() =>
       assertWorkloadSpec({
