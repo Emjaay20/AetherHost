@@ -151,8 +151,10 @@ GROQ_MODEL=openai/gpt-oss-120b
 ### Step 1: Push Prisma Database Schema to Production Postgres
 ```bash
 docker compose -f docker-compose.prod.yml up -d postgres redis
-docker compose -f docker-compose.prod.yml run --rm api pnpm prisma db push
+docker compose -f docker-compose.prod.yml run --rm api pnpm prisma migrate deploy
 ```
+
+Use committed Prisma migrations for every production release. `migrate deploy` applies only migrations that have not run yet, keeping the database history auditable; reserve `prisma db push` for disposable local development databases.
 
 ### Step 2: Start All Services in Background
 ```bash
@@ -206,9 +208,28 @@ In AetherHost:
   - **Running apps:** Container stdout/stderr.
   - **Failed apps:** AI Root-Cause Debugger with 1-click explanation.
 
+## 10. Mobile preview and notifications
+
+The marketing site publishes the current signed Android preview APK. This does not require a Play Store release. When replacing the preview build, update the APK link in the marketing page and root `README.md`, then rebuild the dashboard service.
+
+iPhone testing remains an Expo Go preview until the team opts into TestFlight or App Store distribution. Expo Go does not install AetherHost as an independent iOS app.
+
+The API migration for mobile notifications creates the `PushDevice` table and must be applied before deploying the new API:
+
+```bash
+cd /opt/aetherhost
+git pull --ff-only
+docker compose -f docker-compose.prod.yml up -d postgres redis
+docker compose -f docker-compose.prod.yml run --rm api pnpm prisma migrate deploy
+docker compose -f docker-compose.prod.yml up -d --build api dashboard
+docker compose -f docker-compose.prod.yml ps
+```
+
+The API can store Expo device tokens immediately. For actual alert delivery, configure Firebase Cloud Messaging credentials in the Expo project for Android. iOS alerts additionally require Apple push credentials and an Apple distribution build. A declined permission never blocks a user from using the app.
+
 ---
 
-## 10. Automated Maintenance & Backups (Cron)
+## 11. Automated Maintenance & Backups (Cron)
 
 Set up a daily cron job to back up the database and prune old Docker build caches.
 
@@ -229,7 +250,7 @@ chmod 700 /opt/aetherhost/backups
 
 ---
 
-## 11. Security Checklist Summary
+## 12. Security Checklist Summary
 
 - [x] **No public database ports:** Ports 5432 and 6379 are bound to `127.0.0.1` and internal network only.
 - [x] **UFW Firewall active:** Only 22, 80, and 443 are open.

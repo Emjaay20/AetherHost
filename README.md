@@ -32,6 +32,49 @@ Agencies, developers, and enterprises use AetherHost to:
 
 ---
 
+## 📱 AetherHost Mobile Preview
+
+AetherHost now has a native companion app for operators who need to check a deployment, inspect a failure, update a domain, or start an AI-assisted fix while away from a laptop. It uses the same Clerk account and tenant-scoped API as the web console, so projects and permissions stay in sync.
+
+### Install the current preview
+
+| Device | How to install | What to expect |
+|---|---|---|
+| **Android** | [Download the signed AetherHost 1.0.0 APK](https://expo.dev/artifacts/eas/rdcVqhytdHMIU6XvV-wzRGkTy1A6ScUs1dDhzIvXsp8.apk) on the device, then open the download and approve the Android install prompt. | A directly installable preview APK. It is not published through Google Play. |
+| **iPhone / iPad** | Install [Expo Go](https://expo.dev/go), then open the AetherHost preview when the team provides its Expo link or QR code. | This is a preview inside Expo Go, not a standalone App Store app. |
+
+Android may show an “install unknown apps” confirmation because the APK is downloaded from AetherHost rather than an app store. Only install the release linked above from the official AetherHost site. The preview is deliberately store-free for now; no Play Store or App Store submission is required.
+
+### What the app covers
+
+- See project health, recent deployment events, live logs, and manual redeploy controls.
+- Verify custom-domain DNS and HTTPS status without leaving the app.
+- View masked environment variables and explicitly reveal a value only when needed.
+- Ask the AI operator to diagnose a failed deployment and start a guided follow-up fix.
+- Check plan usage, invoices, checkout links, and tenant API keys.
+- Opt in to push alerts for deployment starts and failures. Delivery requires the platform notification credentials for the relevant device platform.
+
+### Mobile development and preview builds
+
+The app lives in [`apps/mobile`](apps/mobile). Start it locally after providing the public API URL and Clerk publishable key:
+
+```bash
+pnpm install
+cp apps/mobile/.env.example apps/mobile/.env
+# Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY and EXPO_PUBLIC_API_URL in apps/mobile/.env
+pnpm --dir apps/mobile start
+```
+
+Create a fresh downloadable Android APK with the EAS preview profile:
+
+```bash
+pnpm --dir apps/mobile android:apk
+```
+
+That command produces a signed APK through Expo Application Services. Update the Android link above after each promoted preview build. iOS previewing currently stays in Expo Go; a standalone iOS installation will require an Apple distribution path such as TestFlight when the product is ready for it.
+
+---
+
 ## 🏛️ System Architecture
 
 The current production design, trust boundaries, recovery path, and compatibility rules are documented in [Reliability & Security Architecture](docs/architecture/RELIABILITY_PLATFORM.md).
@@ -128,6 +171,11 @@ Built with modern, memory-safe Rust:
 * **Database & Port Isolation**: PostgreSQL 5432 and Redis 6379 are bound strictly to `127.0.0.1` and internal network `aetherhost-net`.
 * **Turnkey Ubuntu Bootstrap**: [deploy/setup-contabo.sh](deploy/setup-contabo.sh) configures 4GB NVMe swap space, Docker CE, UFW firewall rules (ports 22, 80, 443 only), and Fail2Ban in one command.
 * **Production Manual**: Complete step-by-step runbook in [docs/CONTABO_DEPLOYMENT.md](docs/CONTABO_DEPLOYMENT.md).
+
+### 7. Mobile Operations Companion
+* **Same tenant boundary everywhere**: Mobile authentication is handled by Clerk and every project, domain, log, environment, billing, and API-key request remains tenant-scoped by the control-plane API.
+* **Away-from-desk diagnostics**: Deployment timelines, live logs, domain DNS/HTTPS checks, and AI deployment insights put the most useful operator signals on a small screen.
+* **Store-free preview delivery**: A signed Android APK is available directly from the marketing site while iPhone testing remains in Expo Go.
 * **Operational Recovery**: Encrypted off-host backup scripts, a non-destructive weekly restore drill, and bounded Docker cache maintenance. See [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ---

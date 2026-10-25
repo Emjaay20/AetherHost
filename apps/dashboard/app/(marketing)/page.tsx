@@ -56,6 +56,7 @@ export default function LandingPage() {
           <nav className="nav-links" aria-label="Page">
             <a href="#use">What it is</a>
             <a href="#plans">Plans</a>
+            <a href="#mobile">Mobile app</a>
             <Link href="/docs">Docs</Link>
             <Show when="signed-out">
               <Link href="/sign-in">Sign in</Link>
@@ -254,6 +255,36 @@ export default function LandingPage() {
                   memberHref="/billing"
                   memberLabel="Upgrade to Max"
                 />
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="section" id="mobile">
+          <div className="wrap">
+            <p className="kicker">AetherHost Mobile Preview</p>
+            <h2>Run your hosting workspace from your phone.</h2>
+            <p className="intro">
+              The mobile preview lets you check deployments, read logs, manage domains and environment variables, and receive deployment alerts while you are away from your desk.
+            </p>
+            <div className="mobile-downloads">
+              <article className="mobile-card">
+                <p className="mobile-platform">ANDROID</p>
+                <h3>Install the preview APK</h3>
+                <p>Download the AetherHost preview directly, then allow your browser to install apps from this source if Android asks.</p>
+                <a className="btn btn-primary" href="https://expo.dev/artifacts/eas/rdcVqhytdHMIU6XvV-wzRGkTy1A6ScUs1dDhzIvXsp8.apk">
+                  Download Android APK
+                </a>
+                <p className="fine">Version 1.0.0 · Internal preview</p>
+              </article>
+              <article className="mobile-card">
+                <p className="mobile-platform">IPHONE</p>
+                <h3>Use the Expo Go preview</h3>
+                <p>Install Expo Go on your iPhone. When the iPhone preview is published, open its QR link in Expo Go to run AetherHost without an App Store release.</p>
+                <a className="btn" href="https://expo.dev/go" target="_blank" rel="noreferrer">
+                  Get Expo Go
+                </a>
+                <p className="fine">Expo Go runs the preview; it does not install a standalone AetherHost app.</p>
               </article>
             </div>
           </div>

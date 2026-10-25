@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiProxyService } from './ai-proxy.service';
 
@@ -24,9 +24,10 @@ export class OpsInsightService {
     const customPrompt = options?.customPrompt?.trim();
 
     if (applicationId) {
-      const app = await this.prisma.application.findUnique({
-        where: { id: applicationId },
+      const app = await this.prisma.application.findFirst({
+        where: { id: applicationId, tenantId: tenantWhere },
       });
+      if (!app) throw new ForbiddenException('Application does not belong to this tenant');
 
       const logs = await this.prisma.deploymentLog.findMany({
         where: { applicationId },

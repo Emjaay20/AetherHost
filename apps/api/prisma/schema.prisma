@@ -20,6 +20,7 @@ model Tenant {
   invoices           Invoice[]
   auditLogs          AuditLog[]
   apiKeys            ApiKey[]
+  pushDevices        PushDevice[]
 }
 
 model Application {
@@ -138,6 +139,19 @@ model ApiKey {
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model PushDevice {
+  id        String   @id @default(uuid())
+  tenantId  String
+  token     String   @unique
+  platform  String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }

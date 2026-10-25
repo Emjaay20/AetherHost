@@ -244,6 +244,46 @@ html:has(.landing) body {
   line-height: 1.55;
 }
 
+.mobile-downloads {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 32px;
+}
+
+.mobile-card {
+  padding: 22px;
+  border: 1px solid var(--rule);
+  background: var(--inset);
+}
+
+.mobile-platform {
+  margin: 0 0 10px;
+  color: var(--ok);
+  font-family: var(--font-landing-mono), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.mobile-card h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.mobile-card p:not(.mobile-platform):not(.fine) {
+  min-height: 4.8em;
+  color: var(--body);
+  line-height: 1.55;
+}
+
+.mobile-card .fine {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .lede,
 .intro,
 .step p,
@@ -638,6 +678,7 @@ html:has(.landing) body {
 @media (max-width: 900px) {
   .hero,
   .uses,
+  .mobile-downloads,
   .steps,
   .proofs,
   .record,

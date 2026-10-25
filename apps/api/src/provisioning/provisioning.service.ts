@@ -9,6 +9,7 @@ import { DomainEventsService } from '../events/domain-events.service';
 import { ProvisionerFactory } from './provisioner.factory';
 import { ApplicationStatusChanged } from '@aetherhost/domain';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ProvisioningService {
@@ -18,6 +19,7 @@ export class ProvisioningService {
     private readonly prisma: PrismaService,
     private readonly eventsService: DomainEventsService,
     private readonly factory: ProvisionerFactory,
+    private readonly notifications?: NotificationsService,
   ) {}
 
   async tick(tenantId: string) {
@@ -129,6 +131,7 @@ export class ProvisioningService {
             tx,
           );
         });
+        void this.notifications?.sendToTenant(app.tenantId, { title: `${app.name} is live`, body: 'Deployment completed successfully.', data: { url: `/projects/${app.id}` } });
         return { status: 'running', message: result.message };
       }
 
@@ -140,6 +143,7 @@ export class ProvisioningService {
         where: { id: app.id },
         data: { status: 'failed' },
       });
+      void this.notifications?.sendToTenant(app.tenantId, { title: `${app.name} failed to deploy`, body: 'Open AetherHost to inspect logs and diagnostics.', data: { url: `/projects/${app.id}` } });
       return { status: 'failed', message: result.message };
     } catch (err: any) {
       this.logger.error(`Provisioning failed for ${app.id}: ${err.message}`);
@@ -151,6 +155,7 @@ export class ProvisioningService {
         where: { id: app.id },
         data: { status: 'failed' },
       });
+      void this.notifications?.sendToTenant(app.tenantId, { title: `${app.name} failed to deploy`, body: 'Open AetherHost to inspect logs and diagnostics.', data: { url: `/projects/${app.id}` } });
       return { status: 'failed', error: err.message };
     }
   }

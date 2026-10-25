@@ -16,6 +16,10 @@ const NAV: { label: string; items: DocLink[] }[] = [
     ],
   },
   {
+    label: 'Mobile',
+    items: [{ id: 'mobile-preview', label: 'Mobile preview' }],
+  },
+  {
     label: 'Platform',
     items: [
       { id: 'architecture', label: 'Architecture' },
@@ -249,6 +253,50 @@ export default function DocsClient() {
               copied={copied}
               onCopy={copy}
             />
+
+            <h2 id="mobile-preview" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold">
+              Mobile preview
+            </h2>
+            <p className="mt-4 max-w-2xl text-[15px] leading-7 text-zinc-300">
+              AetherHost Mobile is the away-from-desk companion for the console. Sign in with the same Clerk account to see the same tenant, apps, deployment history, domains, billing information, and API keys.
+            </p>
+            <div className="mt-5 grid max-w-3xl gap-4 md:grid-cols-2">
+              <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+                <p className="text-sm font-semibold text-zinc-100">Android — direct APK</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-300">
+                  Download the signed preview APK, open it on your Android device, and approve Android’s install prompt. The preview is delivered from this site, not Google Play.
+                </p>
+                <a
+                  href="https://expo.dev/artifacts/eas/rdcVqhytdHMIU6XvV-wzRGkTy1A6ScUs1dDhzIvXsp8.apk"
+                  className="mt-4 inline-flex rounded-md bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-white"
+                >
+                  Download AetherHost 1.0.0 APK
+                </a>
+              </section>
+              <section className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-5">
+                <p className="text-sm font-semibold text-zinc-100">iPhone — Expo Go preview</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-300">
+                  Install Expo Go and open the team’s AetherHost preview link or QR code. This runs the preview inside Expo Go; it is not a standalone App Store installation.
+                </p>
+                <a
+                  href="https://expo.dev/go"
+                  className="mt-4 inline-flex rounded-md border border-zinc-700 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-500 hover:text-white"
+                >
+                  Get Expo Go
+                </a>
+              </section>
+            </div>
+            <h3 className="mt-7 text-base font-semibold text-zinc-100">Mobile operator workflow</h3>
+            <ul className="mt-3 max-w-2xl list-disc space-y-2 pl-5 text-[15px] leading-7 text-zinc-300">
+              <li>Check project health, deployment timelines, and live logs; redeploy a project when it is safe to do so.</li>
+              <li>Verify custom-domain DNS and HTTPS status from the project detail screen.</li>
+              <li>Keep environment variables masked by default, then reveal a value only with an explicit action.</li>
+              <li>Use the AI operations insight to understand a failure and begin a guided follow-up fix.</li>
+              <li>Review plan usage, invoices, checkout, API keys, and opt into deployment alerts.</li>
+            </ul>
+            <p className="mt-5 max-w-2xl text-sm leading-6 text-zinc-400">
+              Push alerts are optional. The app asks before registering the device; Android delivery requires Firebase credentials in the Expo project, and iOS delivery requires Apple push credentials plus an Apple distribution build.
+            </p>
 
             <h2 id="architecture" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold">
               Architecture

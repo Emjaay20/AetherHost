@@ -20,6 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { getGithubToken, ensureGithubWebhook } from './github-utils';
 import { validateCustomDomain } from './domain-validator';
+import { resolve4 } from 'node:dns/promises';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -548,6 +549,27 @@ if __name__ == '__main__':
     return {
       envVars: (app.envVars as Record<string, string>) || {},
     };
+  }
+
+  async getTimeline(id: string, tenantId: string) {
+    await this.assertOwned(id, tenantId);
+    const [logs, events] = await Promise.all([
+      this.prisma.deploymentLog.findMany({ where: { applicationId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      this.prisma.domainEventRecord.findMany({ where: { applicationId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
+    ]);
+    return [...logs.map((log) => ({ id: log.id, kind: 'log', message: log.logContent, createdAt: log.createdAt })), ...events.map((event) => ({ id: `event-${event.id}`, kind: 'event', eventName: event.eventName, payload: event.payload, message: event.eventName.replace(/([A-Z])/g, ' $1').trim(), createdAt: event.createdAt }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async getDomainStatus(id: string, tenantId: string) {
+    const app = await this.assertOwned(id, tenantId);
+    if (!app.customDomain) return { configured: false, dns: 'not_configured', ssl: 'not_configured' };
+    const expectedIp = process.env.VPS_PUBLIC_IP || '194.163.172.101';
+    let addresses: string[] = [];
+    try { addresses = await resolve4(app.customDomain); } catch { /* DNS has not propagated. */ }
+    const dns = addresses.length ? (addresses.includes(expectedIp) ? 'verified' : 'misconfigured') : 'pending';
+    let ssl: 'active' | 'pending' = 'pending';
+    if (addresses.length) try { const response = await fetch(`https://${app.customDomain}`, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(6000) }); ssl = response.status < 500 ? 'active' : 'pending'; } catch { /* Certificate is still provisioning. */ }
+    return { configured: true, domain: app.customDomain, expectedIp, addresses, dns, ssl, reprovisioning: app.status === 'pending' };
   }
 
   async updateEnvVars(

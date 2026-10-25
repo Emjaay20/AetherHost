@@ -103,6 +103,16 @@ export class ApplicationsController {
     return this.applicationsService.getLogs(id, tenantId);
   }
 
+  @Get(':id/timeline')
+  getTimeline(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.getTimeline(id, tenantId);
+  }
+
+  @Get(':id/domain-status')
+  getDomainStatus(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.applicationsService.getDomainStatus(id, tenantId);
+  }
+
   @Post(':id/logs')
   async addLog(
     @TenantId() tenantId: string,

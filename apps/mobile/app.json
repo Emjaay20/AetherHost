@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "AetherHost",
+    "slug": "aetherhost",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "aetherhost",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.aetherhost.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.aetherhost.app"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "@clerk/expo",
+      "expo-web-browser",
+      "expo-router",
+      "expo-status-bar",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "80065a70-22a9-4513-8d29-7f1d0d140196"
+      }
+    },
+    "owner": "emjaay"
+  }
+}
