@@ -156,6 +156,27 @@ docker compose -f docker-compose.prod.yml up -d --build api
 
 The API image runs `prisma migrate deploy` before it starts NestJS. It applies only committed migrations that have not run yet, keeping the database history auditable; reserve `prisma db push` for disposable local development databases.
 
+> **One-time upgrade note:** If this VPS was created with `prisma db push` before migration history was adopted, Prisma needs to be told that the existing schema is the starting point. Run the following once before the first `migrate deploy` release. It records the six existing migrations without changing their tables, then applies any new migration normally.
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm --no-deps --entrypoint sh api -c '
+  cd apps/api
+  for migration in \
+    20260926062322_init \
+    20260930120000_control_plane_hardening \
+    20261004050024_add_invoices \
+    20261004120000_add_analytics_views \
+    20261004183000_workload_contract \
+    20261023120000_mariadb_workload_contract
+  do
+    ./node_modules/.bin/prisma migrate resolve --applied "$migration"
+  done
+  ./node_modules/.bin/prisma migrate deploy
+'
+```
+
+Do not run that baseline block on a new installation or a database that already has the `_prisma_migrations` table populated.
+
 ### Step 2: Start All Services in Background
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
