@@ -40,4 +40,4 @@ USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/v1/health || exit 1
-CMD ["sh", "-c", "cd apps/api && ./node_modules/.bin/prisma db push --skip-generate && cd /app && node apps/api/dist/main.js"]
+CMD ["sh", "-c", "cd apps/api && ./node_modules/.bin/prisma migrate deploy && cd /app && node apps/api/dist/main.js"]

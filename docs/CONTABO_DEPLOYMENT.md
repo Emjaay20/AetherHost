@@ -151,10 +151,10 @@ GROQ_MODEL=openai/gpt-oss-120b
 ### Step 1: Push Prisma Database Schema to Production Postgres
 ```bash
 docker compose -f docker-compose.prod.yml up -d postgres redis
-docker compose -f docker-compose.prod.yml run --rm api pnpm prisma migrate deploy
+docker compose -f docker-compose.prod.yml up -d --build api
 ```
 
-Use committed Prisma migrations for every production release. `migrate deploy` applies only migrations that have not run yet, keeping the database history auditable; reserve `prisma db push` for disposable local development databases.
+The API image runs `prisma migrate deploy` before it starts NestJS. It applies only committed migrations that have not run yet, keeping the database history auditable; reserve `prisma db push` for disposable local development databases.
 
 ### Step 2: Start All Services in Background
 ```bash
@@ -220,7 +220,6 @@ The API migration for mobile notifications creates the `PushDevice` table and mu
 cd /opt/aetherhost
 git pull --ff-only
 docker compose -f docker-compose.prod.yml up -d postgres redis
-docker compose -f docker-compose.prod.yml run --rm api pnpm prisma migrate deploy
 docker compose -f docker-compose.prod.yml up -d --build api dashboard
 docker compose -f docker-compose.prod.yml ps
 ```
