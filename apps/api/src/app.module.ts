@@ -18,6 +18,8 @@ import { BillingModule } from './billing/billing.module';
 import { AuthModule } from './auth/auth.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SalesforceModule } from './integrations/salesforce/salesforce.module';
+import { CustomerSuccessModule } from './customer-success/customer-success.module';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -82,6 +84,8 @@ const redisConfig = getRedisConfig();
     AuthModule,
     ApiKeysModule,
     NotificationsModule,
+    SalesforceModule,
+    CustomerSuccessModule,
   ],
   controllers: [AppController, TelemetryController],
   providers: [
