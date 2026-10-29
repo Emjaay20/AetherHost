@@ -176,4 +176,57 @@ describe('ApplicationsService', () => {
       service.remove('app_missing', 'tenant-a'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('rejects an invalid container image on updateDockerImage', async () => {
+    prisma.application.findUnique.mockResolvedValue({
+      id: 'app_1',
+      tenantId: 'tenant-a',
+      runtime: 'docker',
+      status: 'running',
+    });
+
+    await expect(
+      service.updateDockerImage('app_1', 'tenant-a', 'invalid/../image:latest'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('updates container image and triggers provisioning event', async () => {
+    const publishMock = jest.fn().mockResolvedValue(undefined);
+    const domainEvents = { publish: publishMock } as unknown as DomainEventsService;
+    const testPrisma = {
+      ...prisma,
+      deploymentLog: { create: jest.fn().mockResolvedValue({}) },
+      application: {
+        ...prisma.application,
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'app_1',
+          tenantId: 'tenant-a',
+          runtime: 'docker',
+          status: 'running',
+        }),
+        update: jest.fn().mockResolvedValue({
+          id: 'app_1',
+          dockerImage: 'ghcr.io/org/app:v2.0.0',
+          status: 'pending',
+        }),
+      },
+    };
+
+    const s = new ApplicationsService(
+      {} as EntitlementsService,
+      domainEvents,
+      testPrisma as unknown as PrismaService,
+    );
+
+    const result = await s.updateDockerImage('app_1', 'tenant-a', 'ghcr.io/org/app:v2.0.0', true);
+
+    expect(result.success).toBe(true);
+    expect(result.dockerImage).toBe('ghcr.io/org/app:v2.0.0');
+    expect(result.status).toBe('pending');
+    expect(testPrisma.application.update).toHaveBeenCalledWith({
+      where: { id: 'app_1' },
+      data: { dockerImage: 'ghcr.io/org/app:v2.0.0', status: 'pending' },
+    });
+    expect(publishMock).toHaveBeenCalled();
+  });
 });

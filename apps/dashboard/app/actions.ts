@@ -277,6 +277,35 @@ export async function updateApplicationCustomDomain(
   }
 }
 
+export async function updateApplicationDockerImage(
+  id: string,
+  dockerImage: string,
+  redeploy = true,
+) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/${id}/image`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ dockerImage, redeploy }),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'Failed to update container image' };
+    }
+
+    const data = await res.json();
+    revalidatePath('/console');
+    revalidatePath('/');
+    return { success: true, data };
+  } catch (error) {
+    return { error: 'Network error communicating with API' };
+  }
+}
+
 export async function generateOpsInsight(applicationId?: string) {
   const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
   if (!headers) return { error: 'Unauthorized' };

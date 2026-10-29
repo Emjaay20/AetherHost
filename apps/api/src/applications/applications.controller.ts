@@ -18,6 +18,7 @@ import {
   UpdateEnvVarsDto,
   RedeployApplicationDto,
   UpdateCustomDomainDto,
+  UpdateDockerImageDto,
 } from './dto/update-application.dto';
 import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { Public } from '../auth/public.decorator';
@@ -157,12 +158,31 @@ export class ApplicationsController {
     );
   }
 
+  @Patch(':id/image')
+  updateDockerImage(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body: UpdateDockerImageDto,
+  ) {
+    return this.applicationsService.updateDockerImage(
+      id,
+      tenantId,
+      body.dockerImage,
+      body.redeploy ?? true,
+    );
+  }
+
   @Post(':id/redeploy')
   redeploy(
     @TenantId() tenantId: string,
     @Param('id') id: string,
     @Body() body?: RedeployApplicationDto,
   ) {
-    return this.applicationsService.redeploy(id, tenantId, body?.envVars);
+    return this.applicationsService.redeploy(
+      id,
+      tenantId,
+      body?.envVars,
+      body?.dockerImage,
+    );
   }
 }

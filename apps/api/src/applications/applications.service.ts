@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { assertWorkloadSpec } from './workload-spec';
+import { assertWorkloadSpec, validateDockerImage } from './workload-spec';
 import { randomUUID } from 'crypto';
 import {
   Application,
@@ -468,6 +468,61 @@ if __name__ == '__main__':
     return { success: true, customDomain: validatedDomain };
   }
 
+  async updateDockerImage(
+    id: string,
+    tenantId: string,
+    dockerImage: string,
+    redeploy = true,
+  ): Promise<{ success: boolean; dockerImage: string; status: string }> {
+    const app = await this.assertOwned(id, tenantId);
+    if (app.runtime === 'wordpress') {
+      throw new BadRequestException('WordPress does not support custom container images');
+    }
+
+    const validatedImage = validateDockerImage(dockerImage);
+
+    // If app has a workload contract, validate that the new image preserves it
+    const envVars = (app.envVars as Record<string, string>) || {};
+    assertWorkloadSpec({
+      runtime: app.runtime,
+      dockerImage: validatedImage,
+      envVars,
+      workerCommand: app.workerCommand || undefined,
+      withPostgres: app.withPostgres,
+      withMariaDb: app.withMariaDb,
+      withRedis: app.withRedis,
+      port: app.port || undefined,
+      healthPath: app.healthPath || undefined,
+    });
+
+    const updated = await this.prisma.application.update({
+      where: { id },
+      data: {
+        dockerImage: validatedImage,
+        ...(redeploy ? { status: 'pending' } : {}),
+      },
+    });
+
+    const ts = new Date().toTimeString().split(' ')[0];
+    await this.addLog(
+      id,
+      `[${ts}] Container image updated to "${validatedImage}". Preserving database, volumes, and custom domain.${redeploy ? ' Triggering rolling update...' : ''}`,
+    );
+
+    if (redeploy) {
+      await this.eventsService.publish(
+        new ApplicationProvisioningRequested(app.tenantId, id),
+        this.prisma,
+      );
+    }
+
+    return {
+      success: true,
+      dockerImage: validatedImage,
+      status: updated.status,
+    };
+  }
+
   async addLog(id: string, logContent: string): Promise<void> {
     await this.prisma.deploymentLog.create({
       data: { applicationId: id, logContent }
@@ -599,13 +654,33 @@ if __name__ == '__main__':
     return { success: true, envVars: updated.envVars };
   }
 
-  async redeploy(id: string, tenantId: string, envVars?: Record<string, string>) {
+  async redeploy(
+    id: string,
+    tenantId: string,
+    envVars?: Record<string, string>,
+    dockerImage?: string,
+  ) {
     const app = await this.assertOwned(id, tenantId);
 
-    if (envVars !== undefined) {
+    const targetImage =
+      dockerImage !== undefined && dockerImage.trim() !== ''
+        ? validateDockerImage(dockerImage)
+        : app.dockerImage;
+
+    if (envVars !== undefined || dockerImage !== undefined) {
       assertWorkloadSpec({
         runtime: app.runtime,
-        envVars,
+        dockerImage: targetImage || undefined,
+        envVars:
+          envVars !== undefined
+            ? envVars
+            : ((app.envVars as Record<string, string>) || {}),
+        workerCommand: app.workerCommand || undefined,
+        withPostgres: app.withPostgres,
+        withMariaDb: app.withMariaDb,
+        withRedis: app.withRedis,
+        port: app.port || undefined,
+        healthPath: app.healthPath || undefined,
       });
     }
 
@@ -622,6 +697,9 @@ if __name__ == '__main__':
 
     const data: any = {
       status: 'pending',
+      ...(targetImage !== undefined && targetImage !== null
+        ? { dockerImage: targetImage }
+        : {}),
       ...(aiFilesToSave
         ? { aiFiles: JSON.parse(JSON.stringify(aiFilesToSave)) }
         : {}),

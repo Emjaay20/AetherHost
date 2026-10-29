@@ -28,6 +28,22 @@ export class RedeployApplicationDto {
   @IsObject()
   @IsOptional()
   envVars?: Record<string, string>;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  dockerImage?: string;
+}
+
+export class UpdateDockerImageDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  dockerImage!: string;
+
+  @IsBoolean()
+  @IsOptional()
+  redeploy?: boolean;
 }
 
 export class UpdateCustomDomainDto {

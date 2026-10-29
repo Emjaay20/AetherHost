@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound, Globe } from 'lucide-react'
+import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound, Globe, Container } from 'lucide-react'
 import { safeAppName } from '../lib/app-name'
 import { getAppUrl } from '../lib/domain'
 import { redeployApplication } from '../app/actions'
@@ -10,6 +10,7 @@ import DeploymentLogViewer from './DeploymentLogViewer'
 import AiProjectModal from './AiProjectModal'
 import EnvVarsModal from './EnvVarsModal'
 import CustomDomainModal from './CustomDomainModal'
+import UpdateImageModal from './UpdateImageModal'
 
 export interface ApplicationItem {
   id: string
@@ -33,7 +34,9 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const [aiModalOpen, setAiModalOpen] = useState(false)
   const [envModalOpen, setEnvModalOpen] = useState(false)
   const [domainModalOpen, setDomainModalOpen] = useState(false)
+  const [imageModalOpen, setImageModalOpen] = useState(false)
   const [currentDomain, setCurrentDomain] = useState(app.customDomain || null)
+  const [currentDockerImage, setCurrentDockerImage] = useState(app.dockerImage || null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRedeploying, setIsRedeploying] = useState(false)
   const [localStatus, setLocalStatus] = useState(app.status)
@@ -41,6 +44,10 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   useEffect(() => {
     setCurrentDomain(app.customDomain || null)
   }, [app.customDomain])
+
+  useEffect(() => {
+    setCurrentDockerImage(app.dockerImage || null)
+  }, [app.dockerImage])
 
   useEffect(() => {
     setLocalStatus(app.status)
@@ -52,12 +59,12 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   useEffect(() => {
     if (localStatus !== 'pending') return
     // Pause background polling while any configuration modal is open
-    if (envModalOpen || domainModalOpen || aiModalOpen) return
+    if (envModalOpen || domainModalOpen || aiModalOpen || imageModalOpen) return
     const interval = setInterval(() => {
       router.refresh()
     }, 3000)
     return () => clearInterval(interval)
-  }, [localStatus, router, envModalOpen, domainModalOpen, aiModalOpen])
+  }, [localStatus, router, envModalOpen, domainModalOpen, aiModalOpen, imageModalOpen])
 
   async function handleDelete() {
     if (!confirm(`Are you sure you want to delete ${app.name}?`)) return
@@ -133,6 +140,15 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                   <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
                 </a>
               )}
+              {currentDockerImage && (
+                <span
+                  className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20"
+                  title={`Container Image: ${currentDockerImage}`}
+                >
+                  <Container className="w-3 h-3 text-cyan-400" />
+                  <span className="max-w-[140px] truncate sm:max-w-[200px]">{currentDockerImage}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -203,6 +219,21 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             >
               <KeyRound className="w-3.5 h-3.5" />
               <span>Env</span>
+            </button>
+
+            {/* Update Container Image Button */}
+            <button
+              type="button"
+              onClick={() => setImageModalOpen(true)}
+              className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-sm ${
+                currentDockerImage
+                  ? 'text-cyan-400 hover:text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/10'
+                  : 'text-slate-400 hover:text-slate-300 border-slate-700/80 hover:bg-slate-800/60'
+              }`}
+              title="Update Container Image without losing database, users, or domains"
+            >
+              <Container className="w-3.5 h-3.5" />
+              <span>Image</span>
             </button>
 
             {/* Custom Domain Button */}
@@ -322,6 +353,28 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
           setCurrentDomain(newDomain)
           setLocalStatus('pending')
           router.refresh()
+        }}
+      />
+
+      {/* Update Container Image Modal */}
+      <UpdateImageModal
+        appId={app.id}
+        appName={app.name}
+        initialDockerImage={currentDockerImage}
+        isOpen={imageModalOpen}
+        onClose={() => setImageModalOpen(false)}
+        onImageUpdated={(newImage, redeployed) => {
+          setCurrentDockerImage(newImage)
+          if (redeployed) {
+            setLocalStatus('pending')
+            router.refresh()
+            setTimeout(() => {
+              setLocalStatus('running')
+              router.refresh()
+            }, 3000)
+          } else {
+            router.refresh()
+          }
         }}
       />
     </div>

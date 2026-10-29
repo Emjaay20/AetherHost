@@ -207,6 +207,15 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	}
 
 	_ = exec.Command("docker", "network", "create", "aetherhost-net").Run()
+
+	// Pull updated image layers so changes to tag or latest are downloaded
+	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Pulling container image: %s ...", time.Now().Format("15:04:05"), app.DockerImage))
+	pullCmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "pull")
+	pullOut, pullErr := pullCmd.CombinedOutput()
+	if pullErr == nil && len(pullOut) > 0 {
+		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Image pull completed:\n%s", time.Now().Format("15:04:05"), strings.TrimSpace(string(pullOut))))
+	}
+
 	cmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "up", "-d")
 	output, err := cmd.CombinedOutput()
 	if err != nil {

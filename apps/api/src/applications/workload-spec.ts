@@ -26,6 +26,14 @@ export type WorkloadInput = {
   healthPath?: string;
 };
 
+export function validateDockerImage(rawImage: string): string {
+  const image = rawImage?.trim();
+  if (!image || !IMAGE_RE.test(image) || image.includes('..') || image.includes('://')) {
+    throw new BadRequestException('dockerImage is not a valid image reference');
+  }
+  return image;
+}
+
 export function assertWorkloadSpec(input: WorkloadInput): void {
   const image = input.dockerImage?.trim();
   const worker = input.workerCommand?.trim();
