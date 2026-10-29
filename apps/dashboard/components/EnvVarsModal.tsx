@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Plus, Trash2, Eye, EyeOff, KeyRound, RotateCcw, Save, Loader2, FileCode, List } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { X, Plus, Trash2, Eye, EyeOff, KeyRound, RotateCcw, Save, Loader2, FileCode, List, Undo2 } from 'lucide-react'
 import { updateApplicationEnvVars, getApplicationEnvVars } from '../app/actions'
 
 interface EnvVarsModalProps {
@@ -35,39 +35,15 @@ export default function EnvVarsModal({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [hasDraft, setHasDraft] = useState(false)
 
-  // Initialize or fetch variables when modal opens
-  useEffect(() => {
-    if (!isOpen) {
-      setError(null)
-      setSuccessMsg(null)
-      return
-    }
+  // Track initialization per modal open session so external parent refreshes do NOT wipe user keystrokes
+  const isInitializedRef = useRef(false)
+  const initialDataLoadedRef = useRef(false)
+  const initialEnvVarsRef = useRef(initialEnvVars)
+  initialEnvVarsRef.current = initialEnvVars
 
-    const initFromObject = (envObj: Record<string, string>) => {
-      const parsedRows: EnvRow[] = Object.entries(envObj).map(([k, v], idx) => ({
-        id: `${k}-${idx}`,
-        key: k,
-        value: v,
-        showSecret: false,
-      }))
-      setRows(parsedRows)
-      setRawText(objectToRaw(envObj))
-    }
-
-    if (initialEnvVars && Object.keys(initialEnvVars).length > 0) {
-      initFromObject(initialEnvVars)
-    } else {
-      setIsLoading(true)
-      getApplicationEnvVars(appId)
-        .then((res) => {
-          if (res.envVars) {
-            initFromObject(res.envVars)
-          }
-        })
-        .finally(() => setIsLoading(false))
-    }
-  }, [isOpen, appId, initialEnvVars])
+  const draftKey = `aether_env_draft_${appId}`
 
   function objectToRaw(obj: Record<string, string>): string {
     return Object.entries(obj)
@@ -75,14 +51,31 @@ export default function EnvVarsModal({
       .join('\n')
   }
 
-  function rawToObject(text: string): Record<string, string> {
-    const result: Record<string, string> = {}
+  function rowsToRaw(currentRows: EnvRow[]): string {
+    return currentRows
+      .map((r) => {
+        const k = r.key.trim()
+        if (k) {
+          return `${k}=${r.value}`
+        }
+        if (r.value) {
+          return `=${r.value}`
+        }
+        return ''
+      })
+      .filter((line, idx, arr) => line !== '' || idx === arr.length - 1)
+      .join('\n')
+  }
+
+  function rawToRows(text: string): EnvRow[] {
     const lines = text.split('\n')
-    for (const rawLine of lines) {
+    const parsedRows: EnvRow[] = []
+
+    lines.forEach((rawLine, idx) => {
       const line = rawLine.trim()
-      if (!line || line.startsWith('#')) continue
+      if (!line || line.startsWith('#')) return
       const eqIdx = line.indexOf('=')
-      if (eqIdx > 0) {
+      if (eqIdx !== -1) {
         const k = line.slice(0, eqIdx).trim()
         let v = line.slice(eqIdx + 1).trim()
         if (
@@ -91,41 +84,148 @@ export default function EnvVarsModal({
         ) {
           v = v.slice(1, -1)
         }
-        if (k) result[k] = v
+        parsedRows.push({
+          id: `row-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          key: k,
+          value: v,
+          showSecret: false,
+        })
+      } else if (line.length > 0) {
+        // Line without =
+        parsedRows.push({
+          id: `row-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          key: line,
+          value: '',
+          showSecret: false,
+        })
+      }
+    })
+
+    return parsedRows
+  }
+
+  const initFromObject = useCallback((envObj: Record<string, string>) => {
+    const parsedRows: EnvRow[] = Object.entries(envObj).map(([k, v], idx) => ({
+      id: `${k}-${idx}-${Date.now()}`,
+      key: k,
+      value: v,
+      showSecret: false,
+    }))
+    setRows(parsedRows)
+    setRawText(objectToRaw(envObj))
+  }, [])
+
+  // Initialize once per open session
+  useEffect(() => {
+    if (!isOpen) {
+      isInitializedRef.current = false
+      initialDataLoadedRef.current = false
+      setError(null)
+      setSuccessMsg(null)
+      return
+    }
+
+    if (isInitializedRef.current) return
+    isInitializedRef.current = true
+
+    // Check if there is an unsaved draft in sessionStorage from previous edits/page switch
+    let draftLoaded = false
+    if (typeof window !== 'undefined') {
+      try {
+        const savedDraftJson = sessionStorage.getItem(draftKey)
+        if (savedDraftJson) {
+          const draft = JSON.parse(savedDraftJson)
+          if (draft && (Array.isArray(draft.rows) || typeof draft.rawText === 'string')) {
+            if (Array.isArray(draft.rows) && draft.rows.length > 0) {
+              setRows(draft.rows)
+              setRawText(draft.rawText || rowsToRaw(draft.rows))
+            } else if (draft.rawText) {
+              setRawText(draft.rawText)
+              setRows(rawToRows(draft.rawText))
+            }
+            if (draft.mode === 'raw' || draft.mode === 'pairs') {
+              setMode(draft.mode)
+            }
+            setHasDraft(true)
+            draftLoaded = true
+            initialDataLoadedRef.current = true
+          }
+        }
+      } catch {
+        // Ignore JSON error
       }
     }
-    return result
+
+    if (draftLoaded) return
+
+    // Normal initialization from props or API
+    const initVars = initialEnvVarsRef.current
+    if (initVars && Object.keys(initVars).length > 0) {
+      initFromObject(initVars)
+      initialDataLoadedRef.current = true
+    } else {
+      setIsLoading(true)
+      getApplicationEnvVars(appId)
+        .then((res) => {
+          if (res?.envVars) {
+            initFromObject(res.envVars)
+          }
+        })
+        .finally(() => {
+          setIsLoading(false)
+          initialDataLoadedRef.current = true
+        })
+    }
+  }, [isOpen, appId, initFromObject, draftKey])
+
+  // Persist edits to sessionStorage draft whenever rows or rawText changes (only after initial load)
+  useEffect(() => {
+    if (!isOpen || !initialDataLoadedRef.current) return
+
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            mode,
+            rows,
+            rawText,
+            timestamp: Date.now(),
+          })
+        )
+      } catch {
+        // Ignore quota errors
+      }
+    }
+  }, [isOpen, rows, rawText, mode, draftKey])
+
+  function handleDiscardDraft() {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(draftKey)
+    }
+    setHasDraft(false)
+    const initVars = initialEnvVarsRef.current || {}
+    initFromObject(initVars)
+    setSuccessMsg('Reverted to saved values.')
+    setTimeout(() => setSuccessMsg(null), 2000)
   }
 
   function handleSwitchMode(targetMode: 'pairs' | 'raw') {
     if (targetMode === 'raw') {
-      // Convert rows to raw
-      const envObj: Record<string, string> = {}
-      for (const r of rows) {
-        if (r.key.trim()) {
-          envObj[r.key.trim()] = r.value
-        }
-      }
-      setRawText(objectToRaw(envObj))
+      // Sync rows to raw text preserving all rows entered
+      setRawText(rowsToRaw(rows))
     } else {
-      // Convert raw to rows
-      const parsed = rawToObject(rawText)
-      const newRows: EnvRow[] = Object.entries(parsed).map(([k, v], idx) => ({
-        id: `${k}-${idx}`,
-        key: k,
-        value: v,
-        showSecret: false,
-      }))
-      setRows(newRows)
+      // Sync raw text to rows preserving all parsed keys
+      setRows(rawToRows(rawText))
     }
     setMode(targetMode)
   }
 
   function handleAddRow() {
-    setRows([
-      ...rows,
+    setRows((prev) => [
+      ...prev,
       {
-        id: `new-${Date.now()}`,
+        id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         key: '',
         value: '',
         showSecret: true,
@@ -134,19 +234,26 @@ export default function EnvVarsModal({
   }
 
   function handleUpdateRow(id: string, field: 'key' | 'value', val: string) {
-    setRows(
-      rows.map((r) => (r.id === id ? { ...r, [field]: val } : r))
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== id) return r
+        if (field === 'key') {
+          // Keep uppercase env var standard, replace space with underscore
+          return { ...r, key: val.replace(/\s+/g, '_') }
+        }
+        return { ...r, [field]: val }
+      })
     )
   }
 
   function handleToggleShow(id: string) {
-    setRows(
-      rows.map((r) => (r.id === id ? { ...r, showSecret: !r.showSecret } : r))
+    setRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, showSecret: !r.showSecret } : r))
     )
   }
 
   function handleDeleteRow(id: string) {
-    setRows(rows.filter((r) => r.id !== id))
+    setRows((prev) => prev.filter((r) => r.id !== id))
   }
 
   async function handleSave(redeploy: boolean) {
@@ -155,9 +262,14 @@ export default function EnvVarsModal({
     setIsSaving(true)
 
     // Build env object
-    let envObj: Record<string, string> = {}
+    const envObj: Record<string, string> = {}
     if (mode === 'raw') {
-      envObj = rawToObject(rawText)
+      const parsed = rawToRows(rawText)
+      for (const r of parsed) {
+        if (r.key.trim()) {
+          envObj[r.key.trim()] = r.value
+        }
+      }
     } else {
       for (const r of rows) {
         const k = r.key.trim()
@@ -175,6 +287,12 @@ export default function EnvVarsModal({
         return
       }
 
+      // Clear draft on successful save
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(draftKey)
+      }
+      setHasDraft(false)
+
       setSuccessMsg(
         redeploy
           ? 'Environment variables updated! Redeployment triggered.'
@@ -187,7 +305,7 @@ export default function EnvVarsModal({
 
       setTimeout(() => {
         onClose()
-      }, 1200)
+      }, 1000)
     } catch {
       setError('An error occurred while saving environment variables.')
     } finally {
@@ -198,7 +316,11 @@ export default function EnvVarsModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+    >
       <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
@@ -209,6 +331,11 @@ export default function EnvVarsModal({
             <div>
               <h3 className="font-semibold text-base text-foreground flex items-center gap-2">
                 Environment Variables
+                {hasDraft && (
+                  <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                    Draft Restored
+                  </span>
+                )}
               </h3>
               <p className="text-xs text-muted-foreground">
                 Configure runtime secrets & variables for <span className="text-foreground font-mono font-medium">{appName}</span>
@@ -216,13 +343,25 @@ export default function EnvVarsModal({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-slate-800 hover:text-foreground transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {hasDraft && (
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                className="text-xs text-amber-400/80 hover:text-amber-300 flex items-center gap-1 px-2 py-1 rounded hover:bg-amber-500/10 transition-colors"
+                title="Discard unsaved draft and revert to saved settings"
+              >
+                <Undo2 className="w-3.5 h-3.5" /> Revert
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-slate-800 hover:text-foreground transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Mode Selector Tabs */}
@@ -293,7 +432,7 @@ export default function EnvVarsModal({
                       value={row.key}
                       onChange={(e) => handleUpdateRow(row.id, 'key', e.target.value)}
                       placeholder="VARIABLE_NAME"
-                      className="w-1/3 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:border-primary placeholder:text-muted-foreground/40 uppercase"
+                      className="w-1/3 bg-slate-950/60 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:border-primary placeholder:text-muted-foreground/40"
                     />
                     <div className="relative flex-1">
                       <input

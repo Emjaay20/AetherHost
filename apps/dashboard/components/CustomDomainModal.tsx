@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   X,
   Globe,
@@ -50,12 +50,17 @@ export default function CustomDomainModal({
 
   const defaultCnameTarget = `${safeName}.aetherhost.com.ng`
 
+  const isInitializedRef = useRef(false)
+
   useEffect(() => {
     if (!isOpen) {
+      isInitializedRef.current = false
       setError(null)
       setSuccessMsg(null)
       return
     }
+    if (isInitializedRef.current) return
+    isInitializedRef.current = true
     setDomainInput(initialCustomDomain || '')
   }, [isOpen, initialCustomDomain])
 

@@ -51,11 +51,13 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
 
   useEffect(() => {
     if (localStatus !== 'pending') return
+    // Pause background polling while any configuration modal is open
+    if (envModalOpen || domainModalOpen || aiModalOpen) return
     const interval = setInterval(() => {
       router.refresh()
     }, 3000)
     return () => clearInterval(interval)
-  }, [localStatus, router])
+  }, [localStatus, router, envModalOpen, domainModalOpen, aiModalOpen])
 
   async function handleDelete() {
     if (!confirm(`Are you sure you want to delete ${app.name}?`)) return
