@@ -21,6 +21,7 @@ import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { getGithubToken, ensureGithubWebhook } from './github-utils';
 import { validateCustomDomain } from './domain-validator';
 import { resolve4 } from 'node:dns/promises';
+import { Prisma } from '@prisma/client';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -186,6 +187,13 @@ export class ApplicationsService {
           customDomain: validatedDomain,
           dockerCompose,
           aiFiles: generatedAiFiles ? JSON.parse(JSON.stringify(generatedAiFiles)) : null,
+          // A generated first commit may be written once to an empty connected
+          // repository. After a successful deploy GitHub becomes the source of
+          // truth, so stale generated files can never overwrite later work.
+          commitMessage:
+            !githubRepo && finalGithubRepo && generatedAiFiles?.length
+              ? 'aetherhost-ai-pending: Initial AetherHost source'
+              : null,
           dockerImage: dockerImage?.trim() || null,
           envVars: envVars ? JSON.parse(JSON.stringify(envVars)) : null,
           workerCommand: workerCommand?.trim() || null,
@@ -422,16 +430,25 @@ if __name__ == '__main__':
     if (!app) throw new NotFoundException('App not found');
 
     // If transitioning from running/pending to failed or terminated, release the slot.
+    const clearAppliedGithubPatch =
+      status === 'running' &&
+      !!app.githubRepo &&
+      app.commitMessage?.startsWith('aetherhost-ai-pending:');
+    const statusData = {
+      status,
+      ...(clearAppliedGithubPatch ? { aiFiles: Prisma.DbNull, commitMessage: null } : {}),
+    };
+
     if ((app.status !== 'failed' && app.status !== 'terminated') && 
         (status === 'failed' || status === 'terminated')) {
       await this.prisma.$transaction(async (tx) => {
-        await tx.application.update({ where: { id }, data: { status } });
+        await tx.application.update({ where: { id }, data: statusData });
         await this.entitlementsService.releaseApplicationSlot(app.tenantId, tx);
       });
     } else {
       await this.prisma.application.update({
         where: { id },
-        data: { status },
+        data: statusData,
       });
     }
   }
@@ -570,7 +587,9 @@ if __name__ == '__main__':
 
     const updateData: any = {
       aiFiles: JSON.parse(JSON.stringify(data.aiFiles)),
-      commitMessage: data.commitMessage,
+      commitMessage: app.githubRepo
+        ? `aetherhost-ai-pending: ${data.commitMessage}`
+        : data.commitMessage,
       status: 'pending',
     };
     if (data.githubRepo) {

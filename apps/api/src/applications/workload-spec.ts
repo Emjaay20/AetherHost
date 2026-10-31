@@ -50,7 +50,7 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
   // A GitHub/source deployment uses the repository's own Dockerfile and compose
   // configuration. It still needs protected runtime environment variables, but
   // it must not be forced into the separate pre-built-image workload contract.
-  const needsImage = Boolean(
+  const needsImage = input.runtime !== 'github' && Boolean(
     worker || input.withPostgres || input.withMariaDb || input.withRedis || input.port || input.healthPath,
   );
   if (needsImage && !image) {

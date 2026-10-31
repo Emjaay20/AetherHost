@@ -6,6 +6,55 @@ import { fetchGithubRepositoryFiles, getGithubToken } from '../applications/gith
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { AI_FILE_RULES, normalizeFileContent, sanitizeAiFiles } from './ai-file-sanitizer';
 
+function isProtectedGithubDeploymentFile(path: string) {
+  return (
+    /(^|\/)(?:Dockerfile(?:\.[^/]+)?|docker-compose(?:\.[^/]+)?\.ya?ml|compose\.ya?ml)$/i.test(path) ||
+    /^(?:deployment|infra|scripts)\//i.test(path) ||
+    /^(?:package-lock\.json|pnpm-lock\.yaml|yarn\.lock)$/i.test(path)
+  );
+}
+
+function packageLifecycleIsPreserved(
+  before: string,
+  after: string,
+) {
+  try {
+    const original = JSON.parse(before) as { scripts?: Record<string, unknown>; packageManager?: unknown; workspaces?: unknown };
+    const proposed = JSON.parse(after) as { scripts?: Record<string, unknown>; packageManager?: unknown; workspaces?: unknown };
+    return (
+      original.scripts?.start === proposed.scripts?.start &&
+      original.packageManager === proposed.packageManager &&
+      JSON.stringify(original.workspaces ?? null) === JSON.stringify(proposed.workspaces ?? null)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertGithubPatchIsSafe(
+  currentFiles: { path: string; content: string }[],
+  candidateFiles: { path: string; content: string }[],
+) {
+  const current = new Map(currentFiles.map((file) => [file.path, normalizeFileContent(file.content)]));
+  for (const candidate of candidateFiles) {
+    const proposed = normalizeFileContent(String(candidate.content ?? ''));
+    const existing = current.get(candidate.path);
+    if (isProtectedGithubDeploymentFile(candidate.path) && existing !== proposed) {
+      throw new Error(
+        `AI may not change protected deployment file "${candidate.path}" for a connected GitHub project.`,
+      );
+    }
+    if (
+      /(^|\/)package\.json$/i.test(candidate.path) &&
+      existing !== undefined &&
+      !packageLifecycleIsPreserved(existing, proposed)
+    ) {
+      throw new Error(
+        `AI may not replace the start/build lifecycle in "${candidate.path}" for a connected GitHub project.`,
+      );
+    }
+  }
+}
 
 @Injectable()
 export class AiProvisioningService {
@@ -25,7 +74,7 @@ export class AiProvisioningService {
   async autoFixBuildFailure(applicationId: string, buildError: string) {
     const app = await this.appsService.findOne(applicationId, SYSTEM_TENANT_ID);
     const files = Array.isArray(app.aiFiles) ? app.aiFiles : [];
-    if (files.length === 0) {
+    if (files.length === 0 && !app.githubRepo) {
       return { fixed: false, reason: 'not_ai_generated' };
     }
 
@@ -206,14 +255,9 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
     }
 
     let currentFiles: { path: string; content: string }[] = [];
-    if (app.aiFiles && Array.isArray(app.aiFiles)) {
-      currentFiles = app.aiFiles as unknown as { path: string; content: string }[];
-    }
-
-    // Connected repositories are editable from the platform as well. Read a
-    // deliberately bounded text-only snapshot using the owner's OAuth token;
-    // the token and source never leave the server except for the AI request.
-    if (currentFiles.length === 0 && app.githubRepo) {
+    // A connected repository is always the source of truth. Never use a
+    // historical AI snapshot here: it could overwrite a later monorepo change.
+    if (app.githubRepo) {
       const token = await getGithubToken(tenantId);
       if (!token) {
         throw new BadRequestException(
@@ -226,6 +270,8 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
           'AetherHost could not read editable text files from this GitHub repository. Check the repository connection and try again.',
         );
       }
+    } else if (app.aiFiles && Array.isArray(app.aiFiles)) {
+      currentFiles = app.aiFiles as unknown as { path: string; content: string }[];
     }
 
     const previewFiles = currentFiles.map((file) => ({
@@ -252,7 +298,7 @@ User Change Request:
 
 Instructions:
 1. Carefully update, improve, or add files to satisfy the user's request.
-    2. Return complete, working file contents for every modified or new file. Keep code concise and well-structured so the JSON output is never truncated.
+    ${app.githubRepo ? `2. This is a connected GitHub repository and its existing monorepo/deployment layout is authoritative. Never replace it with a minimal placeholder app. Return ONLY modified or new application-source files. Do not change Dockerfiles, Compose files, lockfiles, deployment/, infra/, scripts/, or the start/build lifecycle in package.json. Preserve the actual startup process and API routes.` : '2. Return complete, working file contents for every modified or new file.'} Keep code concise and well-structured so the JSON output is never truncated.
     ${AI_FILE_RULES}
     3. Ensure the root "/" route or an "index.html" file renders a clean, interactive HTML UI reflecting the new features so the Live Preview updates visibly, and ensure "/health" returns HTTP 200.
 4. Generate a concise, conventional git commit message (e.g. "feat: add /api/users endpoint").
@@ -275,6 +321,9 @@ Respond ONLY with valid JSON in this exact structure, with no markdown code bloc
       const generated = await this.generateChecked(tenantId, 'application-iteration', prompt, app.id, (candidate) => {
         if (!candidate.files || !Array.isArray(candidate.files)) {
           throw new Error('LLM response must contain a "files" array');
+        }
+        if (app.githubRepo) {
+          assertGithubPatchIsSafe(currentFiles, candidate.files);
         }
         const fileMap = new Map<string, string>();
         for (const f of currentFiles) {

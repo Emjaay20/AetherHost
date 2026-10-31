@@ -167,10 +167,17 @@ export async function fetchLatestCommitSha(
   }
 }
 
-const REPOSITORY_SOURCE_FILE = /(^|\/)(?:Dockerfile(?:\.[^/]+)?|docker-compose(?:\.[^/]+)?\.ya?ml|compose\.ya?ml|package\.json|tsconfig(?:\.[^/]+)?\.json|next\.config\.[^/]+|vite\.config\.[^/]+|README\.md|(?:src|app|pages|public|server|api|lib)\/.*\.(?:[cm]?[jt]sx?|py|go|rs|java|php|rb|css|scss|html|json|ya?ml|toml|env(?:\.example)?))$/i;
+const REPOSITORY_SOURCE_FILE = /(^|\/)(?:Dockerfile(?:\.[^/]+)?|docker-compose(?:\.[^/]+)?\.ya?ml|compose\.ya?ml|package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|tsconfig(?:\.[^/]+)?\.json|next\.config\.[^/]+|vite\.config\.[^/]+|turbo\.json|README\.md|(?:deployment|infra|scripts|src|app|pages|public|server|api|lib|apps|packages|services)\/.*\.(?:[cm]?[jt]sx?|py|go|rs|java|php|rb|css|scss|html|json|ya?ml|toml|env(?:\.example)?))$/i;
 const EXCLUDED_REPOSITORY_PATH = /(^|\/)(?:node_modules|\.git|dist|build|coverage|vendor|\.next)\//i;
 const MAX_SOURCE_FILES = 60;
 const MAX_SOURCE_BYTES = 240_000;
+
+function sourcePriority(path: string) {
+  if (/^(Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml|compose\.ya?ml|package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|turbo\.json)$/i.test(path)) return 0;
+  if (/^(deployment|infra|scripts)\//i.test(path)) return 1;
+  if (/^(apps|packages|services)\/[^/]+\/package\.json$/i.test(path)) return 2;
+  return 3;
+}
 
 /**
  * Reads a bounded, text-only view of a connected repository for AI edits.
@@ -215,7 +222,10 @@ export async function fetchGithubRepositoryFiles(
         !EXCLUDED_REPOSITORY_PATH.test(entry.path) &&
         REPOSITORY_SOURCE_FILE.test(entry.path),
       )
-      .sort((a, b) => (a.path || '').localeCompare(b.path || ''))
+      .sort((a, b) =>
+        sourcePriority(a.path || '') - sourcePriority(b.path || '') ||
+        (a.path || '').localeCompare(b.path || ''),
+      )
       .slice(0, MAX_SOURCE_FILES);
 
     const files: { path: string; content: string }[] = [];

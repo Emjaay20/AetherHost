@@ -68,7 +68,11 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		}
 	}
 
-	shouldWriteAiFiles := len(app.AiFiles) > 0 && (app.Runtime != "github" || app.CommitMessage != "")
+	// For a GitHub project, a freshly cloned repository is authoritative. AI
+	// files may be written only for an explicitly queued one-time patch; this
+	// prevents an old placeholder snapshot from replacing a real monorepo.
+	shouldWriteAiFiles := len(app.AiFiles) > 0 &&
+		(app.GithubRepo == "" || strings.HasPrefix(app.CommitMessage, "aetherhost-ai-pending:"))
 	if shouldWriteAiFiles {
 		sanitized, sanitizeErr := sanitizeAiFiles(app.AiFiles)
 		if sanitizeErr != nil {
@@ -117,8 +121,9 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 	}
 
 	// Commit and push without embedding token in URL
-	if app.GithubRepo != "" && app.GithubToken != "" && len(app.AiFiles) > 0 && (app.Runtime != "github" || app.CommitMessage != "") {
+	if app.GithubRepo != "" && app.GithubToken != "" && shouldWriteAiFiles {
 		msg := app.CommitMessage
+		msg = strings.TrimSpace(strings.TrimPrefix(msg, "aetherhost-ai-pending:"))
 		if msg == "" {
 			msg = "Update application files by AetherHost"
 		}
@@ -144,7 +149,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 		errMsg := fmt.Sprintf("[%s] Docker compose failed:\n%s", time.Now().Format("15:04:05"), string(output))
 		sendAppLog(controlPlaneURL, app.ID, errMsg)
 		appLog.Error("docker compose up failed", slog.String("error", err.Error()), slog.String("output", string(output)))
-		if len(app.AiFiles) > 0 && requestAutoFix(controlPlaneURL, app.ID, string(output)) {
+		if (len(app.AiFiles) > 0 || app.GithubRepo != "") && requestAutoFix(controlPlaneURL, app.ID, string(output)) {
 			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Build failed. AI auto-fix applied; redeploying with corrected files...", time.Now().Format("15:04:05")))
 			return
 		}
@@ -401,6 +406,17 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 			candidatePaths = append(candidatePaths, p)
 		}
 	}
+	requiredPaths := []string{}
+	// An explicitly configured non-default health route is a contract, not a
+	// best-effort probe. For repository deployments, also require a declared
+	// API health endpoint when the source advertises one. This prevents a
+	// placeholder home page from being reported as a successful monorepo deploy.
+	if app.HealthPath != "" && app.HealthPath != "/health" && app.HealthPath != "/" {
+		requiredPaths = append(requiredPaths, app.HealthPath)
+	}
+	if app.GithubRepo != "" {
+		requiredPaths = appendUniquePaths(requiredPaths, inferRepositoryHealthPaths(appDir))
+	}
 
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Probing readiness for container %s on port %d...", time.Now().Format("15:04:05"), containerName, port))
 	appLog.Info("probing readiness for container", slog.String("container", containerName), slog.Int("port", port))
@@ -411,6 +427,22 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 	}
 
 	for i := 0; i < maxAttempts; i++ {
+		if len(requiredPaths) > 0 {
+			allRequiredPathsReady := true
+			for _, path := range requiredPaths {
+				if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) != nil {
+					allRequiredPathsReady = false
+					break
+				}
+			}
+			if allRequiredPathsReady {
+				appLog.Info("container passed required readiness checks", slog.String("container", containerName), slog.Any("paths", requiredPaths))
+				return true
+			}
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
 		// Method 1: probeContainer via alpine:3.20 (netns attached, zero dependency on target container tools)
 		for _, path := range candidatePaths {
 			if probeContainer(containerName, fmt.Sprintf("http://127.0.0.1:%d%s", port, path)) == nil {
@@ -437,4 +469,68 @@ func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass
 		time.Sleep(2 * time.Second)
 	}
 	return false
+}
+
+func appendUniquePaths(paths []string, additions []string) []string {
+	for _, addition := range additions {
+		found := false
+		for _, path := range paths {
+			if path == addition {
+				found = true
+				break
+			}
+		}
+		if !found {
+			paths = append(paths, addition)
+		}
+	}
+	return paths
+}
+
+// inferRepositoryHealthPaths looks for well-known API health routes in a
+// bounded source scan. It never runs repository code. A detected route becomes
+// mandatory during readiness checks, rather than accepting the homepage alone.
+func inferRepositoryHealthPaths(appDir string) []string {
+	paths := []string{"/api/v1/health", "/api/health"}
+	found := make([]string, 0, len(paths))
+	seen := make(map[string]bool)
+	filesScanned := 0
+
+	_ = filepath.WalkDir(appDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry == nil {
+			return nil
+		}
+		if entry.IsDir() {
+			name := entry.Name()
+			if name == ".git" || name == "node_modules" || name == ".next" || name == "dist" || name == "build" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filesScanned >= 200 {
+			return nil
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil || info.Size() > 256*1024 {
+			return nil
+		}
+		extension := strings.ToLower(filepath.Ext(path))
+		if extension != ".js" && extension != ".mjs" && extension != ".cjs" && extension != ".ts" && extension != ".tsx" && extension != ".json" && extension != ".py" {
+			return nil
+		}
+		filesScanned++
+		content, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return nil
+		}
+		for _, healthPath := range paths {
+			if !seen[healthPath] && strings.Contains(string(content), healthPath) {
+				seen[healthPath] = true
+				found = append(found, healthPath)
+			}
+		}
+		return nil
+	})
+
+	return found
 }
