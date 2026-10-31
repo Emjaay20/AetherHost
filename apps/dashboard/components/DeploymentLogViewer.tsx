@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { getApplicationLogs, debugWithAi, redeployApplication } from '../app/actions'
+import { getApplicationLogs, debugWithAi, fixDeploymentWithAi, redeployApplication } from '../app/actions'
 import { Terminal, Sparkles, ChevronDown, ChevronUp, Loader2, Copy, Check, RefreshCw, X, RotateCcw } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -24,31 +24,13 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [debugging, setDebugging] = useState(false)
+  const [fixing, setFixing] = useState(false)
   const [redeploying, setRedeploying] = useState(false)
   const [aiResponse, setAiResponse] = useState<string | null>(null)
   const [aiCollapsed, setAiCollapsed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  // Load logs on expand or status change
-  useEffect(() => {
-    if (expanded) {
-      loadLogs()
-    }
-  }, [expanded, appId, status])
-
-  // Polling if expanded and still pending or redeploying
-  useEffect(() => {
-    if (!expanded) return
-    if (status !== 'pending' && !redeploying) return
-
-    const interval = setInterval(() => {
-      loadLogs(false)
-    }, 1800)
-
-    return () => clearInterval(interval)
-  }, [expanded, status, redeploying, appId])
 
   const loadLogs = async (showLoading = true) => {
     if (showLoading && logs.length === 0) setLoading(true)
@@ -64,6 +46,28 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
       setLoading(false)
     }
   }
+
+  // Load logs on expand or status change.
+  useEffect(() => {
+    if (!expanded) return
+    const timer = window.setTimeout(() => void loadLogs(), 0)
+    return () => window.clearTimeout(timer)
+  // loadLogs intentionally reads the current request state for this render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, appId, status])
+
+  // Poll while a redeploy is in progress so the repair result is visible here.
+  useEffect(() => {
+    if (!expanded) return
+    if (status !== 'pending' && !redeploying) return
+
+    const interval = setInterval(() => {
+      void loadLogs(false)
+    }, 1800)
+
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, status, redeploying, appId])
 
   const handleCopy = () => {
     const fullLogText = logs.map(l => l.logContent).join('\n')
@@ -119,6 +123,29 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
       setError('Failed to trigger redeploy')
     }
     setRedeploying(false)
+  }
+
+  const handleFix = async () => {
+    setFixing(true)
+    setError(null)
+    setExpanded(true)
+    try {
+      const fullLog = logs.map((log) => log.logContent).join('\n')
+      const res = await fixDeploymentWithAi(appId, fullLog)
+      if (res.error) {
+        setError(res.error)
+        return
+      }
+      setAiCollapsed(false)
+      setAiResponse(res.data?.summary || 'AI applied a minimal source repair and queued a new deployment. Live logs will appear here shortly.')
+      onRedeployTriggered?.()
+      await loadLogs(false)
+      setTimeout(() => loadLogs(false), 1200)
+    } catch {
+      setError('AI could not repair this deployment. Please try again.')
+    } finally {
+      setFixing(false)
+    }
   }
 
   const combinedLogText = logs.map(l => l.logContent).join('\n')
@@ -265,6 +292,15 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                       >
                         {redeploying ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
                         {redeploying ? 'Redeploying...' : 'Redeploy Now'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleFix}
+                        disabled={fixing || debugging || redeploying}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 text-purple-200 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {fixing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {fixing ? 'Fixing & deploying...' : 'Fix & Redeploy with AI'}
                       </button>
                       <button 
                         type="button"

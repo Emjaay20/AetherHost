@@ -86,6 +86,20 @@ export class AiProxyController {
     return this.aiProvisioningService.autoFixBuildFailure(id, String(body?.error ?? ''));
   }
 
+  @Post('applications/:id/fix')
+  fixDeploymentFailure(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() body?: { error?: string },
+  ) {
+    this.assertTenant(tenantId);
+    return this.aiProvisioningService.fixDeploymentFailure(
+      tenantId,
+      id,
+      String(body?.error ?? ''),
+    );
+  }
+
   private assertTenant(tenantId: string) {
     if (tenantId === SYSTEM_TENANT_ID) {
       throw new ForbiddenException('Agent cannot consume AI quota');

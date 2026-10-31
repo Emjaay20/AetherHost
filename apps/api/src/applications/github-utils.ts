@@ -166,3 +166,80 @@ export async function fetchLatestCommitSha(
     return null;
   }
 }
+
+const REPOSITORY_SOURCE_FILE = /(^|\/)(?:Dockerfile(?:\.[^/]+)?|docker-compose(?:\.[^/]+)?\.ya?ml|compose\.ya?ml|package\.json|tsconfig(?:\.[^/]+)?\.json|next\.config\.[^/]+|vite\.config\.[^/]+|README\.md|(?:src|app|pages|public|server|api|lib)\/.*\.(?:[cm]?[jt]sx?|py|go|rs|java|php|rb|css|scss|html|json|ya?ml|toml|env(?:\.example)?))$/i;
+const EXCLUDED_REPOSITORY_PATH = /(^|\/)(?:node_modules|\.git|dist|build|coverage|vendor|\.next)\//i;
+const MAX_SOURCE_FILES = 60;
+const MAX_SOURCE_BYTES = 240_000;
+
+/**
+ * Reads a bounded, text-only view of a connected repository for AI edits.
+ * The OAuth token stays server-side; source is never sent to the browser.
+ */
+export async function fetchGithubRepositoryFiles(
+  githubRepoUrl: string,
+  token: string,
+): Promise<{ path: string; content: string }[]> {
+  const parsed = parseGithubOwnerRepo(githubRepoUrl);
+  if (!parsed) return [];
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'AetherHost-API',
+  };
+
+  try {
+    const repoResponse = await fetch(
+      `https://api.github.com/repos/${parsed.owner}/${parsed.repo}`,
+      { headers },
+    );
+    if (!repoResponse.ok) return [];
+    const repository = (await repoResponse.json()) as { default_branch?: string };
+    const branch = repository.default_branch || 'main';
+
+    const treeResponse = await fetch(
+      `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`,
+      { headers },
+    );
+    if (!treeResponse.ok) return [];
+    const tree = (await treeResponse.json()) as {
+      tree?: Array<{ path?: string; type?: string; sha?: string; size?: number }>;
+    };
+
+    const candidates = (tree.tree || [])
+      .filter((entry) =>
+        entry.type === 'blob' &&
+        !!entry.path &&
+        !!entry.sha &&
+        !EXCLUDED_REPOSITORY_PATH.test(entry.path) &&
+        REPOSITORY_SOURCE_FILE.test(entry.path),
+      )
+      .sort((a, b) => (a.path || '').localeCompare(b.path || ''))
+      .slice(0, MAX_SOURCE_FILES);
+
+    const files: { path: string; content: string }[] = [];
+    let totalBytes = 0;
+    for (const entry of candidates) {
+      if (!entry.path || !entry.sha || (entry.size || 0) > 80_000) continue;
+      if (totalBytes + (entry.size || 0) > MAX_SOURCE_BYTES) continue;
+      const blobResponse = await fetch(
+        `https://api.github.com/repos/${parsed.owner}/${parsed.repo}/git/blobs/${entry.sha}`,
+        { headers },
+      );
+      if (!blobResponse.ok) continue;
+      const blob = (await blobResponse.json()) as { content?: string; encoding?: string };
+      if (!blob.content || blob.encoding !== 'base64') continue;
+      const content = Buffer.from(blob.content.replace(/\n/g, ''), 'base64').toString('utf8');
+      if (content.includes('\u0000')) continue;
+      totalBytes += Buffer.byteLength(content, 'utf8');
+      files.push({ path: entry.path, content });
+    }
+    return files;
+  } catch (err) {
+    logger.warn(
+      `Failed to read source from ${githubRepoUrl}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return [];
+  }
+}

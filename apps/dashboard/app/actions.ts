@@ -456,6 +456,28 @@ export async function debugWithAi(id: string, logContent?: string) {
   }
 }
 
+export async function fixDeploymentWithAi(id: string, logContent?: string) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
+  if (!headers) return { error: 'Unauthorized' };
+
+  try {
+    const res = await fetch(`${API_URL}/v1/ai/applications/${id}/fix`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ error: logContent || '' }),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return { error: error.message || 'AI could not repair this deployment' };
+    }
+    revalidatePath('/console');
+    revalidatePath('/');
+    return { data: await res.json() };
+  } catch {
+    return { error: 'Network error communicating with AI service' };
+  }
+}
+
 export async function listApiKeys() {
   const headers = await getAuthHeaders();
   if (!headers) return [];

@@ -615,6 +615,16 @@ if __name__ == '__main__':
     return [...logs.map((log) => ({ id: log.id, kind: 'log', message: log.logContent, createdAt: log.createdAt })), ...events.map((event) => ({ id: `event-${event.id}`, kind: 'event', eventName: event.eventName, payload: event.payload, message: event.eventName.replace(/([A-Z])/g, ' $1').trim(), createdAt: event.createdAt }))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
+  async getRecentLogText(id: string, tenantId: string, limit = 25) {
+    await this.assertOwned(id, tenantId);
+    const logs = await this.prisma.deploymentLog.findMany({
+      where: { applicationId: id },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return logs.reverse().map((log) => log.logContent).join('\n').slice(-12_000);
+  }
+
   async getDomainStatus(id: string, tenantId: string) {
     const app = await this.assertOwned(id, tenantId);
     if (!app.customDomain) return { configured: false, dns: 'not_configured', ssl: 'not_configured' };

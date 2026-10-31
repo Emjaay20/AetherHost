@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, Logger } from '@nes
 import { AiProxyService } from './ai-proxy.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { Runtime } from '@aetherhost/domain';
-import { getGithubToken } from '../applications/github-utils';
+import { fetchGithubRepositoryFiles, getGithubToken } from '../applications/github-utils';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { AI_FILE_RULES, normalizeFileContent, sanitizeAiFiles } from './ai-file-sanitizer';
 
@@ -51,6 +51,33 @@ export class AiProvisioningService {
       this.logger.warn(`Auto-fix failed for ${applicationId}: ${err?.message ?? err}`);
       return { fixed: false, reason: 'ai_error' };
     }
+  }
+
+  /**
+   * User-initiated repair. Unlike a diagnosis, this writes the AI's minimal
+   * source correction and queues a fresh deployment.
+   */
+  async fixDeploymentFailure(
+    tenantId: string,
+    applicationId: string,
+    buildError = '',
+  ) {
+    const app = await this.appsService.findOne(applicationId, tenantId);
+    const storedFiles = Array.isArray(app.aiFiles) ? app.aiFiles : [];
+    if (storedFiles.length === 0 && !app.githubRepo) {
+      throw new BadRequestException(
+        'This project has no editable source snapshot. Connect its GitHub repository or deploy it through AetherHost before asking AI to repair it.',
+      );
+    }
+
+    const logs = buildError.trim() || (await this.appsService.getRecentLogText(applicationId, tenantId));
+    return this.iterateOnApplication(
+      tenantId,
+      applicationId,
+      `The latest deployment failed. Repair the root cause, changing only the files needed, then make sure the application can build, start, and pass its health check. ${
+        logs ? `\n\nDeployment error output:\n${logs.slice(-8_000)}` : ''
+      }`,
+    );
   }
 
   private extractJson(rawOutput: string): any {
@@ -181,6 +208,24 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
     let currentFiles: { path: string; content: string }[] = [];
     if (app.aiFiles && Array.isArray(app.aiFiles)) {
       currentFiles = app.aiFiles as unknown as { path: string; content: string }[];
+    }
+
+    // Connected repositories are editable from the platform as well. Read a
+    // deliberately bounded text-only snapshot using the owner's OAuth token;
+    // the token and source never leave the server except for the AI request.
+    if (currentFiles.length === 0 && app.githubRepo) {
+      const token = await getGithubToken(tenantId);
+      if (!token) {
+        throw new BadRequestException(
+          'Reconnect GitHub before editing this project with AI.',
+        );
+      }
+      currentFiles = await fetchGithubRepositoryFiles(app.githubRepo, token);
+      if (currentFiles.length === 0) {
+        throw new BadRequestException(
+          'AetherHost could not read editable text files from this GitHub repository. Check the repository connection and try again.',
+        );
+      }
     }
 
     const previewFiles = currentFiles.map((file) => ({
