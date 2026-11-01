@@ -252,7 +252,7 @@ export class CustomerSuccessService {
     return await this.salesforceService.syncTenantToSalesforce({
       account: {
         Name: tenant.name,
-        BillingCountry: 'EMEA',
+        BillingCountry: 'United Kingdom',
         Type: 'Customer - Direct',
       },
       contact: {
