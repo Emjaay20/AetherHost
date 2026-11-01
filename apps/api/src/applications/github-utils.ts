@@ -31,6 +31,20 @@ export function normalizeRepoFullName(urlOrName?: string | null): string | null 
   return `${parsed.owner.toLowerCase()}/${parsed.repo.toLowerCase()}`;
 }
 
+/**
+ * An immutable digest or release/commit tag cannot change when Docker pulls it
+ * again. Only well-known floating tags are safe to redeploy on a source push.
+ */
+export function isFloatingContainerImage(image?: string | null): boolean {
+  const reference = image?.trim().toLowerCase();
+  if (!reference || reference.includes('@sha256:')) return false;
+  const lastSlash = reference.lastIndexOf('/');
+  const tagSeparator = reference.lastIndexOf(':');
+  if (tagSeparator <= lastSlash) return true; // Docker defaults this to latest.
+  const tag = reference.slice(tagSeparator + 1);
+  return ['latest', 'edge', 'main', 'master', 'dev', 'canary'].includes(tag);
+}
+
 export async function ensureGithubWebhook(
   tenantId: string,
   githubRepoUrl: string,

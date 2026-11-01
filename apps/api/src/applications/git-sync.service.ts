@@ -6,6 +6,7 @@ import {
   ensureGithubWebhook,
   fetchLatestCommitSha,
   getGithubToken,
+  isFloatingContainerImage,
 } from './github-utils';
 
 @Injectable()
@@ -65,6 +66,13 @@ export class GitSyncService {
           this.deployedCommitShas.set(app.id, latest.sha);
 
           const timeStr = new Date().toTimeString().split(' ')[0];
+          if (app.dockerImage && !isFloatingContainerImage(app.dockerImage)) {
+            await this.appsService.addLog(
+              app.id,
+              `[${timeStr}] GitHub commit ${latest.sha.slice(0, 7)} detected, but this deployment is pinned to immutable image "${app.dockerImage}". It was not redeployed with stale code. Update the container image in AetherHost to the new published tag or digest to release this commit.`,
+            );
+            continue;
+          }
           await this.appsService.addLog(
             app.id,
             `[${timeStr}] Auto-sync detected new GitHub commit (${latest.sha.slice(0, 7)}: ${latest.message} by ${latest.author}). Redeploying...`,

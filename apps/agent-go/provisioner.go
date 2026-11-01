@@ -7,18 +7,46 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
 func provisionPendingApps(controlPlaneURL, hostPwd, baseDomain string) {
-	apps, err := fetchApplicationsByStatus(controlPlaneURL, "pending")
+	pendingApps, err := fetchApplicationsByStatus(controlPlaneURL, "pending")
 	if err != nil {
 		logger.Warn("failed to poll pending applications", slog.String("error", err.Error()))
 		return
 	}
-	for _, app := range apps {
-		provisionSingleApp(app, controlPlaneURL, hostPwd, baseDomain)
+	// A process restart can leave an application marked provisioning. Pick it up
+	// again on the next poll rather than leaving the dashboard stuck forever.
+	provisioningApps, err := fetchApplicationsByStatus(controlPlaneURL, "provisioning")
+	if err != nil {
+		logger.Warn("failed to poll provisioning applications", slog.String("error", err.Error()))
 	}
+
+	apps := append(pendingApps, provisioningApps...)
+	seen := make(map[string]bool, len(apps))
+	const maxConcurrentProvisioning = 2
+	semaphore := make(chan struct{}, maxConcurrentProvisioning)
+	var workers sync.WaitGroup
+
+	for _, app := range apps {
+		if app.ID == "" || seen[app.ID] {
+			continue
+		}
+		seen[app.ID] = true
+		semaphore <- struct{}{}
+		workers.Add(1)
+		go func(candidate Application) {
+			defer workers.Done()
+			defer func() { <-semaphore }()
+			// Surface active work immediately. Final status is written by the
+			// provisioner, while a restarted agent will recover this state.
+			updateAppStatus(controlPlaneURL, candidate.ID, "provisioning")
+			provisionSingleApp(candidate, controlPlaneURL, hostPwd, baseDomain)
+		}(app)
+	}
+	workers.Wait()
 }
 
 func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain string) {

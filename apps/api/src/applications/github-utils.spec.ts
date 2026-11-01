@@ -1,4 +1,4 @@
-import { parseGithubOwnerRepo, normalizeRepoFullName } from './github-utils';
+import { isFloatingContainerImage, parseGithubOwnerRepo, normalizeRepoFullName } from './github-utils';
 
 describe('github-utils', () => {
   describe('parseGithubOwnerRepo', () => {
@@ -53,6 +53,20 @@ describe('github-utils', () => {
     it('returns null for empty or invalid input', () => {
       expect(normalizeRepoFullName(undefined)).toBeNull();
       expect(normalizeRepoFullName('')).toBeNull();
+    });
+  });
+
+  describe('isFloatingContainerImage', () => {
+    it('allows floating tags to redeploy after a source push', () => {
+      expect(isFloatingContainerImage('ghcr.io/acme/service:latest')).toBe(true);
+      expect(isFloatingContainerImage('ghcr.io/acme/service:main')).toBe(true);
+      expect(isFloatingContainerImage('nginx')).toBe(true);
+    });
+
+    it('recognizes commit, release, and digest references as immutable', () => {
+      expect(isFloatingContainerImage('ghcr.io/acme/service:3e94e35')).toBe(false);
+      expect(isFloatingContainerImage('ghcr.io/acme/service:v1.2.0')).toBe(false);
+      expect(isFloatingContainerImage('ghcr.io/acme/service@sha256:abcdef')).toBe(false);
     });
   });
 });

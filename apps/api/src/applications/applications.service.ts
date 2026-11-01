@@ -256,7 +256,10 @@ export class ApplicationsService {
       orderBy: { createdAt: 'desc' },
     }) as unknown as Application[];
 
-    if (tenantId === SYSTEM_TENANT_ID && status === 'pending') {
+    if (
+      tenantId === SYSTEM_TENANT_ID &&
+      (status === 'pending' || status === 'provisioning')
+    ) {
       // Provide Github tokens to the agent
       const appsWithTokens = await Promise.all(
         apps.map(async (app) => {

@@ -12,7 +12,7 @@ import { Prisma } from '@prisma/client';
 import { ApplicationsService } from '../applications/applications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { verifyGithubSignature } from './github-signature';
-import { normalizeRepoFullName } from '../applications/github-utils';
+import { isFloatingContainerImage, normalizeRepoFullName } from '../applications/github-utils';
 import { Public } from '../auth/public.decorator';
 
 @Public()
@@ -95,6 +95,13 @@ export class GithubWebhookController {
 
       for (const app of matchedApps) {
         const timeStr = new Date().toTimeString().split(' ')[0];
+        if (app.dockerImage && !isFloatingContainerImage(app.dockerImage)) {
+          await this.appsService.addLog(
+            app.id,
+            `[${timeStr}] GitHub push ${commitSha} received, but the deployment image is pinned to immutable reference "${app.dockerImage}". No stale-image redeploy was started. Update the image reference in AetherHost to publish this commit.`,
+          );
+          continue;
+        }
         await this.appsService.addLog(
           app.id,
           `[${timeStr}] GitHub push received on branch '${branch}' (${commitSha}: ${commitMsg} by ${author}). Initiating automatic redeployment...`,
