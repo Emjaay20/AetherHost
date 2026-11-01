@@ -185,6 +185,10 @@ services:
       - BASE_DOMAIN=${BASE_DOMAIN}
       - APP_BASE_URL=https://console.${BASE_DOMAIN}
       - API_BASE_URL=https://api.${BASE_DOMAIN}
+      - SALESFORCE_CLIENT_ID=${SALESFORCE_CLIENT_ID}
+      - SALESFORCE_CLIENT_SECRET=${SALESFORCE_CLIENT_SECRET}
+      - SALESFORCE_LOGIN_URL=${SALESFORCE_LOGIN_URL:-https://login.salesforce.com}
+      - SALESFORCE_INSTANCE_URL=${SALESFORCE_INSTANCE_URL}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/v1/health || exit 1"]
       interval: 15s
