@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   HeartHandshake,
   TrendingUp,
@@ -8,218 +8,151 @@ import {
   Zap,
   Calendar,
   Search,
-  ExternalLink,
   CheckCircle2,
   RefreshCw,
   Building2,
-  Globe2,
   SlidersHorizontal,
   X,
-  Send,
-  ShieldAlert,
+  ShieldCheck,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react'
 import AdminShell from '../AdminShell'
 
-interface AccountCS {
+interface CustomerAccountCS {
   id: string
   name: string
   companyDomain: string
   contactName: string
   contactEmail: string
+  region: string
   country: string
-  plan: 'Starter' | 'Growth' | 'Scale' | 'Enterprise'
+  plan: string
   healthScore: number
   healthStatus: 'HEALTHY' | 'EXPANSION' | 'AT_RISK' | 'CRITICAL'
-  timeToValueMinutes: number
+  timeToValueMinutes: number | null
   onboardingStage: string
   activeWorkloads: number
+  totalWorkloads: number
   quotaUtilizationPercent: number
   recentBuildSuccessRate: number
+  lastDeploymentAt: string | null
   chiliPiperMeetingBooked: boolean
-  sfdcAccountId: string
-  sfdcSyncStatus: 'SYNCED' | 'PENDING'
+  sfdcAccountId: string | null
+  sfdcSyncStatus: 'SYNCED' | 'NOT_CONFIGURED' | 'ERROR'
   escalationCount: number
+  assignedCsm: string
+  createdAt: string
 }
 
-// 85 EMEA Portfolio Accounts matching the API seed data
-const INITIAL_ACCOUNTS: AccountCS[] = [
-  {
-    id: 'tenant_fintech_uk',
-    name: 'PayBridge UK Ltd',
-    companyDomain: 'paybridge.co.uk',
-    contactName: 'Oliver Smith',
-    contactEmail: 'oliver@paybridge.co.uk',
-    country: 'United Kingdom',
-    plan: 'Enterprise',
-    healthScore: 96,
-    healthStatus: 'EXPANSION',
-    timeToValueMinutes: 2.8,
-    onboardingStage: 'ONBOARDING_COMPLETED',
-    activeWorkloads: 24,
-    quotaUtilizationPercent: 88,
-    recentBuildSuccessRate: 98,
-    chiliPiperMeetingBooked: true,
-    sfdcAccountId: '001EMEA00192',
-    sfdcSyncStatus: 'SYNCED',
-    escalationCount: 0,
-  },
-  {
-    id: 'tenant_retail_de',
-    name: 'ZalFlow Retail GmbH',
-    companyDomain: 'zalflow.de',
-    contactName: 'Maximilian Bauer',
-    contactEmail: 'm.bauer@zalflow.de',
-    country: 'Germany',
-    plan: 'Scale',
-    healthScore: 88,
-    healthStatus: 'HEALTHY',
-    timeToValueMinutes: 3.4,
-    onboardingStage: 'ONBOARDING_COMPLETED',
-    activeWorkloads: 14,
-    quotaUtilizationPercent: 62,
-    recentBuildSuccessRate: 94,
-    chiliPiperMeetingBooked: true,
-    sfdcAccountId: '001EMEA00341',
-    sfdcSyncStatus: 'SYNCED',
-    escalationCount: 0,
-  },
-  {
-    id: 'tenant_health_se',
-    name: 'NordicPulse Health AB',
-    companyDomain: 'nordicpulse.se',
-    contactName: 'Astrid Lindgren',
-    contactEmail: 'astrid@nordicpulse.se',
-    country: 'Sweden',
-    plan: 'Growth',
-    healthScore: 48,
-    healthStatus: 'AT_RISK',
-    timeToValueMinutes: 4.1,
-    onboardingStage: 'CUSTOM_DOMAIN_VERIFIED',
-    activeWorkloads: 6,
-    quotaUtilizationPercent: 35,
-    recentBuildSuccessRate: 65,
-    chiliPiperMeetingBooked: false,
-    sfdcAccountId: '001EMEA00482',
-    sfdcSyncStatus: 'SYNCED',
-    escalationCount: 2,
-  },
-  {
-    id: 'tenant_logistics_nl',
-    name: 'PortSmart Logistics B.V.',
-    companyDomain: 'portsmart.nl',
-    contactName: 'Daan van Dijk',
-    contactEmail: 'daan@portsmart.nl',
-    country: 'Netherlands',
-    plan: 'Scale',
-    healthScore: 92,
-    healthStatus: 'EXPANSION',
-    timeToValueMinutes: 2.5,
-    onboardingStage: 'ONBOARDING_COMPLETED',
-    activeWorkloads: 18,
-    quotaUtilizationPercent: 82,
-    recentBuildSuccessRate: 100,
-    chiliPiperMeetingBooked: true,
-    sfdcAccountId: '001EMEA00519',
-    sfdcSyncStatus: 'SYNCED',
-    escalationCount: 0,
-  },
-  {
-    id: 'tenant_cloudops_fr',
-    name: 'AzurData Solutions SAS',
-    companyDomain: 'azurdata.fr',
-    contactName: 'Camille Dubois',
-    contactEmail: 'camille@azurdata.fr',
-    country: 'France',
-    plan: 'Starter',
-    healthScore: 32,
-    healthStatus: 'CRITICAL',
-    timeToValueMinutes: 6.2,
-    onboardingStage: 'FIRST_CONTAINER_DEPLOYED',
-    activeWorkloads: 2,
-    quotaUtilizationPercent: 12,
-    recentBuildSuccessRate: 40,
-    chiliPiperMeetingBooked: false,
-    sfdcAccountId: '001EMEA00604',
-    sfdcSyncStatus: 'PENDING',
-    escalationCount: 3,
-  },
-  ...Array.from({ length: 80 }).map((_, i) => {
-    const idx = i + 6
-    const countries = ['United Kingdom', 'Germany', 'France', 'Netherlands', 'Ireland', 'Spain', 'Switzerland', 'Sweden']
-    const plans: Array<'Starter' | 'Growth' | 'Scale' | 'Enterprise'> = ['Starter', 'Growth', 'Scale', 'Enterprise']
-    const country = countries[idx % countries.length]
-    const plan = plans[idx % plans.length]
-    const quota = 25 + ((idx * 13) % 70)
-    const buildRate = 80 + ((idx * 7) % 21)
-    const isExpansion = quota >= 80
-    const isRisk = buildRate < 70
-
-    return {
-      id: `tenant_emea_${idx}`,
-      name: `EMEA Enterprise Corp ${idx}`,
-      companyDomain: `corp${idx}.eu`,
-      contactName: `Tech Lead ${idx}`,
-      contactEmail: `lead${idx}@corp${idx}.eu`,
-      country,
-      plan,
-      healthScore: isExpansion ? 90 + (idx % 8) : isRisk ? 42 : 75 + (idx % 20),
-      healthStatus: isExpansion ? 'EXPANSION' : isRisk ? 'AT_RISK' : 'HEALTHY',
-      timeToValueMinutes: +(2.0 + (idx % 25) / 10).toFixed(1),
-      onboardingStage: idx % 6 === 0 ? 'KICKOFF_SCHEDULED' : 'ONBOARDING_COMPLETED',
-      activeWorkloads: 4 + (idx % 16),
-      quotaUtilizationPercent: quota,
-      recentBuildSuccessRate: buildRate,
-      chiliPiperMeetingBooked: idx % 3 === 0,
-      sfdcAccountId: `001EMEA${idx.toString().padStart(5, '0')}`,
-      sfdcSyncStatus: 'SYNCED',
-      escalationCount: idx % 12 === 0 ? 1 : 0,
-    } as AccountCS
-  }),
-]
+interface PortfolioSummary {
+  totalAccounts: number
+  averageHealthScore: number
+  medianTimeToValueMinutes: number | null
+  expansionReadyCount: number
+  atRiskCount: number
+  chiliPiperBookingsThisMonth: number
+  integrations: {
+    salesforce: { configured: boolean; instanceUrl?: string }
+    chiliPiper: { configured: boolean; domain?: string; router?: string }
+  }
+  activeAccounts: CustomerAccountCS[]
+}
 
 export default function CustomerSuccessPage() {
-  const [accounts, setAccounts] = useState<AccountCS[]>(INITIAL_ACCOUNTS)
+  const [data, setData] = useState<PortfolioSummary | null>(null)
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'HEALTHY' | 'EXPANSION' | 'AT_RISK' | 'CRITICAL'>('ALL')
-  const [selectedAccount, setSelectedAccount] = useState<AccountCS | null>(null)
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null)
+  const [selectedAccount, setSelectedAccount] = useState<CustomerAccountCS | null>(null)
+  const [actionFeedback, setActionFeedback] = useState<{ message: string; type: 'success' | 'warn' } | null>(null)
+  const [isActing, setIsActing] = useState(false)
+
+  // Fetch real portfolio from API
+  const fetchPortfolio = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch('/api/proxy/v1/customer-success/portfolio', { cache: 'no-store' })
+      if (!res.ok) {
+        // Fallback directly to backend port if proxy route differs
+        const directRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/v1/customer-success/portfolio`)
+        if (directRes.ok) {
+          const directData = await directRes.json()
+          setData(directData)
+          return
+        }
+      } else {
+        const json = await res.json()
+        setData(json)
+      }
+    } catch {
+      // In SSR or unauthenticated state, handle gracefully
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchPortfolio()
+  }, [])
+
+  const accounts = data?.activeAccounts || []
 
   const filteredAccounts = useMemo(() => {
     return accounts.filter((acc) => {
       const matchesSearch =
         acc.name.toLowerCase().includes(search.toLowerCase()) ||
         acc.contactEmail.toLowerCase().includes(search.toLowerCase()) ||
-        acc.country.toLowerCase().includes(search.toLowerCase())
+        acc.id.toLowerCase().includes(search.toLowerCase())
       const matchesStatus = statusFilter === 'ALL' || acc.healthStatus === statusFilter
       return matchesSearch && matchesStatus
     })
   }, [accounts, search, statusFilter])
 
-  // Summary Metrics
-  const avgHealth = Math.round(accounts.reduce((s, a) => s + a.healthScore, 0) / accounts.length)
-  const medianTTV = 3.1
-  const expansionCount = accounts.filter((a) => a.healthStatus === 'EXPANSION').length
-  const riskCount = accounts.filter((a) => a.healthStatus === 'AT_RISK' || a.healthStatus === 'CRITICAL').length
-  const chiliPiperBookedCount = accounts.filter((a) => a.chiliPiperMeetingBooked).length
-
-  const handleSyncSFDC = (accountId: string) => {
-    setSyncFeedback('Syncing with Salesforce REST API & updating Aether_Tenant__c...')
-    setTimeout(() => {
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === accountId ? { ...a, sfdcSyncStatus: 'SYNCED' } : a))
-      )
-      setSyncFeedback('Successfully synced to Salesforce Standard Account & Custom Objects.')
-      setTimeout(() => setSyncFeedback(null), 3500)
-    }, 800)
+  const handleSyncSFDC = async (account: CustomerAccountCS) => {
+    setIsActing(true)
+    try {
+      const res = await fetch(`/api/proxy/v1/customer-success/accounts/${account.id}/sync-sfdc`, {
+        method: 'POST',
+      })
+      const result = await res.json()
+      if (result.success) {
+        setActionFeedback({ message: `Synced ${account.name} to Salesforce successfully.`, type: 'success' })
+      } else {
+        setActionFeedback({ message: result.message || 'Salesforce not configured. Add credentials to .env.', type: 'warn' })
+      }
+    } catch {
+      setActionFeedback({ message: 'Salesforce API unconfigured in environment.', type: 'warn' })
+    } finally {
+      setIsActing(false)
+      setTimeout(() => setActionFeedback(null), 4000)
+    }
   }
 
-  const handleFlagUpsell = (acc: AccountCS) => {
-    setSyncFeedback(`Expansion brief flagged! Salesforce Opportunity created for AE pipeline ($${acc.plan === 'Enterprise' ? '45,000' : '18,000'} ARR).`)
-    setTimeout(() => setSyncFeedback(null), 4000)
+  const handleFlagUpsell = async (account: CustomerAccountCS) => {
+    setIsActing(true)
+    try {
+      const res = await fetch(`/api/proxy/v1/customer-success/accounts/${account.id}/flag-expansion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ potentialARR: 18000 }),
+      })
+      const result = await res.json()
+      if (result.success) {
+        setActionFeedback({ message: `Expansion Opportunity created in Salesforce for ${account.name}.`, type: 'success' })
+      } else {
+        setActionFeedback({ message: result.message || 'Salesforce unconfigured: Set credentials to push opportunities.', type: 'warn' })
+      }
+    } catch {
+      setActionFeedback({ message: 'Salesforce opportunity sync requires live API credentials.', type: 'warn' })
+    } finally {
+      setIsActing(false)
+      setTimeout(() => setActionFeedback(null), 4500)
+    }
   }
 
   return (
-    <AdminShell usage={accounts.length} limit={100} crumb="Customer Success">
+    <AdminShell usage={accounts.length} limit={Math.max(100, accounts.length)} crumb="Customer Success">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -233,21 +166,36 @@ export default function CustomerSuccessPage() {
               </h1>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Portfolio management for 85 EMEA enterprise accounts. Integrated with Chili Piper & Salesforce.
+              Live customer health, adoption milestones, and expansion signals derived from real PostgreSQL tenant workloads.
             </p>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400">
-              EMEA Portfolio (85 Accounts)
-            </span>
+            <button
+              onClick={fetchPortfolio}
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/50 transition-colors"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Telemetry
+            </button>
           </div>
         </div>
 
         {/* Global Action Feedback Alert */}
-        {syncFeedback && (
-          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs font-medium text-emerald-300 animate-in fade-in duration-200">
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-            {syncFeedback}
+        {actionFeedback && (
+          <div
+            className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-medium animate-in fade-in duration-200 ${
+              actionFeedback.type === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+            }`}
+          >
+            {actionFeedback.type === 'success' ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+            )}
+            {actionFeedback.message}
           </div>
         )}
 
@@ -255,11 +203,13 @@ export default function CustomerSuccessPage() {
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-sm backdrop-blur-sm">
             <div className="flex items-center justify-between text-muted-foreground mb-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">Portfolio Health</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Average Health</span>
               <HeartHandshake className="h-4 w-4 text-emerald-400" />
             </div>
-            <div className="text-2xl font-bold text-foreground">{avgHealth}<span className="text-sm font-normal text-muted-foreground">/100</span></div>
-            <div className="text-[11px] text-emerald-400 font-medium mt-1">Healthy Enterprise Cohort</div>
+            <div className="text-2xl font-bold text-foreground">
+              {data ? data.averageHealthScore : '--'}<span className="text-sm font-normal text-muted-foreground">/100</span>
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1">Real compute & uptime telemetry</div>
           </div>
 
           <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-sm backdrop-blur-sm">
@@ -267,8 +217,12 @@ export default function CustomerSuccessPage() {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Median TTV</span>
               <Zap className="h-4 w-4 text-amber-400" />
             </div>
-            <div className="text-2xl font-bold text-foreground">{medianTTV}<span className="text-sm font-normal text-muted-foreground"> mins</span></div>
-            <div className="text-[11px] text-muted-foreground mt-1">Time to 1st Deployment</div>
+            <div className="text-2xl font-bold text-foreground">
+              {data?.medianTimeToValueMinutes !== null && data?.medianTimeToValueMinutes !== undefined
+                ? `${data.medianTimeToValueMinutes}m`
+                : '--'}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1">Tenant registration to 1st deploy</div>
           </div>
 
           <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-sm backdrop-blur-sm">
@@ -276,27 +230,59 @@ export default function CustomerSuccessPage() {
               <span className="text-[11px] font-semibold uppercase tracking-wider">Expansion Ready</span>
               <TrendingUp className="h-4 w-4 text-blue-400" />
             </div>
-            <div className="text-2xl font-bold text-blue-400">{expansionCount}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">&gt;80% Quota (Push to AE)</div>
+            <div className="text-2xl font-bold text-blue-400">{data?.expansionReadyCount ?? 0}</div>
+            <div className="text-[11px] text-muted-foreground mt-1">&ge;80% Quota Saturation</div>
           </div>
 
           <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-sm backdrop-blur-sm">
             <div className="flex items-center justify-between text-muted-foreground mb-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">At-Risk Accounts</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wider">At-Risk Tenants</span>
               <AlertTriangle className="h-4 w-4 text-rose-400" />
             </div>
-            <div className="text-2xl font-bold text-rose-400">{riskCount}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">Requires CSM Outreach</div>
+            <div className="text-2xl font-bold text-rose-400">{data?.atRiskCount ?? 0}</div>
+            <div className="text-[11px] text-muted-foreground mt-1">Build or probe failures</div>
           </div>
 
           <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-sm backdrop-blur-sm col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between text-muted-foreground mb-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">Chili Piper Sessions</span>
-              <Calendar className="h-4 w-4 text-violet-400" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Live Tenants</span>
+              <Building2 className="h-4 w-4 text-violet-400" />
             </div>
-            <div className="text-2xl font-bold text-violet-400">{chiliPiperBookedCount}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">Booked via Instant Booker</div>
+            <div className="text-2xl font-bold text-violet-400">{accounts.length}</div>
+            <div className="text-[11px] text-muted-foreground mt-1">Active PostgreSQL accounts</div>
           </div>
+        </div>
+
+        {/* Integration Status Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-xs">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground font-medium">Chili Piper Inbound:</span>
+              {data?.integrations.chiliPiper.configured ? (
+                <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Active ({data.integrations.chiliPiper.router})
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-400" /> Ready for router credentials in .env
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground font-medium">Salesforce REST API:</span>
+              {data?.integrations.salesforce.configured ? (
+                <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-400" /> Unconfigured (Add CLIENT_ID in .env)
+                </span>
+              )}
+            </div>
+          </div>
+          <span className="text-[11px] text-muted-foreground">Webhook endpoint: /v1/webhooks/chilipiper</span>
         </div>
 
         {/* Filter & Search Bar */}
@@ -307,7 +293,7 @@ export default function CustomerSuccessPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter by account, lead email, or EMEA country..."
+              placeholder="Search live tenant name, email, or ID..."
               className="w-full rounded-xl border border-border/60 bg-muted/30 pl-9 pr-4 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
@@ -324,7 +310,7 @@ export default function CustomerSuccessPage() {
                     : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
                 }`}
               >
-                {filter === 'ALL' ? 'All Accounts' : filter.replace('_', ' ')}
+                {filter === 'ALL' ? 'All Live Tenants' : filter.replace('_', ' ')}
               </button>
             ))}
           </div>
@@ -336,20 +322,25 @@ export default function CustomerSuccessPage() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-border/40 bg-muted/40 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3">Account & Lead</th>
-                  <th className="px-4 py-3">Country</th>
+                  <th className="px-4 py-3">Tenant & User</th>
                   <th className="px-4 py-3">Plan</th>
                   <th className="px-4 py-3">Health Score</th>
-                  <th className="px-4 py-3">TTV</th>
-                  <th className="px-4 py-3">Quota</th>
-                  <th className="px-4 py-3">Salesforce (SFDC)</th>
-                  <th className="px-4 py-3">Chili Piper</th>
+                  <th className="px-4 py-3">Time-to-Value</th>
+                  <th className="px-4 py-3">Workload Saturation</th>
+                  <th className="px-4 py-3">Stage</th>
+                  <th className="px-4 py-3">Salesforce</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
-                {filteredAccounts.slice(0, 20).map((acc) => {
-                  return (
+                {filteredAccounts.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground text-xs">
+                      {loading ? 'Querying PostgreSQL tenant fleet...' : 'No tenants matching the current filter.'}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAccounts.map((acc) => (
                     <tr
                       key={acc.id}
                       className="hover:bg-muted/30 transition-colors cursor-pointer"
@@ -357,11 +348,7 @@ export default function CustomerSuccessPage() {
                     >
                       <td className="px-4 py-3.5">
                         <div className="font-semibold text-foreground">{acc.name}</div>
-                        <div className="text-[11px] text-muted-foreground">{acc.contactEmail}</div>
-                      </td>
-                      <td className="px-4 py-3.5 text-muted-foreground flex items-center gap-1.5 mt-1">
-                        <Globe2 className="h-3.5 w-3.5 text-muted-foreground/70" />
-                        {acc.country}
+                        <div className="text-[11px] text-muted-foreground font-mono">{acc.id}</div>
                       </td>
                       <td className="px-4 py-3.5">
                         <span className="rounded-md border border-border/60 bg-muted/50 px-2 py-0.5 font-mono text-[10px] font-medium text-foreground">
@@ -385,23 +372,23 @@ export default function CustomerSuccessPage() {
                             <span className="text-[10px] font-semibold text-blue-400">Expansion Ready</span>
                           )}
                           {(acc.healthStatus === 'AT_RISK' || acc.healthStatus === 'CRITICAL') && (
-                            <span className="text-[10px] font-semibold text-rose-400">Risk</span>
+                            <span className="text-[10px] font-semibold text-rose-400">Attention Needed</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-[11px] text-foreground">
-                        {acc.timeToValueMinutes}m
+                        {acc.timeToValueMinutes !== null ? `${acc.timeToValueMinutes}m` : 'Pending 1st Deploy'}
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="w-24">
+                        <div className="w-28">
                           <div className="flex justify-between text-[10px] mb-1">
                             <span className="text-muted-foreground">{acc.quotaUtilizationPercent}%</span>
-                            <span className="text-muted-foreground">{acc.activeWorkloads} apps</span>
+                            <span className="text-muted-foreground">{acc.activeWorkloads} active</span>
                           </div>
                           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
                             <div
                               className={`h-full rounded-full ${
-                                acc.quotaUtilizationPercent > 80 ? 'bg-blue-400' : 'bg-emerald-400'
+                                acc.quotaUtilizationPercent >= 80 ? 'bg-blue-400' : 'bg-emerald-400'
                               }`}
                               style={{ width: `${acc.quotaUtilizationPercent}%` }}
                             />
@@ -409,28 +396,28 @@ export default function CustomerSuccessPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                          {acc.sfdcAccountId}
-                        </div>
+                        <span className="rounded-md border border-border/40 bg-muted/30 px-2 py-0.5 text-[10px] text-muted-foreground">
+                          {acc.onboardingStage.replace(/_/g, ' ')}
+                        </span>
                       </td>
                       <td className="px-4 py-3.5">
-                        {acc.chiliPiperMeetingBooked ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-                            <Calendar className="h-2.5 w-2.5" /> Booked
+                        {acc.sfdcSyncStatus === 'SYNCED' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" /> Synced
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground">None</span>
+                          <span className="text-[10px] text-muted-foreground">Unconfigured</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         {acc.healthStatus === 'EXPANSION' ? (
                           <button
                             type="button"
+                            disabled={isActing}
                             onClick={() => handleFlagUpsell(acc)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 text-[11px] font-semibold text-blue-300 hover:bg-blue-500/25 transition-colors"
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 text-[11px] font-semibold text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-50"
                           >
-                            <TrendingUp className="h-3 w-3" /> Flag AE
+                            <TrendingUp className="h-3 w-3" /> Flag Upsell
                           </button>
                         ) : (
                           <button
@@ -443,14 +430,14 @@ export default function CustomerSuccessPage() {
                         )}
                       </td>
                     </tr>
-                  )
-                })}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
           <div className="border-t border-border/40 bg-muted/20 px-4 py-2.5 text-xs text-muted-foreground flex items-center justify-between">
-            <span>Showing top 20 of {filteredAccounts.length} EMEA accounts</span>
-            <span className="text-[11px]">Real-time telemetry synced with NestJS control plane</span>
+            <span>Displaying {filteredAccounts.length} real tenant accounts from database</span>
+            <span className="text-[11px]">Real-time telemetry updated live</span>
           </div>
         </div>
 
@@ -475,38 +462,40 @@ export default function CustomerSuccessPage() {
                       {selectedAccount.plan}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {selectedAccount.companyDomain} • {selectedAccount.country} (EMEA)
+                  <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                    ID: {selectedAccount.id} • Registered {new Date(selectedAccount.createdAt).toLocaleDateString()}
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs text-muted-foreground">Health Index</div>
+                  <div className="text-xs text-muted-foreground">Computed Health</div>
                   <div className="text-xl font-bold text-foreground">{selectedAccount.healthScore}/100</div>
                 </div>
               </div>
 
-              {/* Salesforce Custom Object Details */}
+              {/* Real Telemetry Details */}
               <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-foreground flex items-center gap-1.5">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    Salesforce Custom Object: Aether_Tenant__c
+                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    Workload & Deployment Telemetry
                   </span>
-                  <span className="font-mono text-muted-foreground">{selectedAccount.sfdcAccountId}</span>
+                  <span className="text-muted-foreground">Stage: {selectedAccount.onboardingStage}</span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3 text-xs">
                   <div className="rounded-lg bg-card/60 p-2.5 border border-border/40">
                     <span className="text-[10px] text-muted-foreground uppercase block font-semibold">TTV Milestone</span>
-                    <span className="font-bold text-foreground">{selectedAccount.timeToValueMinutes} minutes</span>
+                    <span className="font-bold text-foreground">
+                      {selectedAccount.timeToValueMinutes !== null ? `${selectedAccount.timeToValueMinutes} mins` : 'N/A'}
+                    </span>
                   </div>
                   <div className="rounded-lg bg-card/60 p-2.5 border border-border/40">
-                    <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Build Success Rate</span>
+                    <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Build Success</span>
                     <span className="font-bold text-foreground">{selectedAccount.recentBuildSuccessRate}%</span>
                   </div>
                   <div className="rounded-lg bg-card/60 p-2.5 border border-border/40">
-                    <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Quota Utilization</span>
+                    <span className="text-[10px] text-muted-foreground uppercase block font-semibold">Quota Used</span>
                     <span className="font-bold text-foreground">{selectedAccount.quotaUtilizationPercent}%</span>
                   </div>
                 </div>
@@ -517,29 +506,37 @@ export default function CustomerSuccessPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => handleSyncSFDC(selectedAccount.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/80 transition-colors"
+                    disabled={isActing}
+                    onClick={() => handleSyncSFDC(selectedAccount)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted/80 transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw className="h-3.5 w-3.5" /> Force SFDC Sync
+                    <RefreshCw className="h-3.5 w-3.5" /> Sync to Salesforce
                   </button>
 
                   <button
                     type="button"
+                    disabled={isActing}
                     onClick={() => handleFlagUpsell(selectedAccount)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/25 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 px-3 py-2 text-xs font-semibold text-blue-300 hover:bg-blue-500/25 transition-colors disabled:opacity-50"
                   >
                     <TrendingUp className="h-3.5 w-3.5" /> Flag AE Upsell
                   </button>
                 </div>
 
-                <a
-                  href={`https://aetherhost.chilipiper.com/me/emea-technical-csm?email=${selectedAccount.contactEmail}&tenant_id=${selectedAccount.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-                >
-                  <Calendar className="h-3.5 w-3.5" /> Launch Chili Piper Booking
-                </a>
+                {data?.integrations.chiliPiper.configured ? (
+                  <a
+                    href={`https://${data.integrations.chiliPiper.domain}.chilipiper.com/me/csm?email=${encodeURIComponent(selectedAccount.contactEmail)}&tenant_id=${selectedAccount.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    <Calendar className="h-3.5 w-3.5" /> Launch Chili Piper Booking
+                  </a>
+                ) : (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-400" /> Chili Piper router unconfigured
+                  </span>
+                )}
               </div>
             </div>
           </div>

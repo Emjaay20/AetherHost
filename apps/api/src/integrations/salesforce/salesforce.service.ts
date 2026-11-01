@@ -18,25 +18,30 @@ export class SalesforceService {
 
   constructor(private readonly config: ConfigService) {}
 
+  public isConfigured(): boolean {
+    const clientId = this.config.get<string>('SALESFORCE_CLIENT_ID');
+    const clientSecret = this.config.get<string>('SALESFORCE_CLIENT_SECRET');
+    return Boolean(clientId && clientSecret);
+  }
+
+  public getInstanceUrl(): string | undefined {
+    return this.instanceUrl || this.config.get<string>('SALESFORCE_INSTANCE_URL');
+  }
+
   /**
    * Retrieves or refreshes an OAuth2 access token for the Salesforce REST API.
-   * If credentials are not configured, runs in high-fidelity sandbox/demo simulation mode.
+   * If credentials are not configured, returns null without faking tokens.
    */
-  private async getAccessToken(): Promise<{ token: string; instanceUrl: string }> {
+  private async getAccessToken(): Promise<{ token: string; instanceUrl: string } | null> {
     const clientId = this.config.get<string>('SALESFORCE_CLIENT_ID');
     const clientSecret = this.config.get<string>('SALESFORCE_CLIENT_SECRET');
     const loginUrl = this.config.get<string>('SALESFORCE_LOGIN_URL', 'https://login.salesforce.com');
 
-    // Return cached token if still valid
-    if (this.accessToken && this.instanceUrl && Date.now() < this.tokenExpiresAt - 60000) {
-      return { token: this.accessToken || '', instanceUrl: this.instanceUrl || '' };
+    if (!clientId || !clientSecret) {
+      return null;
     }
 
-    if (!clientId || !clientSecret) {
-      this.logger.debug('Salesforce credentials not configured in env. Operating in Sandboxed Simulation Mode.');
-      this.accessToken = 'sfdc_demo_token_' + Date.now();
-      this.instanceUrl = 'https://aetherhost-dev-ed.develop.my.salesforce.com';
-      this.tokenExpiresAt = Date.now() + 3600 * 1000;
+    if (this.accessToken && this.instanceUrl && Date.now() < this.tokenExpiresAt - 60000) {
       return { token: this.accessToken || '', instanceUrl: this.instanceUrl || '' };
     }
 
@@ -63,67 +68,128 @@ export class SalesforceService {
 
       return { token: this.accessToken || '', instanceUrl: this.instanceUrl || '' };
     } catch (err: any) {
-      this.logger.warn(`Failed to authenticate with real Salesforce: ${err.message}. Falling back to simulation.`);
-      return {
-        token: 'sfdc_simulated_token',
-        instanceUrl: 'https://aetherhost.sandbox.my.salesforce.com',
-      };
+      this.logger.error(`Failed to authenticate with Salesforce REST API: ${err.message}`);
+      return null;
     }
   }
 
   /**
-   * Syncs an entire Tenant to Salesforce:
-   * 1. Creates/Upserts Account (Standard Object)
-   * 2. Creates/Upserts Contact (Standard Object)
-   * 3. Creates/Upserts Aether_Tenant__c (Custom Object for CS telemetry)
+   * Syncs an entire Tenant to Salesforce via REST API.
+   * Only executes if real Salesforce credentials are configured.
    */
   async syncTenantToSalesforce(payload: {
     account: SFDCStandardAccount;
     contact: SFDCStandardContact;
     telemetry: Omit<SFDCAetherTenantCustomObject, 'Id'>;
   }): Promise<SFDCSyncResult> {
-    const { instanceUrl } = await this.getAccessToken();
-    const simulatedAccountId = `001EMEA${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-    const simulatedCustomObjId = `a01Custom${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const auth = await this.getAccessToken();
+    if (!auth) {
+      return {
+        success: false,
+        syncTimestamp: new Date().toISOString(),
+        message: 'Salesforce integration unconfigured. Set SALESFORCE_CLIENT_ID and SALESFORCE_CLIENT_SECRET in environment variables to enable live CRM sync.',
+      };
+    }
 
-    this.logger.log(
-      `[Salesforce REST API] Syncing Tenant '${payload.account.Name}' (Region: ${payload.telemetry.Region__c}, Health: ${payload.telemetry.Customer_Health_Score__c}) to SFDC instance: ${instanceUrl}`
-    );
+    try {
+      // Upsert Account via Salesforce REST API
+      const accountRes = await fetch(`${auth.instanceUrl}/services/data/v59.0/sobjects/Account`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload.account),
+      });
 
-    return {
-      success: true,
-      salesforceAccountId: simulatedAccountId,
-      salesforceCustomObjectId: simulatedCustomObjId,
-      syncTimestamp: new Date().toISOString(),
-      message: `Tenant '${payload.account.Name}' synced to Salesforce Standard Account & Custom Object Aether_Tenant__c.`,
-    };
+      const accountData = await accountRes.json();
+      const accountId = accountData.id;
+
+      // Upsert Custom Object Aether_Tenant__c
+      const customRes = await fetch(`${auth.instanceUrl}/services/data/v59.0/sobjects/Aether_Tenant__c`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...payload.telemetry,
+          Account__c: accountId,
+        }),
+      });
+
+      const customData = await customRes.json();
+
+      return {
+        success: true,
+        salesforceAccountId: accountId,
+        salesforceCustomObjectId: customData.id,
+        syncTimestamp: new Date().toISOString(),
+        message: `Synced tenant to Salesforce Account (${accountId}) and Aether_Tenant__c (${customData.id}).`,
+      };
+    } catch (err: any) {
+      this.logger.error(`Salesforce sync error: ${err.message}`);
+      return {
+        success: false,
+        syncTimestamp: new Date().toISOString(),
+        message: `Salesforce API sync error: ${err.message}`,
+      };
+    }
   }
 
   /**
-   * Records an Onboarding or Technical Escalation meeting (triggered via Chili Piper)
-   * as a Salesforce Task associated with the Account and Assigned CSM.
+   * Records a task in Salesforce if configured.
    */
-  async createMeetingTask(task: SFDCStandardTask): Promise<{ success: boolean; taskId: string }> {
-    const simulatedTaskId = `00TTask${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-    this.logger.log(`[Salesforce Task Created] Subject: "${task.Subject}" | Due: ${task.ActivityDate} | Status: ${task.Status}`);
-    return {
-      success: true,
-      taskId: simulatedTaskId,
-    };
+  async createMeetingTask(task: SFDCStandardTask): Promise<{ success: boolean; taskId?: string; message?: string }> {
+    const auth = await this.getAccessToken();
+    if (!auth) {
+      return {
+        success: false,
+        message: 'Salesforce not configured.',
+      };
+    }
+
+    try {
+      const res = await fetch(`${auth.instanceUrl}/services/data/v59.0/sobjects/Task`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(task),
+      });
+      const data = await res.json();
+      return { success: true, taskId: data.id };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
   }
 
   /**
-   * Flags an Expansion Opportunity for the Account Executive (AE) team when a customer
-   * exceeds 80% quota utilization or indicates expansion readiness.
+   * Flags an Expansion Opportunity for the Account Executive (AE) team.
    */
-  async createExpansionOpportunity(opportunity: SFDCStandardOpportunity): Promise<{ success: boolean; opportunityId: string }> {
-    const simulatedOppId = `006Opp${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-    this.logger.log(
-      `[Salesforce Opportunity Created] AE Upsell Flagged: "${opportunity.Name}" | Amount: $${opportunity.Amount} | Stage: ${opportunity.StageName}`
-    );
-    return {
-      success: true,
-      opportunityId: simulatedOppId,
-    };
+  async createExpansionOpportunity(opportunity: SFDCStandardOpportunity): Promise<{ success: boolean; opportunityId?: string; message?: string }> {
+    const auth = await this.getAccessToken();
+    if (!auth) {
+      return {
+        success: false,
+        message: 'Salesforce unconfigured. Configure SALESFORCE_CLIENT_ID to push opportunities directly to Salesforce.',
+      };
+    }
+
+    try {
+      const res = await fetch(`${auth.instanceUrl}/services/data/v59.0/sobjects/Opportunity`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${auth.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(opportunity),
+      });
+      const data = await res.json();
+      return { success: true, opportunityId: data.id };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
   }
 }

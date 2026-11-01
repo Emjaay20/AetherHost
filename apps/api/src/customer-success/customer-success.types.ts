@@ -13,32 +13,36 @@ export interface CustomerAccountCS {
   companyDomain: string;
   contactName: string;
   contactEmail: string;
-  region: 'EMEA' | 'AMER' | 'APAC';
+  region: string;
   country: string;
-  plan: 'Starter' | 'Growth' | 'Scale' | 'Enterprise';
+  plan: string;
   healthScore: number; // 0 - 100
   healthStatus: CustomerHealthStatus;
-  timeToValueMinutes: number;
+  timeToValueMinutes: number | null;
   onboardingStage: OnboardingStage;
   activeWorkloads: number;
+  totalWorkloads: number;
   quotaUtilizationPercent: number;
   recentBuildSuccessRate: number; // 0 - 100
-  lastDeploymentAt: string;
+  lastDeploymentAt: string | null;
   chiliPiperMeetingBooked: boolean;
-  lastMeetingNotes?: string;
-  sfdcAccountId: string;
-  sfdcSyncStatus: 'SYNCED' | 'PENDING' | 'ERROR';
+  sfdcAccountId: string | null;
+  sfdcSyncStatus: 'SYNCED' | 'NOT_CONFIGURED' | 'ERROR';
   escalationCount: number;
   assignedCsm: string;
+  createdAt: string;
 }
 
 export interface PortfolioSummary {
   totalAccounts: number;
-  region: string;
   averageHealthScore: number;
-  medianTimeToValueMinutes: number;
+  medianTimeToValueMinutes: number | null;
   expansionReadyCount: number;
   atRiskCount: number;
   chiliPiperBookingsThisMonth: number;
+  integrations: {
+    salesforce: { configured: boolean; instanceUrl?: string };
+    chiliPiper: { configured: boolean; domain?: string; router?: string };
+  };
   activeAccounts: CustomerAccountCS[];
 }

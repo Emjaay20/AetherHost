@@ -45,7 +45,6 @@ export class ChiliPiperWebhookController {
       const result = await this.csService.handleChiliPiperMeetingBooked({
         tenantId: payload.lead?.tenant_id,
         email: payload.lead?.email,
-        companyName: payload.lead?.company,
         meetingTime: payload.meeting?.start_time || new Date().toISOString(),
         routerName: payload.router_name || 'inbound-concierge',
         assigneeEmail: payload.assignee?.email || 'csm-emea@aetherhost.io',
@@ -54,14 +53,9 @@ export class ChiliPiperWebhookController {
       return {
         received: true,
         event: payload.event,
-        accountUpdated: result.account?.name,
-        healthScore: result.account?.healthScore,
+        tenantMatched: result.matched,
+        tenantId: result.tenantId,
       };
-    }
-
-    if (payload.event === 'meeting.cancelled') {
-      this.logger.warn(`Chili Piper meeting cancelled for lead: ${payload.lead?.email}`);
-      return { received: true, event: payload.event, status: 'meeting_cancelled_recorded' };
     }
 
     return { received: true, event: payload.event };
