@@ -11,6 +11,21 @@ import (
 	"time"
 )
 
+const maxConcurrentProvisioning = 2
+
+// The scheduler is deliberately process-local. The control plane remains the
+// durable source of truth: an application left in "provisioning" after an
+// agent restart is picked up by the next agent process. Locally, this prevents
+// each five-second poll from starting the same deployment more than once.
+var provisioningScheduler = struct {
+	sync.Mutex
+	inFlight  map[string]struct{}
+	semaphore chan struct{}
+}{
+	inFlight:  make(map[string]struct{}),
+	semaphore: make(chan struct{}, maxConcurrentProvisioning),
+}
+
 func provisionPendingApps(controlPlaneURL, hostPwd, baseDomain string) {
 	pendingApps, err := fetchApplicationsByStatus(controlPlaneURL, "pending")
 	if err != nil {
@@ -26,27 +41,49 @@ func provisionPendingApps(controlPlaneURL, hostPwd, baseDomain string) {
 
 	apps := append(pendingApps, provisioningApps...)
 	seen := make(map[string]bool, len(apps))
-	const maxConcurrentProvisioning = 2
-	semaphore := make(chan struct{}, maxConcurrentProvisioning)
-	var workers sync.WaitGroup
 
 	for _, app := range apps {
 		if app.ID == "" || seen[app.ID] {
 			continue
 		}
 		seen[app.ID] = true
-		semaphore <- struct{}{}
-		workers.Add(1)
-		go func(candidate Application) {
-			defer workers.Done()
-			defer func() { <-semaphore }()
-			// Surface active work immediately. Final status is written by the
-			// provisioner, while a restarted agent will recover this state.
-			updateAppStatus(controlPlaneURL, candidate.ID, "provisioning")
-			provisionSingleApp(candidate, controlPlaneURL, hostPwd, baseDomain)
-		}(app)
+		scheduleProvisioning(app, controlPlaneURL, hostPwd, baseDomain)
 	}
-	workers.Wait()
+}
+
+// scheduleProvisioning never waits for another application's health check.
+// The previous queue waited for every active job before polling again, so a
+// slow or invalid deployment could leave a newly queued app appearing pending
+// for several minutes. Capacity is bounded, while new work is discovered on
+// the next five-second poll as soon as a slot becomes free.
+func scheduleProvisioning(app Application, controlPlaneURL, hostPwd, baseDomain string) {
+	provisioningScheduler.Lock()
+	if _, alreadyRunning := provisioningScheduler.inFlight[app.ID]; alreadyRunning {
+		provisioningScheduler.Unlock()
+		return
+	}
+
+	select {
+	case provisioningScheduler.semaphore <- struct{}{}:
+		provisioningScheduler.inFlight[app.ID] = struct{}{}
+	default:
+		provisioningScheduler.Unlock()
+		return
+	}
+	provisioningScheduler.Unlock()
+
+	go func(candidate Application) {
+		defer func() {
+			provisioningScheduler.Lock()
+			delete(provisioningScheduler.inFlight, candidate.ID)
+			<-provisioningScheduler.semaphore
+			provisioningScheduler.Unlock()
+		}()
+		// Surface active work immediately. Final status is written by the
+		// provisioner, while a restarted agent will recover this state.
+		updateAppStatus(controlPlaneURL, candidate.ID, "provisioning")
+		provisionSingleApp(candidate, controlPlaneURL, hostPwd, baseDomain)
+	}(app)
 }
 
 func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain string) {
