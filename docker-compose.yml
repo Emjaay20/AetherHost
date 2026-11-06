@@ -156,7 +156,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://aether:aether@postgres:5432/aetherhost?schema=public
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-aether}:${POSTGRES_PASSWORD:-aether}@postgres:5432/${POSTGRES_DB:-aetherhost}?schema=public
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-aether-redis-local}
