@@ -228,8 +228,10 @@ services:
 networks:
   aetherhost-net:
     name: aetherhost-net
+    external: true
   control-plane-net:
     name: aetherhost-control-plane-net
+    external: true
 
 volumes:
   pgdata:
