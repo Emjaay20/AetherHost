@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Shield, Key, CreditCard, Building2, Bell, ExternalLink, Zap } from 'lucide-react'
 import { useUser } from '@clerk/nextjs'
 import ApiKeyManager from './ApiKeyManager'
+import SlackAlertManager from './SlackAlertManager'
 
 export default function SettingsTabs({ planId = 'starter' }: { planId?: string }) {
   const [activeTab, setActiveTab] = useState('general')
@@ -126,7 +127,13 @@ export default function SettingsTabs({ planId = 'starter' }: { planId?: string }
           </div>
         )}
 
-        {(activeTab === 'security' || activeTab === 'notifications') && (
+        {activeTab === 'notifications' && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <SlackAlertManager />
+          </div>
+        )}
+
+        {activeTab === 'security' && (
           <div className="p-12 text-center border border-border/50 border-dashed rounded-2xl bg-card/30 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <h3 className="text-lg font-medium text-foreground mb-1">Coming Soon</h3>
             <p className="text-sm text-muted-foreground">This settings pane is currently under development.</p>

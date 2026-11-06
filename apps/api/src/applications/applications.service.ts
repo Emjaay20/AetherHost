@@ -423,6 +423,7 @@ if __name__ == '__main__':
     const app = await this.assertOwned(id, tenantId);
 
     await this.prisma.$transaction(async (tx) => {
+      await tx.deploymentLog.deleteMany({ where: { applicationId: id } });
       await tx.application.delete({ where: { id } });
       await this.entitlementsService.releaseApplicationSlot(app.tenantId, tx);
     });

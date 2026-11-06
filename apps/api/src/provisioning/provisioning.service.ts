@@ -132,6 +132,13 @@ export class ProvisioningService {
           );
         });
         void this.notifications?.sendToTenant(app.tenantId, { title: `${app.name} is live`, body: 'Deployment completed successfully.', data: { url: `/projects/${app.id}` } });
+        void this.notifications?.sendSlackAlert({
+          appName: app.name,
+          eventType: 'deployment_success',
+          message: result.message || 'Deployment completed successfully. Health probe 200 OK.',
+          details: { Runtime: app.runtime, Tenant: app.tenantId },
+          url: `https://console.aetherhost.com.ng`,
+        });
         return { status: 'running', message: result.message };
       }
 
@@ -144,6 +151,13 @@ export class ProvisioningService {
         data: { status: 'failed' },
       });
       void this.notifications?.sendToTenant(app.tenantId, { title: `${app.name} failed to deploy`, body: 'Open AetherHost to inspect logs and diagnostics.', data: { url: `/projects/${app.id}` } });
+      void this.notifications?.sendSlackAlert({
+        appName: app.name,
+        eventType: 'deployment_failed',
+        message: result.message || 'Deployment failed to provision or pass health checks.',
+        details: { Runtime: app.runtime, Tenant: app.tenantId },
+        url: `https://console.aetherhost.com.ng`,
+      });
       return { status: 'failed', message: result.message };
     } catch (err: any) {
       this.logger.error(`Provisioning failed for ${app.id}: ${err.message}`);
@@ -156,6 +170,13 @@ export class ProvisioningService {
         data: { status: 'failed' },
       });
       void this.notifications?.sendToTenant(app.tenantId, { title: `${app.name} failed to deploy`, body: 'Open AetherHost to inspect logs and diagnostics.', data: { url: `/projects/${app.id}` } });
+      void this.notifications?.sendSlackAlert({
+        appName: app.name,
+        eventType: 'deployment_failed',
+        message: `Provisioning error: ${err.message}`,
+        details: { Runtime: app.runtime, Tenant: app.tenantId },
+        url: `https://console.aetherhost.com.ng`,
+      });
       return { status: 'failed', error: err.message };
     }
   }

@@ -125,7 +125,7 @@ model DeploymentLog {
   applicationId String
   logContent    String      @db.Text
   createdAt     DateTime    @default(now())
-  application   Application @relation(fields: [applicationId], references: [id])
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
 }
