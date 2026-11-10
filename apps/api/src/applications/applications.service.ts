@@ -269,8 +269,21 @@ export class ApplicationsService {
       );
       return appsWithTokens;
     }
-    
-    return apps;
+
+    if (tenantId === SYSTEM_TENANT_ID) {
+      // The agent needs secret values to provision containers.
+      return apps;
+    }
+
+    // Never send secret values in listings to tenants. Values are only
+    // returned by the explicit GET /v1/applications/:id/env reveal endpoint.
+    // The field is omitted (not masked) so clients that pre-fill editors
+    // from the listing fall back to that endpoint instead of saving masks.
+    return apps.map((app) => {
+      const listed: Application & { envVars?: unknown } = { ...app };
+      delete listed.envVars;
+      return listed;
+    });
   }
 
   private getBoilerplateFiles(runtime: string): { path: string; content: string }[] {

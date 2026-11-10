@@ -132,6 +132,28 @@ describe('ApplicationsService', () => {
     });
   });
 
+  it('omits secret env var values from tenant listings', async () => {
+    prisma.application.findMany.mockResolvedValue([
+      { id: 'app-1', tenantId: 'tenant-a', name: 'one', envVars: { DB_PASSWORD: 'hunter2' } },
+      { id: 'app-2', tenantId: 'tenant-a', name: 'two', envVars: null },
+    ]);
+    const apps = await service.findAll(undefined, undefined, 'tenant-a');
+    expect(apps).toHaveLength(2);
+    for (const app of apps) {
+      expect(app).not.toHaveProperty('envVars');
+    }
+    expect(JSON.stringify(apps)).not.toContain('hunter2');
+    expect(apps[0]).toMatchObject({ id: 'app-1', name: 'one' });
+  });
+
+  it('keeps env var values for the agent so it can provision', async () => {
+    prisma.application.findMany.mockResolvedValue([
+      { id: 'app-1', tenantId: 'tenant-a', name: 'one', envVars: { DB_PASSWORD: 'hunter2' } },
+    ]);
+    const apps = await service.findAll('running', undefined, SYSTEM_TENANT_ID);
+    expect(apps[0]).toHaveProperty('envVars', { DB_PASSWORD: 'hunter2' });
+  });
+
   it("rejects delete of another tenant's application", async () => {
     prisma.application.findUnique.mockResolvedValue({
       id: 'app_1',
