@@ -1,3 +1,5 @@
+name: aetherhost
+
 services:
   # =========================================================================
   # 1. Edge Ingress: Traefik with Automated Let's Encrypt SSL/TLS
@@ -303,7 +305,7 @@ networks:
     external: true
   control-plane-net:
     name: aetherhost-control-plane-net
-    internal: true
+    external: true
 
 volumes:
   pgdata:
