@@ -45,3 +45,11 @@ Image publication, signed-image verification, and deployment identity changes
 are intentionally separate changes: the current production deployment builds
 locally on the VPS. They require a tested move to CI-built GHCR images and a
 dedicated signing identity before the server can be restricted to signed pulls.
+
+## Current VPS deployment identity
+
+The CI SSH account is `engineer`, not root. Its sudoers rule permits exactly
+`/srv/aetherhost/control/deploy/deploy-production.sh`, which remains owned by
+root. This lets the root-owned control-plane checkout update and compose
+services rebuild without granting the account an interactive root shell or a
+general-purpose Docker command. SSH root access is unchanged by this control.

@@ -1,0 +1,3 @@
+# This account may run only the immutable, root-owned deployment entry point.
+# Do not grant a shell, wildcard command, or broad Docker access here.
+engineer ALL=(root) NOPASSWD: /srv/aetherhost/control/deploy/deploy-production.sh

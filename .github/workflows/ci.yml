@@ -143,4 +143,4 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            bash /srv/aetherhost/control/deploy/deploy-production.sh
+            sudo /srv/aetherhost/control/deploy/deploy-production.sh
