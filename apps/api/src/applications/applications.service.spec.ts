@@ -21,6 +21,9 @@ describe('ApplicationsService', () => {
       findUnique: jest.Mock;
       update: jest.Mock;
     };
+    auditLog: {
+      create: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
 
@@ -33,6 +36,9 @@ describe('ApplicationsService', () => {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+      },
+      auditLog: {
+        create: jest.fn().mockResolvedValue({}),
       },
       $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),
     };
@@ -152,6 +158,27 @@ describe('ApplicationsService', () => {
     ]);
     const apps = await service.findAll('running', undefined, SYSTEM_TENANT_ID);
     expect(apps[0]).toHaveProperty('envVars', { DB_PASSWORD: 'hunter2' });
+  });
+
+  it('audits environment reads without storing an environment value in the audit record', async () => {
+    prisma.application.findUnique.mockResolvedValue({
+      id: 'app-1',
+      tenantId: 'tenant-a',
+      envVars: { DATABASE_PASSWORD: 'not-for-audit-logs' },
+    });
+
+    const result = await service.getEnvVars('app-1', 'tenant-a', 'operator-a');
+
+    expect(result.envVars).toEqual({ DATABASE_PASSWORD: 'not-for-audit-logs' });
+    expect(prisma.auditLog.create).toHaveBeenCalledWith({
+      data: {
+        tenantId: 'tenant-a',
+        action: 'APPLICATION_ENV_READ',
+        resourceId: 'app-1',
+        metadata: { actorTenantId: 'operator-a', keyCount: 1 },
+      },
+    });
+    expect(JSON.stringify(prisma.auditLog.create.mock.calls)).not.toContain('not-for-audit-logs');
   });
 
   it("rejects delete of another tenant's application", async () => {

@@ -20,7 +20,7 @@ import {
   UpdateCustomDomainDto,
   UpdateDockerImageDto,
 } from './dto/update-application.dto';
-import { TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
+import { ActorTenantId, TenantId, SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { Public } from '../auth/public.decorator';
 
 @Controller('v1/applications')
@@ -127,13 +127,18 @@ export class ApplicationsController {
   }
 
   @Get(':id/env')
-  getEnvVars(@TenantId() tenantId: string, @Param('id') id: string) {
-    return this.applicationsService.getEnvVars(id, tenantId);
+  getEnvVars(
+    @TenantId() tenantId: string,
+    @ActorTenantId() actorTenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.applicationsService.getEnvVars(id, tenantId, actorTenantId);
   }
 
   @Patch(':id/env')
   updateEnvVars(
     @TenantId() tenantId: string,
+    @ActorTenantId() actorTenantId: string,
     @Param('id') id: string,
     @Body() body: UpdateEnvVarsDto,
   ) {
@@ -142,6 +147,7 @@ export class ApplicationsController {
       tenantId,
       body.envVars || {},
       body.redeploy ?? true,
+      actorTenantId,
     );
   }
 

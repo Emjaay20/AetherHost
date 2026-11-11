@@ -22,6 +22,7 @@ import { getGithubToken, ensureGithubWebhook } from './github-utils';
 import { validateCustomDomain } from './domain-validator';
 import { resolve4 } from 'node:dns/promises';
 import { Prisma } from '@prisma/client';
+import { redactSensitiveLogContent } from './log-redaction';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -559,7 +560,7 @@ if __name__ == '__main__':
 
   async addLog(id: string, logContent: string): Promise<void> {
     await this.prisma.deploymentLog.create({
-      data: { applicationId: id, logContent }
+      data: { applicationId: id, logContent: redactSensitiveLogContent(logContent) }
     });
   }
 
@@ -635,8 +636,11 @@ if __name__ == '__main__':
     return updated;
   }
 
-  async getEnvVars(id: string, tenantId: string) {
+  async getEnvVars(id: string, tenantId: string, actorTenantId = tenantId) {
     const app = await this.assertOwned(id, tenantId);
+    await this.recordSecretAudit(app, 'APPLICATION_ENV_READ', actorTenantId, {
+      keyCount: Object.keys((app.envVars as Record<string, string>) || {}).length,
+    });
     return {
       envVars: (app.envVars as Record<string, string>) || {},
     };
@@ -678,6 +682,7 @@ if __name__ == '__main__':
     tenantId: string,
     envVars: Record<string, string>,
     shouldRedeploy = true,
+    actorTenantId = tenantId,
   ) {
     const app = await this.assertOwned(id, tenantId);
 
@@ -693,11 +698,35 @@ if __name__ == '__main__':
       },
     });
 
+    await this.recordSecretAudit(app, 'APPLICATION_ENV_UPDATED', actorTenantId, {
+      keyCount: Object.keys(envVars).length,
+      keys: Object.keys(envVars).sort(),
+      redeployRequested: shouldRedeploy,
+    });
+
     if (shouldRedeploy) {
       return this.redeploy(id, tenantId, envVars);
     }
 
     return { success: true, envVars: updated.envVars };
+  }
+
+  private async recordSecretAudit(
+    app: { id: string; tenantId: string },
+    action: 'APPLICATION_ENV_READ' | 'APPLICATION_ENV_UPDATED',
+    actorTenantId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    // Values must never be written into audit metadata: the record establishes
+    // accountability without becoming another copy of a tenant secret.
+    await this.prisma.auditLog.create({
+      data: {
+        tenantId: app.tenantId,
+        action,
+        resourceId: app.id,
+        metadata: { actorTenantId, ...metadata },
+      },
+    });
   }
 
   async redeploy(
