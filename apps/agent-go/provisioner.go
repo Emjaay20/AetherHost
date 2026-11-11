@@ -26,7 +26,7 @@ var provisioningScheduler = struct {
 	semaphore: make(chan struct{}, maxConcurrentProvisioning),
 }
 
-func provisionPendingApps(controlPlaneURL, hostPwd, baseDomain string) {
+func provisionPendingApps(controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain string) {
 	pendingApps, err := fetchApplicationsByStatus(controlPlaneURL, "pending")
 	if err != nil {
 		logger.Warn("failed to poll pending applications", slog.String("error", err.Error()))
@@ -47,7 +47,7 @@ func provisionPendingApps(controlPlaneURL, hostPwd, baseDomain string) {
 			continue
 		}
 		seen[app.ID] = true
-		scheduleProvisioning(app, controlPlaneURL, hostPwd, baseDomain)
+		scheduleProvisioning(app, controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain)
 	}
 }
 
@@ -56,7 +56,7 @@ func provisionPendingApps(controlPlaneURL, hostPwd, baseDomain string) {
 // slow or invalid deployment could leave a newly queued app appearing pending
 // for several minutes. Capacity is bounded, while new work is discovered on
 // the next five-second poll as soon as a slot becomes free.
-func scheduleProvisioning(app Application, controlPlaneURL, hostPwd, baseDomain string) {
+func scheduleProvisioning(app Application, controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain string) {
 	provisioningScheduler.Lock()
 	if _, alreadyRunning := provisioningScheduler.inFlight[app.ID]; alreadyRunning {
 		provisioningScheduler.Unlock()
@@ -82,11 +82,11 @@ func scheduleProvisioning(app Application, controlPlaneURL, hostPwd, baseDomain 
 		// Surface active work immediately. Final status is written by the
 		// provisioner, while a restarted agent will recover this state.
 		updateAppStatus(controlPlaneURL, candidate.ID, "provisioning")
-		provisionSingleApp(candidate, controlPlaneURL, hostPwd, baseDomain)
+		provisionSingleApp(candidate, controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain)
 	}(app)
 }
 
-func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain string) {
+func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain string) {
 	appLog := logger.With(
 		slog.String("app_id", app.ID),
 		slog.String("app_name", app.Name),
@@ -180,7 +180,7 @@ func provisionSingleApp(app Application, controlPlaneURL, hostPwd, baseDomain st
 
 	writeEnvFile(app, appDir)
 
-	safeCompose := renderRuntimeCompose(app, safeName, hostPwd, baseDomain, dbPass)
+	safeCompose := renderRuntimeCompose(app, safeName, controlPlaneRoot, projectsRoot, baseDomain, dbPass)
 	if safeCompose != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
 	}
@@ -328,7 +328,7 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	appLog.Info("workload provisioning finished", slog.String("final_status", statusStr))
 }
 
-func renderRuntimeCompose(app Application, safeName, hostPwd, baseDomain, dbPass string) string {
+func renderRuntimeCompose(app Application, safeName, controlPlaneRoot, projectsRoot, baseDomain, dbPass string) string {
 	hostRule := "`" + safeName + "." + baseDomain + "`"
 	if app.CustomDomain != "" {
 		hostRule += " || Host(`" + app.CustomDomain + "`)"
@@ -410,11 +410,11 @@ volumes:
 networks:
   aetherhost-net:
     external: true
-`, hostPwd, hostPwd, safeName, hostRule, tlsLabels, safeName, hostPwd, dbPass, hostPwd, dbPass)
+`, controlPlaneRoot, controlPlaneRoot, safeName, hostRule, tlsLabels, safeName, controlPlaneRoot, dbPass, controlPlaneRoot, dbPass)
 	}
 
 	if app.Runtime == "docker" {
-		return renderDockerRuntimeCompose(app, safeName, hostPwd, hostRule, tlsLabels)
+		return renderDockerRuntimeCompose(app, safeName, projectsRoot, hostRule, tlsLabels)
 	}
 
 	img, startCmd := runtimeSpec(app.Runtime)
@@ -436,7 +436,7 @@ services:
 networks:
   aetherhost-net:
     external: true
-`, img, startCmd, hostPwd, safeName, safeName, hostRule, tlsLabels, safeName)
+`, img, startCmd, projectsRoot, safeName, safeName, hostRule, tlsLabels, safeName)
 }
 
 func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass, controlPlaneURL string) bool {

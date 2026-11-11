@@ -14,11 +14,34 @@ This runbook makes day-two operations explicit: observe, contain, recover, and r
 Install the timers after deployment:
 
 ```bash
-sudo /opt/aetherhost/deploy/install-operations-timers.sh
+sudo /srv/aetherhost/control/deploy/install-operations-timers.sh
 systemctl list-timers --all 'aetherhost-*'
 ```
 
 Configure Google Drive before enabling a real backup run: see [Google Drive setup](../deploy/backup/GOOGLE_DRIVE_SETUP.md).
+
+## Protected filesystem layout
+
+AetherHost's platform source and tenant workspaces must be separate. This
+keeps an application deployment such as FlowMeet inside AetherHost while
+preventing it from replacing the API, dashboard, agent, or operational scripts.
+
+```text
+/srv/aetherhost/control       platform checkout and compose configuration
+/srv/aetherhost/projects      one writable directory per hosted application
+/etc/aetherhost               root-owned secrets and backup configuration
+```
+
+For a legacy installation that used `/opt/aetherhost` for both roles, run the
+additive migration. It copies files and leaves the original directory intact:
+
+```bash
+sudo /opt/aetherhost-release-2ec3d0f/deploy/migrate-control-plane-layout.sh
+```
+
+Google Drive remains the supported off-host backup destination. The backup
+script deliberately limits Restic/rclone concurrency and retries transient
+Drive quota errors instead of treating Drive capacity as the problem.
 
 ## First-response guide
 

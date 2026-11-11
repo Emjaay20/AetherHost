@@ -66,9 +66,9 @@ func dockerRuntimeService(appDir, hostAppDir string, port int) (stanza string, s
 	}
 }
 
-func renderDockerRuntimeCompose(app Application, safeName, hostPwd, hostRule, tlsLabels string) string {
+func renderDockerRuntimeCompose(app Application, safeName, projectsRoot, hostRule, tlsLabels string) string {
 	appDir := filepath.Join("deployments", safeName)
-	hostAppDir := fmt.Sprintf("%s/deployments/%s", hostPwd, safeName)
+	hostAppDir := fmt.Sprintf("%s/%s", projectsRoot, safeName)
 	stanza, port := dockerRuntimeService(appDir, hostAppDir, detectAppPort(app, appDir))
 
 	return fmt.Sprintf(`

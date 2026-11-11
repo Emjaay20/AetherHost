@@ -5,4 +5,4 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/aetherhost/deploy/backup/restore-check.sh
+ExecStart=/srv/aetherhost/control/deploy/backup/restore-check.sh

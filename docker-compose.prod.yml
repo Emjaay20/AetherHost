@@ -272,18 +272,22 @@ services:
     depends_on:
       - api
       - docker-socket-proxy
-    # Must match the host owner of ${HOST_PWD}/deployments (engineer = 1001 on the VPS).
+    # Must match the owner of ${PROJECTS_ROOT} (engineer = 1001 on the VPS).
     user: "${AGENT_UID:-1001}:${AGENT_GID:-1001}"
     environment:
       - HOME=/tmp
       - CONTROL_PLANE_URL=http://api:3000
       - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
-      - HOST_PWD=${HOST_PWD:-/opt/aetherhost}
+      # Platform source is read-only; tenant repositories are the only
+      # writable host mount. This prevents a tenant deployment from replacing
+      # AetherHost itself.
+      - CONTROL_PLANE_ROOT=${CONTROL_PLANE_ROOT:-/opt/aetherhost}
+      - PROJECTS_ROOT=${PROJECTS_ROOT:-/opt/aetherhost/deployments}
       - BASE_DOMAIN=${BASE_DOMAIN}
     volumes:
-      - ${HOST_PWD:-/opt/aetherhost}:/app
-      - ${HOST_PWD:-/opt/aetherhost}/deployments:/app/deployments
+      - ${CONTROL_PLANE_ROOT:-/opt/aetherhost}:/app:ro
+      - ${PROJECTS_ROOT:-/opt/aetherhost/deployments}:/app/deployments
     deploy:
       resources:
         limits:

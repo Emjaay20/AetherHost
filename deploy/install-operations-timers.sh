@@ -8,7 +8,8 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-readonly source_dir="/opt/aetherhost/deploy/systemd"
+readonly control_plane_root="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
+readonly source_dir="${control_plane_root}/deploy/systemd"
 readonly target_dir="/etc/systemd/system"
 
 install -m 0644 "$source_dir/aetherhost-backup.service" "$target_dir/aetherhost-backup.service"
@@ -18,7 +19,7 @@ install -m 0644 "$source_dir/aetherhost-restore-check.timer" "$target_dir/aether
 install -m 0644 "$source_dir/aetherhost-docker-maintenance.service" "$target_dir/aetherhost-docker-maintenance.service"
 install -m 0644 "$source_dir/aetherhost-docker-maintenance.timer" "$target_dir/aetherhost-docker-maintenance.timer"
 
-chmod 0750 /opt/aetherhost/deploy/backup/backup.sh /opt/aetherhost/deploy/backup/restore-check.sh
+chmod 0750 "${control_plane_root}/deploy/backup/backup.sh" "${control_plane_root}/deploy/backup/restore-check.sh"
 systemctl daemon-reload
 systemctl enable --now aetherhost-docker-maintenance.timer
 if [[ -r /etc/aetherhost/backup.env ]]; then

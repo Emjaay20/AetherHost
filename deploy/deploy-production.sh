@@ -7,14 +7,14 @@ if ! flock -n 9; then
   exit 0
 fi
 
-cd /opt/aetherhost
+readonly control_plane_root="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
+cd "$control_plane_root"
 
 echo "🚀 [CI/CD] Starting automated production deployment..."
 
 # 1. Pull latest code from GitHub
 echo "📥 [CI/CD] Pulling latest code from origin/main..."
-git fetch origin main
-git reset --hard origin/main
+git pull --ff-only origin main
 
 # 2. Build updated images using Docker cache
 echo "🏗️ [CI/CD] Building updated container images..."

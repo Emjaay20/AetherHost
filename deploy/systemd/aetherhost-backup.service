@@ -5,4 +5,4 @@ After=docker.service network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/aetherhost/deploy/backup/backup.sh
+ExecStart=/srv/aetherhost/control/deploy/backup/backup.sh

@@ -4,6 +4,7 @@
 set -euo pipefail
 
 readonly config_file="/etc/aetherhost/backup.env"
+readonly platform_dir="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
 readonly target_dir="$(mktemp -d /var/tmp/aetherhost-restore-check.XXXXXX)"
 
 cleanup() {
@@ -26,8 +27,15 @@ set +a
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is required}"
 : "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is required}"
 
-restic check
-restic restore latest --target "$target_dir"
+readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers 1 --checkers 1 --tpslimit 2 --tpslimit-burst 2 --retries 8}"
+readonly rclone_timeout="${RCLONE_TIMEOUT:-5m}"
+
+restic_run() {
+  restic -o "rclone.args=${rclone_args}" -o "rclone.timeout=${rclone_timeout}" "$@"
+}
+
+restic_run check
+restic_run restore latest --target "$target_dir"
 
 dump_file="$(find "$target_dir" -name control-plane-postgres.sql -type f -print -quit)"
 if [[ -z "$dump_file" ]] || [[ ! -s "$dump_file" ]]; then

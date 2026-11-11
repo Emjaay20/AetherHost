@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -143,9 +144,17 @@ func main() {
 		controlPlaneURL = "http://localhost:3000"
 	}
 
-	hostPwd := os.Getenv("HOST_PWD")
-	if hostPwd == "" {
-		hostPwd = "/opt/aetherhost"
+	controlPlaneRoot := os.Getenv("CONTROL_PLANE_ROOT")
+	if controlPlaneRoot == "" {
+		// HOST_PWD remains a compatibility fallback for existing installations.
+		controlPlaneRoot = os.Getenv("HOST_PWD")
+	}
+	if controlPlaneRoot == "" {
+		controlPlaneRoot = "/opt/aetherhost"
+	}
+	projectsRoot := os.Getenv("PROJECTS_ROOT")
+	if projectsRoot == "" {
+		projectsRoot = filepath.Join(controlPlaneRoot, "deployments")
 	}
 
 	baseDomain := os.Getenv("BASE_DOMAIN")
@@ -166,7 +175,7 @@ func main() {
 			return
 		}
 
-		provisionPendingApps(controlPlaneURL, hostPwd, baseDomain)
+		provisionPendingApps(controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain)
 		terminateApps(controlPlaneURL)
 		suspendApps(controlPlaneURL)
 		watchRunningApps(controlPlaneURL)

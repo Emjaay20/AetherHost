@@ -4,7 +4,8 @@
 # images and build cache: they are reproducible and waste backup capacity.
 set -euo pipefail
 
-readonly platform_dir="/opt/aetherhost"
+readonly platform_dir="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
+readonly projects_dir="${PROJECTS_ROOT:-/srv/aetherhost/projects}"
 readonly config_file="/etc/aetherhost/backup.env"
 readonly work_dir="$(mktemp -d /var/tmp/aetherhost-backup.XXXXXX)"
 
@@ -28,6 +29,35 @@ source "$config_file"
 set +a
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is required}"
 : "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is required}"
+
+if [[ ! -f "$platform_dir/docker-compose.prod.yml" ]] || [[ ! -d "$projects_dir" ]]; then
+  echo "Missing AetherHost control-plane or projects directory. Run the layout migration first." >&2
+  exit 1
+fi
+
+# Google Drive is a valid backup target. Rate limiting is applied to the rclone
+# process which Restic launches, preventing the request bursts that previously
+# exhausted the Drive API quota. Operators can tune these safely in backup.env.
+readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers 1 --checkers 1 --tpslimit 2 --tpslimit-burst 2 --retries 8}"
+readonly rclone_timeout="${RCLONE_TIMEOUT:-5m}"
+
+restic_run() {
+  restic -o "rclone.args=${rclone_args}" -o "rclone.timeout=${rclone_timeout}" "$@"
+}
+
+retry_restic() {
+  local attempt=1
+  local max_attempts="${RESTIC_MAX_ATTEMPTS:-3}"
+  until restic_run "$@"; do
+    if (( attempt >= max_attempts )); then
+      return 1
+    fi
+    local delay=$(( attempt * 60 ))
+    echo "Restic command failed; retrying in ${delay}s (attempt $((attempt + 1))/${max_attempts})..." >&2
+    sleep "$delay"
+    ((attempt++))
+  done
+}
 
 mkdir -p "$work_dir/volumes"
 
@@ -57,16 +87,24 @@ tar \
   --exclude='node_modules' \
   --exclude='.next' \
   --exclude='deployments/*/target' \
-  -czf "$work_dir/platform-config-and-source.tgz" \
-  -C "$platform_dir" .env docker-compose.prod.yml deployments deploy
+  -czf "$work_dir/control-plane-config-and-source.tgz" \
+  -C "$platform_dir" .env docker-compose.prod.yml deploy
 
-if ! restic cat config >/dev/null 2>&1; then
+tar \
+  --exclude='.git' \
+  --exclude='node_modules' \
+  --exclude='.next' \
+  --exclude='*/target' \
+  -czf "$work_dir/project-source.tgz" \
+  -C "$projects_dir" .
+
+if ! restic_run cat config >/dev/null 2>&1; then
   echo "Initializing new restic repository at ${RESTIC_REPOSITORY}..."
-  restic init
+  restic_run init
 fi
 
-restic backup --tag aetherhost --tag production "$work_dir"
-restic forget --prune \
+retry_restic backup --tag aetherhost --tag production "$work_dir"
+retry_restic forget --prune \
   --keep-daily "${RESTIC_KEEP_DAILY:-14}" \
   --keep-weekly "${RESTIC_KEEP_WEEKLY:-8}" \
   --keep-monthly "${RESTIC_KEEP_MONTHLY:-12}"

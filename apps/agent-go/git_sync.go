@@ -14,8 +14,18 @@ func syncApplicationRepo(app Application, appDir, safeName string, appLog *slog.
 	gitDir := filepath.Join(appDir, ".git")
 	nowStr := func() string { return time.Now().Format("15:04:05") }
 
-	// 1. Fast sync if valid git repository already exists
+	// 1. Fast sync only when the existing .git directory is a usable
+	// repository. A partially copied checkout can contain an empty .git folder;
+	// treating that as valid leaves the project permanently undeployable.
+	validRepository := false
 	if _, err := os.Stat(gitDir); err == nil {
+		validRepository = exec.Command("git", "-C", appDir, "rev-parse", "--is-inside-work-tree").Run() == nil
+		if !validRepository {
+			appLog.Warn("invalid git metadata found; preserving checkout before clean clone")
+			sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Existing checkout is incomplete; preserving it before a clean clone...", nowStr()))
+		}
+	}
+	if validRepository {
 		appLog.Info("syncing existing git repository", slog.String("repo", app.GithubRepo), slog.String("dir", appDir))
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Syncing latest commits from GitHub...", nowStr()))
 
@@ -52,22 +62,31 @@ func syncApplicationRepo(app Application, appDir, safeName string, appLog *slog.
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Fast git sync encountered issue; performing clean checkout...", nowStr()))
 	}
 
-	// 2. If no .git exists or fast sync failed, tear down any running containers to release file locks
-	composeFile := filepath.Join(appDir, "docker-compose.yml")
-	if _, err := os.Stat(composeFile); err == nil {
-		_ = exec.Command("docker", "compose", "-f", composeFile, "-p", "aetherhost-"+safeName, "down").Run()
+	// 2. Preserve the old checkout before cloning. The running container keeps
+	// serving its current image while the replacement is prepared, and a failed
+	// clone can be rolled back without losing project files or its local .env.
+	recoveryDir := ""
+	if _, err := os.Stat(appDir); err == nil {
+		recoveryDir = filepath.Join(filepath.Dir(appDir), fmt.Sprintf(".%s-recovery-%d", safeName, time.Now().UTC().Unix()))
+		if err := os.Rename(appDir, recoveryDir); err != nil {
+			return fmt.Errorf("cannot preserve existing checkout before clone: %w", err)
+		}
 	}
-
-	// Clean directory
-	_ = os.RemoveAll(appDir)
-	_ = exec.Command("rm", "-rf", appDir).Run()
-	_ = os.MkdirAll(appDir, 0755)
+	if err := os.MkdirAll(filepath.Dir(appDir), 0755); err != nil {
+		return fmt.Errorf("cannot create project parent directory: %w", err)
+	}
 
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cloning repository: %s", nowStr(), app.GithubRepo))
 	appLog.Info("cloning github repository", slog.String("repo", app.GithubRepo))
 
 	out, err := runGitWithToken(app.GithubToken, "clone", "--depth", "1", app.GithubRepo, appDir)
 	if err != nil {
+		// git can leave a partial target directory. Remove only that newly-created
+		// partial clone, then restore the preserved checkout when possible.
+		_ = os.RemoveAll(appDir)
+		if recoveryDir != "" {
+			_ = os.Rename(recoveryDir, appDir)
+		}
 		errMsg := fmt.Sprintf("git clone failed: %s", out)
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Git clone failed: %s", nowStr(), out))
 		appLog.Error("git clone failed", slog.String("output", out), slog.String("error", err.Error()))
@@ -80,11 +99,21 @@ func syncApplicationRepo(app Application, appDir, safeName string, appLog *slog.
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cloned commit %s", nowStr(), commitMsg))
 	}
 
+	if len(app.EnvVars) == 0 && recoveryDir != "" {
+		if env, readErr := os.ReadFile(filepath.Join(recoveryDir, ".env")); readErr == nil {
+			_ = os.WriteFile(filepath.Join(appDir, ".env"), env, 0600)
+		}
+	}
 	writeEnvFile(app, appDir)
 	return nil
 }
 
 func writeEnvFile(app Application, appDir string) {
+	// Do not replace a project's local environment file with an empty file when
+	// it has not yet been imported into the control plane.
+	if len(app.EnvVars) == 0 {
+		return
+	}
 	var envBuilder strings.Builder
 	for k, v := range app.EnvVars {
 		envBuilder.WriteString(fmt.Sprintf("%s=%s\n", k, v))
