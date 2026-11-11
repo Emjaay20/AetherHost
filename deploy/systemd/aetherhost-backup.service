@@ -6,4 +6,8 @@ OnFailure=aetherhost-operation-alert@%n.service
 
 [Service]
 Type=oneshot
+# systemd does not provide an interactive HOME. Set both variables here as a
+# defense in depth measure for Restic and its rclone child process.
+Environment=HOME=/root
+Environment=XDG_CACHE_HOME=/var/cache/aetherhost/restic
 ExecStart=/srv/aetherhost/control/deploy/backup/backup.sh
