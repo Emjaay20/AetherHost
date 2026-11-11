@@ -38,6 +38,7 @@ rsync -a \
   --exclude='node_modules' \
   --exclude='.next' \
   "$source_root/" "$control_plane_root/"
+install -d -m 0755 -o root -g root "$control_plane_root/deployments"
 install -m 0600 -o root -g root "$legacy_root/.env" "$control_plane_root/.env"
 
 if [[ -d "$legacy_root/deployments" ]]; then
