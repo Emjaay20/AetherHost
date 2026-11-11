@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec 9>/tmp/aetherhost-production-deploy.lock
+readonly lock_dir="/run/lock/aetherhost"
+install -d -o root -g root -m 0755 "$lock_dir"
+exec 9>"${lock_dir}/production-deploy.lock"
 if ! flock -n 9; then
   echo "⏭️  [CI/CD] A production deployment is already running; skipping this duplicate trigger."
   exit 0
