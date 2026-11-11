@@ -33,7 +33,7 @@ func watchRunningApps(controlPlaneURL string) {
 		return
 	}
 	for _, app := range apps {
-		safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
+		safeName := safeAppName(app.Name)
 		out, err := exec.Command("docker", "ps", "-a",
 			"--filter", "label=com.docker.compose.project=aetherhost-"+safeName,
 			"--format", "{{.Names}}|{{.State}}|{{.Status}}").Output()

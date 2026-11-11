@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -65,6 +66,14 @@ func safeAppName(name string) string {
 		return "app"
 	}
 	return s
+}
+
+// deploymentDirectory is the only path constructor for tenant workspaces.
+// It normalizes the untrusted display name before joining it to deployments,
+// ensuring names such as "..", "/tmp/app", or "a/../../b" can never escape
+// the agent's project root.
+func deploymentDirectory(name string) string {
+	return filepath.Join("deployments", safeAppName(name))
 }
 
 func isReservedEnv(key string) bool {

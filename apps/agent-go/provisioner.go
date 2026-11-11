@@ -94,14 +94,14 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 	)
 	appLog.Info("starting application provisioning")
 
-	safeName := strings.ReplaceAll(strings.ToLower(app.Name), " ", "-")
+	safeName := safeAppName(app.Name)
 	if isWorkload(app) {
 		// Workloads use their immutable application ID for all runtime resources.
 		// The display name remains the public hostname, but can never collide with
 		// another workload's Compose project, databases, or credentials.
 		safeName = workloadDeploymentName(app)
 	}
-	appDir := fmt.Sprintf("./deployments/%s", safeName)
+	appDir := "./" + deploymentDirectory(safeName)
 	if err := os.MkdirAll(appDir, 0755); err != nil {
 		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Cannot create deployment directory: %v", time.Now().Format("15:04:05"), err))
 		appLog.Error("cannot create deployment directory", slog.String("error", err.Error()))

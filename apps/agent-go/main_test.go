@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -37,6 +38,25 @@ func TestRejectTenantCompose(t *testing.T) {
 	}
 	if rejectTenantCompose("services:\n  app:\n    image: nginx:alpine") {
 		t.Fatal("expected a normal compose file to be allowed")
+	}
+}
+
+func TestDeploymentDirectoryCannotEscapeProjectsRoot(t *testing.T) {
+	root, err := filepath.Abs("deployments")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"..", "../control", "/tmp/escape", "a/../../b", `C:\\temp\\escape`} {
+		t.Run(name, func(t *testing.T) {
+			path, err := filepath.Abs(deploymentDirectory(name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+				t.Fatalf("unsafe project name %q escaped deployments: %q", name, path)
+			}
+		})
 	}
 }
 
