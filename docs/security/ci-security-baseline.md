@@ -48,8 +48,12 @@ dedicated signing identity before the server can be restricted to signed pulls.
 
 ## Current VPS deployment identity
 
-The CI SSH account is `engineer`, not root. Its sudoers rule permits exactly
-`/srv/aetherhost/control/deploy/deploy-production.sh`, which remains owned by
-root. This lets the root-owned control-plane checkout update and compose
-services rebuild without granting the account an interactive root shell or a
-general-purpose Docker command. SSH root access is unchanged by this control.
+The CI SSH account is `engineer`, not root. A root-owned sudoers rule permits
+exactly `/srv/aetherhost/control/deploy/deploy-production.sh`, allowing the
+root-owned control-plane checkout to update and compose services to rebuild.
+
+**Open risk:** the current VPS configuration also grants `engineer` broader
+passwordless sudo rights. The single-command rule cannot reduce that existing
+permission. SSH root access is unchanged by this control. Removing the broader
+rule is a separate access-policy change and must be explicitly approved and
+tested before this can be described as least privilege.
