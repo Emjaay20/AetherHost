@@ -20,6 +20,24 @@ systemctl list-timers --all 'aetherhost-*'
 
 Configure Google Drive before enabling a real backup run: see [Google Drive setup](../deploy/backup/GOOGLE_DRIVE_SETUP.md).
 
+## Failure alerts
+
+Backup, restore-drill, and Docker-maintenance failures can notify an
+operations-only Slack channel. The webhook is deliberately kept in a root-owned
+file outside the repository:
+
+```bash
+sudo install -d -m 0700 /etc/aetherhost
+sudo install -m 0600 /srv/aetherhost/control/deploy/operations.env.example /etc/aetherhost/operations.env
+sudoedit /etc/aetherhost/operations.env
+sudo /srv/aetherhost/control/deploy/install-operations-timers.sh
+```
+
+Without a webhook, the failed operation remains visible in `systemctl` and the
+journal; it is never reported as a successful notification. Test after adding
+the webhook by running a controlled failing unit, then confirm both delivery
+and the journal record without copying any secrets into a ticket.
+
 ## Protected filesystem layout
 
 AetherHost's platform source and tenant workspaces must be separate. This

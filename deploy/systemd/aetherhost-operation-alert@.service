@@ -1,0 +1,11 @@
+[Unit]
+Description=AetherHost operations failure alert for %i
+
+[Service]
+Type=oneshot
+ExecStart=/srv/aetherhost/control/deploy/notify-operation-failure.sh %i
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/log /run

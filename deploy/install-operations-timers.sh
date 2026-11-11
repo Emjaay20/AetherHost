@@ -18,8 +18,9 @@ install -m 0644 "$source_dir/aetherhost-restore-check.service" "$target_dir/aeth
 install -m 0644 "$source_dir/aetherhost-restore-check.timer" "$target_dir/aetherhost-restore-check.timer"
 install -m 0644 "$source_dir/aetherhost-docker-maintenance.service" "$target_dir/aetherhost-docker-maintenance.service"
 install -m 0644 "$source_dir/aetherhost-docker-maintenance.timer" "$target_dir/aetherhost-docker-maintenance.timer"
+install -m 0644 "$source_dir/aetherhost-operation-alert@.service" "$target_dir/aetherhost-operation-alert@.service"
 
-chmod 0750 "${control_plane_root}/deploy/backup/backup.sh" "${control_plane_root}/deploy/backup/restore-check.sh"
+chmod 0750 "${control_plane_root}/deploy/backup/backup.sh" "${control_plane_root}/deploy/backup/restore-check.sh" "${control_plane_root}/deploy/notify-operation-failure.sh"
 systemctl daemon-reload
 systemctl enable --now aetherhost-docker-maintenance.timer
 if [[ -r /etc/aetherhost/backup.env ]]; then

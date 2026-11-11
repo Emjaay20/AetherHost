@@ -34,7 +34,7 @@ tenant data.
    Drive path, and lock it down:
 
    ```bash
-   sudo cp /opt/aetherhost/deploy/backup/backup.env.example /etc/aetherhost/backup.env
+   sudo cp /srv/aetherhost/control/deploy/backup/backup.env.example /etc/aetherhost/backup.env
    sudo chmod 600 /etc/aetherhost/backup.env
    sudo nano /etc/aetherhost/backup.env
    ```
@@ -42,7 +42,7 @@ tenant data.
 5. Install the timers and run the first backup and restore drill:
 
    ```bash
-   sudo /opt/aetherhost/deploy/install-operations-timers.sh
+   sudo /srv/aetherhost/control/deploy/install-operations-timers.sh
    sudo systemctl start aetherhost-backup.service
    sudo systemctl start aetherhost-restore-check.service
    ```

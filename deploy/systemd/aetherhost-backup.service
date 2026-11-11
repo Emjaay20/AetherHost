@@ -2,6 +2,7 @@
 Description=AetherHost encrypted off-host backup
 Wants=docker.service
 After=docker.service network-online.target
+OnFailure=aetherhost-operation-alert@%n.service
 
 [Service]
 Type=oneshot

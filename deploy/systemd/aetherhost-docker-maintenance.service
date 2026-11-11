@@ -2,6 +2,7 @@
 Description=AetherHost bounded Docker cache maintenance
 Wants=docker.service
 After=docker.service
+OnFailure=aetherhost-operation-alert@%n.service
 
 [Service]
 Type=oneshot
