@@ -6,6 +6,7 @@ set -euo pipefail
 readonly config_file="/etc/aetherhost/backup.env"
 readonly platform_dir="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
 readonly target_dir="$(mktemp -d /var/tmp/aetherhost-restore-check.XXXXXX)"
+readonly restic_cache_dir="${RESTIC_CACHE_DIR:-/var/cache/aetherhost/restic}"
 
 cleanup() {
   rm -rf "$target_dir"
@@ -26,6 +27,8 @@ source "$config_file"
 set +a
 : "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is required}"
 : "${RESTIC_PASSWORD_FILE:?RESTIC_PASSWORD_FILE is required}"
+install -d -m 0700 "$restic_cache_dir"
+export XDG_CACHE_HOME="$restic_cache_dir"
 
 readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers 1 --checkers 1 --tpslimit 2 --tpslimit-burst 2 --retries 8}"
 readonly rclone_timeout="${RCLONE_TIMEOUT:-5m}"
