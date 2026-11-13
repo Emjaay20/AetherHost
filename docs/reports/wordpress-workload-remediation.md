@@ -2,9 +2,10 @@
 
 ## Scope
 
-This report records the first remediation stage for the AetherHost WordPress
-runtime. It is intentionally limited to local source and test work. No deployed
-host or tenant application was changed.
+This report records the WordPress runtime remediation and its controlled
+production validation. The validation used unique disposable tenants and
+deployment directories only; no customer application, volume, or database was
+changed.
 
 ## Issues discovered
 
@@ -33,6 +34,16 @@ host or tenant application was changed.
 - Changed the WordPress Redis sidecar to a non-persistent cache after the first
   live disposable smoke test showed the persistent append-only mode could not
   initialise its data directory under the restricted runtime permissions.
+- Changed generated configuration bind mounts to use the configured
+  host-visible project directory. The agent runs in a container, while Docker
+  resolves bind-mount sources on the VPS host; relative paths were therefore
+  incorrectly resolved as `/app/deployments/...` on the host.
+- Made nginx readiness traverse PHP-FPM's ping endpoint instead of returning a
+  static nginx response. A running nginx process alone is not sufficient proof
+  that WordPress can execute PHP.
+- Removed `innodb_redo_log_capacity` from the MariaDB 10.11 profile after live
+  validation showed that the server rejects that MySQL-specific setting during
+  its startup configuration check.
 
 ## Verification performed
 
@@ -43,14 +54,20 @@ host or tenant application was changed.
   corresponding memory budgets.
 - API contract tests accept a bounded WordPress memory budget and reject an
   unsafe one.
+- The first disposable VPS run failed before exposure when Redis could not
+  create its append-only directory; its data, containers, database record, and
+  tenant record were removed after diagnosis.
+- The second disposable VPS run confirmed the Redis correction and exposed the
+  host-path and MariaDB configuration defects before traffic could be served.
+  Its resources are likewise disposable and are removed after validation.
 
 ## Validation still required before production rollout
 
-The local Docker daemon was unavailable in this development environment, so an
-end-to-end WordPress container run, seeded data migration, cache activation,
-load test, and database-failure drill have not been claimed as complete. The
-next stage must run those checks locally, record command output and measured
-latency/error values, and only then decide whether to deploy this profile.
+The corrected profile must complete one fresh end-to-end VPS run before it is
+enabled for customer WordPress applications. A seeded legacy-volume migration,
+object-cache activation, load test, and database-failure drill also remain
+required. Measurements and pass/fail evidence belong in this report before any
+customer migration is claimed complete.
 
 ## Observability implementation
 

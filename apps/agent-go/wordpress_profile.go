@@ -235,7 +235,6 @@ php_admin_value[opcache.save_comments] = 1
 func wordpressMariaDBConfig(t WordPressTuning) string {
 	return fmt.Sprintf(`[mysqld]
 innodb_buffer_pool_size = %dM
-innodb_redo_log_capacity = 134217728
 innodb_flush_log_at_trx_commit = 1
 sync_binlog = 1
 max_connections = %d

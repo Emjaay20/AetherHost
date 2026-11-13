@@ -282,6 +282,13 @@ func TestWordPressTuningScalesWithBudgetAndStaysBounded(t *testing.T) {
 			t.Fatalf("%s database budget can exceed limit: %d > %d", name, dbWorstCase, resources.MariaMB)
 		}
 	}
+	config := wordpressMariaDBConfig(small)
+	if strings.Contains(config, "innodb_redo_log_capacity") {
+		t.Fatal("MariaDB 10.11 does not support innodb_redo_log_capacity")
+	}
+	if !strings.Contains(config, "innodb_flush_log_at_trx_commit = 1") {
+		t.Fatal("WordPress database profile must retain durable commits")
+	}
 }
 
 func TestSafeAppName(t *testing.T) {
