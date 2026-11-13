@@ -13,6 +13,12 @@ const isPublicRoute = createRouteMatcher([
 const isAdminRoute = createRouteMatcher(['/admin(.*)']);
 
 export default clerkMiddleware(async (auth, req) => {
+  const host = req.headers.get("host") || "";
+  if (host.includes("aetherhost.com.ng")) {
+    const targetUrl = new URL(req.nextUrl.pathname + req.nextUrl.search, "https://aetherhost.app");
+    return NextResponse.redirect(targetUrl, 307);
+  }
+
   if (!isPublicRoute(req)) {
     const { userId, sessionClaims } = await auth.protect();
 

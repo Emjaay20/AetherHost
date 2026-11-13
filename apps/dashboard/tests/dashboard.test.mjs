@@ -54,11 +54,13 @@ test('OpsInsightPanel and ApplicationCardItem support per-project AI diagnostics
   assert.match(cardItem, /\.com\.ng/);
 });
 
-test('proxy.ts enforces admin route protection on /admin(.*)', () => {
+test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin route protection on /admin(.*)', () => {
   const proxyContent = fs.readFileSync(
     path.join(dashboardRoot, 'proxy.ts'),
     'utf8',
   );
+  assert.match(proxyContent, /aetherhost\.com\.ng/);
+  assert.match(proxyContent, /https:\/\/aetherhost\.app/);
   assert.match(proxyContent, /isAdminRoute/);
   assert.match(proxyContent, /ADMIN_TENANT_IDS/);
 });
