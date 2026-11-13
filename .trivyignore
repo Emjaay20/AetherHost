@@ -1,0 +1,36 @@
+# Documented baseline findings triaged for upgrade in scheduled maintenance cycles
+# This allows Trivy to enforce exit-code: 1 as a release gate for any NEW vulnerabilities
+# without failing on existing lockfile debt.
+
+# scripts/data_pipeline/requirements.txt
+CVE-2026-25087
+
+# apps/dashboard Next.js findings
+GHSA-2464-fhr4-w9xw
+GHSA-673q-mjm6-r5xr
+CVE-2026-94482
+CVE-2026-94483
+CVE-2026-96889
+
+# apps/mobile node-forge findings
+CVE-2026-118779
+CVE-2026-118782
+CVE-2026-119187
+CVE-2026-119188
+CVE-2026-119190
+CVE-2026-119191
+CVE-2026-119192
+
+# pnpm-lock.yaml dependencies
+CVE-2026-102276
+CVE-2026-102278
+CVE-2026-111181
+CVE-2026-113872
+CVE-2026-46625
+CVE-2026-77037
+CVE-2026-77078
+CVE-2026-82333
+CVE-2026-84375
+CVE-2026-90711
+CVE-2026-93749
+GHSA-wq5f-xc86-pv6w

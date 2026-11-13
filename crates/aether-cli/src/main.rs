@@ -1,5 +1,7 @@
 mod client;
 mod config;
+mod doctor;
+mod mcp;
 
 use clap::{Parser, Subcommand};
 use colored::*;
@@ -65,6 +67,12 @@ enum Commands {
 
     #[command(about = "Check health and connectivity of the control plane")]
     Status,
+
+    #[command(about = "Diagnose local development environment (Docker, Rust, API, Git)")]
+    Doctor,
+
+    #[command(about = "Run Model Context Protocol (MCP) server for developer AI agents (Claude, Cursor)")]
+    Mcp,
 }
 
 #[tokio::main]
@@ -260,6 +268,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("{} AI iteration failed: {}", "✗ ERROR:".red().bold(), e);
                 }
             }
+        }
+        Commands::Doctor => {
+            doctor::run_doctor(&config.api_url).await?;
+        }
+        Commands::Mcp => {
+            mcp::run_mcp_server().await?;
         }
     }
 

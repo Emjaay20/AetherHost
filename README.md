@@ -155,11 +155,14 @@ flowchart LR
 * **Obsidian Terminal Interface**: Formatted dark-mode terminal with auto-scrolling, live polling, and full lifecycle timestamps.
 * **1-Click AI Root-Cause Debugger**: If an application crashes or fails health checks, click "Analyze Failure with AI" to receive an immediate plain-English explanation and fix from Groq.
 
-### 4. Native Rust Infrastructure Toolchain (`crates/`)
-Built with modern, memory-safe Rust:
-* **`aether-cli`**: The official developer CLI. Installable binary with zero runtime dependencies. Features colored tables, interactive spinners, instant `aether status`, `aether list`, `aether logs`, and terminal-based AI generation (`aether ai <id> "<prompt>"`).
+### 4. Native Rust Platform & Systems Subsystem (`crates/`)
+Built with modern, memory-safe Rust and Staff-level platform engineering standards:
+* **`aether-authz`**: High-performance in-memory authorization engine (RBAC/ABAC) featuring role inheritance hierarchies, multi-tenant isolation guarantees, sub-microsecond LRU evaluation caching, and structured audit trails.
+* **`aether-telemetry`**: Production observability layer standardizing W3C `traceparent` distributed tracing (Honeycomb/Jaeger) and atomic Prometheus RED metrics (Rate, Errors, Duration) with p50/p95/p99 latency histograms and Axum middleware.
+* **`aether-core`**: Shared platform kernel featuring typed error hierarchies (`PlatformError`), concurrency-safe circuit breakers (`CircuitBreaker`) preventing cascading upstream outages, and fail-fast startup configuration validation.
+* **`aether-cli`**: The official developer CLI and agent interface. Features `aether doctor` for 1-click environment diagnostics, `aether mcp` running an AI Model Context Protocol server over stdio for coding agents (Claude, Cursor, Antigravity), instant `aether status`, `aether list`, `aether logs`, and terminal-based AI generation (`aether ai <id> "<prompt>"`).
 * **`aether-logd`**: Sub-millisecond log ingestion daemon with Tokio broadcast channels and WebSocket multiplexing (`/ws/:app_id`) for zero-GC real-time log distribution.
-* **`aether-router`**: High-performance reverse proxy with per-tenant byte metering and a Prometheus `/metrics` endpoint for accurate bandwidth billing.
+* **`aether-router`**: High-performance reverse proxy with circuit-breaker upstream resilience, per-tenant byte metering, and Prometheus `/metrics` exposition for accurate bandwidth billing. Detailed design in [Platform Engineering Architecture](docs/architecture/PLATFORM_ENGINEERING.md).
 
 ### 5. Multi-Tenant Entitlements & Atomic SQL Quota Guard
 * **Atomic Concurrency Protection**: Quota allocation uses atomic SQL conditions (`UPDATE ... WHERE usage < limit`), preventing race conditions and overselling even under heavy parallel load.

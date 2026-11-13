@@ -1,0 +1,47 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: aether-platform
+  namespace: aether-system
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./deploy/helm/aether-platform
+      sourceRef:
+        kind: GitRepository
+        name: aetherhost
+        namespace: flux-system
+      interval: 1m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+    cleanupOnFail: true
+  test:
+    enable: true
+  values:
+    replicaCount: 3
+    ingress:
+      enabled: true
+      className: traefik
+      annotations:
+        traefik.ingress.kubernetes.io/router.entrypoints: websecure
+        traefik.ingress.kubernetes.io/router.tls: "true"
+      hosts:
+        - host: edge.aetherhost.app
+          paths:
+            - path: /
+              pathType: Prefix
+              port: 8080
+    autoscaling:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 15
+      targetCPUUtilizationPercentage: 75
+      targetMemoryUtilizationPercentage: 80
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 2

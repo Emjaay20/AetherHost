@@ -1,0 +1,14 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: aetherhost
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/Emjaay20/AetherHost.git
+  ref:
+    branch: main
+  ignore: |
+    /*
+    !/deploy/helm/aether-platform
+    !/deploy/gitops

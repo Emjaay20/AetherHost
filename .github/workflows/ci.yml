@@ -92,10 +92,21 @@ jobs:
       - name: Setup Rust toolchain
         # stable branch, pinned at 2026-11-11
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          components: clippy, rustfmt
 
-      - name: Run Cargo check & unit tests
+      - name: Cache Cargo dependencies & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+
+      - name: Enforce strict platform clippy lints
         run: |
-          cargo test --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Cargo workspace tests & doc tests
+        run: |
+          cargo test --workspace --verbose
 
   security:
     name: Security and Dependency Checks
@@ -123,6 +134,7 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           # Start in reporting mode so existing dependency debt does not block
           # a safe deployment. Promote this to a blocking gate after findings
           # are triaged and documented.

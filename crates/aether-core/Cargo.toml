@@ -8,3 +8,5 @@ description = "Shared core types, HTTP client utilities, and auth helpers for Ae
 reqwest = { workspace = true, features = ["json", "stream"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
