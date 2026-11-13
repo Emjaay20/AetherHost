@@ -13,7 +13,7 @@ resolver = "2"
 aether-core = { path = "aether-core" }
 aether-authz = { path = "aether-authz" }
 aether-telemetry = { path = "aether-telemetry" }
-axum = { version = "0.7" }
+axum = { version = "0.8" }
 tokio = { version = "1.38", features = ["full"] }
 reqwest = { version = "0.12" }
 serde = { version = "1.0", features = ["derive"] }
