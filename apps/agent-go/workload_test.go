@@ -195,6 +195,9 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 	if !strings.Contains(plan.Compose, "name: aetherhost-legacy-blog_wordpress_data") || !strings.Contains(plan.Compose, "name: aetherhost-legacy-blog_db_data") {
 		t.Fatal("legacy WordPress volume names were not preserved")
 	}
+	if strings.Contains(plan.Compose, "redis_data:/data") || strings.Contains(plan.Compose, "--appendonly yes") {
+		t.Fatal("the WordPress Redis object cache must not persist application data")
+	}
 	if plan.Alias != "aetherhost-legacy-blog-nginx" || plan.Port != 80 || plan.HealthPath != "/.aetherhost/ready" {
 		t.Fatalf("wordpress must be health-checked through nginx, got %+v", plan)
 	}

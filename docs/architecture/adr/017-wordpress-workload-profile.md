@@ -30,7 +30,7 @@ The profile generates a fixed service graph:
 | nginx | ingress and private | shared WordPress files, read-only | sole routed web service |
 | php-fpm | private | shared WordPress files | WordPress runtime |
 | MariaDB | private | `db_data` | WordPress database |
-| Redis | private | `redis_data` | authenticated object-cache backend |
+| Redis | private | none | authenticated, ephemeral object-cache backend |
 
 The profile uses the same generated deployment directory and protected env-file
 credentials as image workloads. The Compose file contains references to env
@@ -50,7 +50,8 @@ Historical WordPress deployments used their normalized display name as the
 Compose project name. The profile intentionally retains that identity and names
 the two legacy volumes exactly `aetherhost-<name>_wordpress_data` and
 `aetherhost-<name>_db_data`. This makes a contract-profile redeploy reuse posts,
-uploads, and the initialized database. `redis_data` is new.
+uploads, and the initialized database. Redis deliberately has no persistent
+volume: it is a rebuildable cache, not an application source of record.
 
 The legacy renderer kept the generated database password in the per-app Compose
 file. On the first profile deployment, the agent reads that one local value into
