@@ -79,7 +79,7 @@ jobs:
           go test -v ./...
 
   rust-crates:
-    name: Rust Platform Crates (aether-core, aether-authz, aether-telemetry, aether-cli, aether-logd, aether-router)
+    name: Rust Crates (aether-core, aether-cli, aether-logd, aether-router)
     runs-on: ubuntu-latest
     defaults:
       run:
