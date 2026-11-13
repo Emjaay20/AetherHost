@@ -207,8 +207,11 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 		}
 	}
 	nginxConfig := plan.ConfigFiles["wordpress-nginx.conf"]
-	if !strings.Contains(nginxConfig, "location = /.aetherhost/ready") || !strings.Contains(nginxConfig, "fastcgi_pass php:9000") {
+	if !strings.Contains(nginxConfig, "location = /.aetherhost/ready") || !strings.Contains(nginxConfig, "fastcgi_pass aetherhost-legacy-blog-php:9000") {
 		t.Fatal("WordPress readiness must verify PHP-FPM through nginx")
+	}
+	if strings.Contains(nginxConfig, "fastcgi_pass php:9000") {
+		t.Fatal("WordPress nginx configuration must use the tenant-specific PHP service name")
 	}
 	if strings.Contains(nginxConfig, "location = /.aetherhost/ready { access_log off; return 204; }") {
 		t.Fatal("static nginx readiness must not mask a failed PHP-FPM process")

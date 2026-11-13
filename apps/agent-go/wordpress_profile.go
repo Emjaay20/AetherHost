@@ -56,7 +56,7 @@ func buildWordPressWorkload(app Application, identity, mariaDBPassword, redisPas
 		MariaDbEnv:   mariaEnv,
 		RedisEnv:     redisEnv,
 		ConfigFiles: map[string]string{
-			"wordpress-nginx.conf":   wordpressNginxConfig(),
+			"wordpress-nginx.conf":   wordpressNginxConfig(phpName),
 			"wordpress-php-fpm.conf": wordpressPHPFPMConfig(tuning),
 			"wordpress-mariadb.cnf":  wordpressMariaDBConfig(tuning),
 		},
@@ -155,8 +155,8 @@ func writeServiceLifecycle(b *strings.Builder, memoryMB, pids int, dropCapabilit
 	}
 }
 
-func wordpressNginxConfig() string {
-	return `server {
+func wordpressNginxConfig(phpName string) string {
+	config := `server {
     listen 80;
     server_name _;
     root /var/www/html;
@@ -204,6 +204,7 @@ func wordpressNginxConfig() string {
     }
 }
 `
+	return strings.ReplaceAll(config, "fastcgi_pass php:9000", fmt.Sprintf("fastcgi_pass %s:9000", phpName))
 }
 
 func wordpressPHPFPMConfig(t WordPressTuning) string {
