@@ -123,6 +123,7 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           # High and critical findings with an available upstream fix block a
           # release. Unfixed findings remain visible without forcing a risky
           # upgrade solely to clear a gate.
