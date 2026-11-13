@@ -206,6 +206,43 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 			t.Fatalf("missing generated config %s", path)
 		}
 	}
+	nginxConfig := plan.ConfigFiles["wordpress-nginx.conf"]
+	if !strings.Contains(nginxConfig, "location = /.aetherhost/ready") || !strings.Contains(nginxConfig, "fastcgi_pass php:9000") {
+		t.Fatal("WordPress readiness must verify PHP-FPM through nginx")
+	}
+	if strings.Contains(nginxConfig, "location = /.aetherhost/ready { access_log off; return 204; }") {
+		t.Fatal("static nginx readiness must not mask a failed PHP-FPM process")
+	}
+}
+
+func TestWorkloadConfigMountsUseHostProjectDirectory(t *testing.T) {
+	app := Application{
+		ID:               "app_wordpress_smoke_12345678",
+		Name:             "WordPress Smoke",
+		Runtime:          "wordpress",
+		WorkloadMemoryMB: 1024,
+	}
+	identity := workloadDeploymentName(app)
+	plan, err := buildWorkloadWithIdentity(app, identity, "PostgresPass123", "MariaDbPass123", "RedisPass123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	compose, err := bindWorkloadConfigFiles(plan.Compose, "/srv/aetherhost/projects", identity, plan.ConfigFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"wordpress-nginx.conf", "wordpress-php-fpm.conf", "wordpress-mariadb.cnf"} {
+		want := "/srv/aetherhost/projects/wordpress-smoke/" + path + ":"
+		if !strings.Contains(compose, want) {
+			t.Fatalf("expected host-visible bind mount %q in compose:\n%s", want, compose)
+		}
+		if strings.Contains(compose, "./"+path+":") {
+			t.Fatalf("relative config mount survived for %s", path)
+		}
+	}
+	if _, err := bindWorkloadConfigFiles(plan.Compose, "relative/projects", identity, plan.ConfigFiles); err == nil {
+		t.Fatal("expected relative projects root to be rejected")
+	}
 }
 
 func TestWordPressTuningScalesWithBudgetAndStaysBounded(t *testing.T) {

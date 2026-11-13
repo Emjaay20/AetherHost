@@ -162,8 +162,17 @@ func wordpressNginxConfig() string {
     root /var/www/html;
     index index.php index.html;
 
-    location = /.aetherhost/ready { access_log off; return 204; }
+    # Readiness must traverse PHP-FPM. A static 204 would prove only that
+    # nginx started, allowing a broken PHP process to be marked healthy.
+    location = /.aetherhost/ready {
+        access_log off;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /fpm-ping;
+        fastcgi_param SCRIPT_NAME /fpm-ping;
+        fastcgi_pass php:9000;
+    }
     location = /fpm-ping {
+        internal;
         access_log off;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME /fpm-ping;

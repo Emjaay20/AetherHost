@@ -26,6 +26,28 @@ var provisioningScheduler = struct {
 	semaphore: make(chan struct{}, maxConcurrentProvisioning),
 }
 
+// bindWorkloadConfigFiles replaces Compose-relative config mounts with the
+// host-visible deployment path. The agent runs in a container, so paths such
+// as /app/deployments/... exist only inside the agent. Docker, however, reads
+// bind-mount sources on the VPS host. Named data volumes remain unchanged.
+func bindWorkloadConfigFiles(compose, projectsRoot, deploymentName string, configFiles map[string]string) (string, error) {
+	if !filepath.IsAbs(projectsRoot) {
+		return "", fmt.Errorf("projects root must be an absolute host path")
+	}
+	if safeAppName(deploymentName) != deploymentName {
+		return "", fmt.Errorf("invalid workload deployment name")
+	}
+
+	hostAppDir := filepath.Join(projectsRoot, deploymentName)
+	for path := range configFiles {
+		if filepath.Base(path) != path || path == "." {
+			return "", fmt.Errorf("workload config path rejected: %s", path)
+		}
+		compose = strings.ReplaceAll(compose, "./"+path+":", filepath.Join(hostAppDir, path)+":")
+	}
+	return compose, nil
+}
+
 func provisionPendingApps(controlPlaneURL, controlPlaneRoot, projectsRoot, baseDomain string) {
 	pendingApps, err := fetchApplicationsByStatus(controlPlaneURL, "pending")
 	if err != nil {
@@ -110,7 +132,7 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 	}
 
 	if isWorkload(app) {
-		provisionWorkloadApp(app, appLog, safeName, appDir, controlPlaneURL)
+		provisionWorkloadApp(app, appLog, safeName, appDir, projectsRoot, controlPlaneURL)
 		return
 	}
 
@@ -241,7 +263,7 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 	appLog.Info("application provisioning finished", slog.String("final_status", statusStr))
 }
 
-func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir, controlPlaneURL string) {
+func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir, projectsRoot, controlPlaneURL string) {
 	workloadName := app.DockerImage
 	if app.Runtime == "wordpress" {
 		workloadName = "platform-managed WordPress profile"
@@ -265,8 +287,16 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 		updateAppStatus(controlPlaneURL, app.ID, "failed")
 		return
 	}
+	compose, err := bindWorkloadConfigFiles(plan.Compose, projectsRoot, safeName, plan.ConfigFiles)
+	if err != nil {
+		errMsg := fmt.Sprintf("[%s] Workload configuration setup failed: %v", time.Now().Format("15:04:05"), err)
+		sendAppLog(controlPlaneURL, app.ID, errMsg)
+		appLog.Error("workload configuration setup failed", slog.String("error", err.Error()))
+		updateAppStatus(controlPlaneURL, app.ID, "failed")
+		return
+	}
 
-	_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(plan.Compose), 0644)
+	_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(compose), 0644)
 	_ = os.WriteFile(fmt.Sprintf("%s/workload.env", appDir), []byte(plan.AppEnv), 0600)
 	if plan.WordPressEnv != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/wordpress.env", appDir), []byte(plan.WordPressEnv), 0600)
@@ -281,13 +311,6 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 		_ = os.WriteFile(fmt.Sprintf("%s/redis.env", appDir), []byte(plan.RedisEnv), 0600)
 	}
 	for path, contents := range plan.ConfigFiles {
-		if filepath.Base(path) != path {
-			errMsg := fmt.Sprintf("[%s] Workload config path rejected: %s", time.Now().Format("15:04:05"), path)
-			sendAppLog(controlPlaneURL, app.ID, errMsg)
-			appLog.Error("workload config path rejected", slog.String("path", path))
-			updateAppStatus(controlPlaneURL, app.ID, "failed")
-			return
-		}
 		if err := os.WriteFile(filepath.Join(appDir, path), []byte(contents), 0644); err != nil {
 			errMsg := fmt.Sprintf("[%s] Workload config write failed: %v", time.Now().Format("15:04:05"), err)
 			sendAppLog(controlPlaneURL, app.ID, errMsg)
