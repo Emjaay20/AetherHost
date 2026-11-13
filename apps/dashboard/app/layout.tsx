@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs'
+import Script from 'next/script'
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -22,6 +23,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
+      <Script id="sidebar-preference" strategy="beforeInteractive">
+        {`try { if (localStorage.getItem('aetherhost-sidebar') === 'collapsed') document.documentElement.dataset.sidebar = 'collapsed' } catch {}`}
+      </Script>
       <body
         suppressHydrationWarning
         className={`${inter.variable} font-sans antialiased min-h-screen selection:bg-primary selection:text-primary-foreground`}

@@ -36,7 +36,7 @@ test('stale Next.js src/app scaffold is removed and root layout has AetherHost t
   assert.match(layoutContent, /AetherHost \| Agency Dashboard/);
 });
 
-test('OpsInsightPanel and ApplicationCardItem support per-project AI diagnostics, Redeploy, and dual-domain legacy dropdown', () => {
+test('console app rows preserve actions and keep legacy domains inside the Visit menu', () => {
   const opsPanel = fs.readFileSync(
     path.join(dashboardRoot, 'components', 'OpsInsightPanel.tsx'),
     'utf8',
@@ -48,10 +48,32 @@ test('OpsInsightPanel and ApplicationCardItem support per-project AI diagnostics
     path.join(dashboardRoot, 'components', 'ApplicationCardItem.tsx'),
     'utf8',
   );
+  const logViewer = fs.readFileSync(
+    path.join(dashboardRoot, 'components', 'DeploymentLogViewer.tsx'),
+    'utf8',
+  );
   assert.match(cardItem, /redeployApplication/);
   assert.match(cardItem, /isLegacyApplication/);
   assert.match(cardItem, /getLegacyAppUrl/);
   assert.match(cardItem, /\.com\.ng/);
+  assert.doesNotMatch(cardItem, /Legacy Domain Active/);
+  assert.match(cardItem, /grid-cols-\[minmax\(0,1fr\)_6\.5rem_auto\]/);
+  assert.match(logViewer, /if \(!expanded && status !== 'failed'\) return null/);
+});
+
+test('console layout keeps navigation fixed and makes dense deployments searchable', () => {
+  const appShell = fs.readFileSync(path.join(dashboardRoot, 'components', 'AppShell.tsx'), 'utf8');
+  const sidebar = fs.readFileSync(path.join(dashboardRoot, 'components', 'Sidebar.tsx'), 'utf8');
+  const layout = fs.readFileSync(path.join(dashboardRoot, 'app', 'layout.tsx'), 'utf8');
+  const deploymentList = fs.readFileSync(path.join(dashboardRoot, 'components', 'DeploymentList.tsx'), 'utf8');
+
+  assert.match(appShell, /h-screen w-full overflow-hidden/);
+  assert.match(sidebar, /aetherhost-sidebar/);
+  assert.match(sidebar, /Ctrl\/Cmd\+B/);
+  assert.match(layout, /sidebar-preference/);
+  assert.match(deploymentList, /Search deployments/);
+  assert.match(deploymentList, /statusRank/);
+  assert.match(deploymentList, /option value="failed"/);
 });
 
 test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin route protection on /admin(.*)', () => {
