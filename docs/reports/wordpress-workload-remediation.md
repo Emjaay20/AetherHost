@@ -28,6 +28,8 @@ host or tenant application was changed.
   resulting configuration into the managed deployment directory.
 - Preserved legacy `wordpress_data` and `db_data` volume names to protect
   existing posts, uploads, and databases during a redeploy.
+- Added a one-time migration from the legacy generated Compose password into
+  the protected workload credential record before the legacy file is replaced.
 
 ## Verification performed
 

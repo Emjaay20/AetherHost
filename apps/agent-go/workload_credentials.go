@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 )
 
 const workloadCredentialsFile = "workload-credentials.json"
+
+var legacyWordPressPasswordPattern = regexp.MustCompile(`(?m)^\s*WORDPRESS_DB_PASSWORD:\s*([A-Za-z0-9]{16,128})\s*$`)
 
 // WorkloadCredentials are generated once per immutable workload deployment
 // directory. Keeping them stable is required because PostgreSQL and MariaDB
@@ -52,6 +55,13 @@ func workloadCredentialsFor(appDir string) (WorkloadCredentials, error) {
 		MariaDbPassword:  randomPassword(),
 		RedisPassword:    randomPassword(),
 	}
+	// The legacy WordPress renderer put its generated MariaDB password directly
+	// into the per-app Compose file. Capture it once before the contract renderer
+	// overwrites that file, so the existing db_data volume remains usable. The
+	// source file is never logged and is replaced by protected env files.
+	if legacy, ok := legacyWordPressPassword(appDir); ok {
+		credentials.MariaDbPassword = legacy
+	}
 	data, err := json.Marshal(credentials)
 	if err != nil {
 		return WorkloadCredentials{}, fmt.Errorf("encode workload credentials: %w", err)
@@ -78,4 +88,16 @@ func workloadCredentialsFor(appDir string) (WorkloadCredentials, error) {
 		return WorkloadCredentials{}, fmt.Errorf("save workload credentials: %w", err)
 	}
 	return credentials, nil
+}
+
+func legacyWordPressPassword(appDir string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(appDir, "docker-compose.yml"))
+	if err != nil {
+		return "", false
+	}
+	matches := legacyWordPressPasswordPattern.FindStringSubmatch(string(data))
+	if len(matches) != 2 || !validWorkloadCredential(matches[1]) {
+		return "", false
+	}
+	return matches[1], true
 }

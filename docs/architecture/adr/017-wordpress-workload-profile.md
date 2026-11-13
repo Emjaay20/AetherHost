@@ -52,6 +52,12 @@ the two legacy volumes exactly `aetherhost-<name>_wordpress_data` and
 `aetherhost-<name>_db_data`. This makes a contract-profile redeploy reuse posts,
 uploads, and the initialized database. `redis_data` is new.
 
+The legacy renderer kept the generated database password in the per-app Compose
+file. On the first profile deployment, the agent reads that one local value into
+the protected workload credential record before replacing Compose. This is a
+one-time migration path; the password is not logged or written into the new
+Compose file.
+
 ## Tuning boundary
 
 `workloadMemoryMb` is a bounded WordPress profile budget (1,024–4,096 MiB).
