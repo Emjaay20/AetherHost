@@ -63,6 +63,7 @@ export class ApplicationsController {
       body.withRedis,
       body.port,
       body.healthPath,
+      body.workloadMemoryMb,
     );
   }
 

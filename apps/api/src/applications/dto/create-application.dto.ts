@@ -80,4 +80,10 @@ export class CreateApplicationDto {
   @IsString()
   @Matches(/^\/[A-Za-z0-9._/-]*$/)
   healthPath?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1024)
+  @Max(4096)
+  workloadMemoryMb?: number;
 }

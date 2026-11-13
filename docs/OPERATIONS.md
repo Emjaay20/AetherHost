@@ -100,3 +100,25 @@ Keep these sanitized artifacts in the repository or application docs:
 3. A Docker cache incident/capacity report showing the 10GB bound.
 4. A load-test report for an Nginx/PHP or image workload.
 5. An incident note showing detection, containment, recovery, and prevention.
+
+## WordPress workload drill
+
+Run this only against a locally provisioned test application. It deliberately
+does not target the deployed VPS.
+
+1. Confirm `aetherhost_wordpress_ready` is `1` and Grafana shows PHP-FPM,
+   MariaDB, and Redis metrics for the test application.
+2. Start the reproducible load test with `WORDPRESS_URL=http://<test-host> k6
+   run scripts/wordpress-load-test.js`.
+3. During the ramp, stop only the test workload's MariaDB container. Record the
+   user-visible error, readiness state, alert timestamp, and recovery time
+   after restarting it.
+4. Run the WordPress backup and restore procedure into a fresh test workload.
+   Verify a known post and uploaded file by checksum and browser request.
+5. Record measured values in `docs/CASE_STUDY.md`; do not copy customer data,
+   passwords, or bearer credentials into the report.
+
+The agent's `/metrics` endpoint is reachable only from Docker networks and is
+scraped as `agent:9108` by Prometheus. PHP-FPM status stays loopback-only inside
+nginx; MariaDB and Redis are queried through the agent's existing Docker
+authority and have no public metrics endpoint.

@@ -24,6 +24,7 @@ export type WorkloadInput = {
   withRedis?: boolean;
   port?: number;
   healthPath?: string;
+  workloadMemoryMb?: number;
 };
 
 export function validateDockerImage(rawImage: string): string {
@@ -43,6 +44,7 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
         'WordPress does not accept a custom image or sidecar',
       );
     }
+    validateWorkloadMemory(input.workloadMemoryMb);
     validateEnvironment(input.envVars, false);
     return;
   }
@@ -76,6 +78,15 @@ export function assertWorkloadSpec(input: WorkloadInput): void {
     throw new BadRequestException('healthPath must be a relative path');
   }
   validateEnvironment(input.envVars, Boolean(image));
+}
+
+function validateWorkloadMemory(memoryMb?: number): void {
+  if (memoryMb == null) {
+    return;
+  }
+  if (!Number.isInteger(memoryMb) || memoryMb < 1024 || memoryMb > 4096) {
+    throw new BadRequestException('workloadMemoryMb must be an integer between 1024 and 4096');
+  }
 }
 
 function validateEnvironment(

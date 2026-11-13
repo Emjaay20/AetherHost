@@ -45,6 +45,7 @@ type Application struct {
 	WithRedis             bool              `json:"withRedis,omitempty"`
 	Port                  int               `json:"port,omitempty"`
 	HealthPath            string            `json:"healthPath,omitempty"`
+	WorkloadMemoryMB      int               `json:"workloadMemoryMb,omitempty"`
 	CommitMessage         string            `json:"commitMessage,omitempty"`
 	AiFiles               []AiFile          `json:"aiFiles,omitempty"`
 }
@@ -166,6 +167,7 @@ func main() {
 	defer stop()
 
 	go startTelemetryReporter(ctx, controlPlaneURL)
+	startWordPressMetricsServer()
 
 	logger.Info("AetherHost Go Agent started; polling control plane", slog.String("control_plane_url", controlPlaneURL))
 
@@ -221,4 +223,13 @@ func requestAutoFix(controlPlaneURL, appID, buildOutput string) bool {
 
 func probeContainer(container, rawURL string) error {
 	return exec.Command("docker", "run", "--rm", "--network", "container:"+container, "alpine:3.20", "wget", "-q", "-O", "-", rawURL).Run()
+}
+
+// probeIngressNetwork checks the only route the platform exposes to Traefik.
+// It intentionally does not run in the target container's network namespace:
+// a PHP-FPM or database process being healthy alone is not enough to serve a
+// user request.
+func probeIngressNetwork(alias string, port int, healthPath string) error {
+	url := fmt.Sprintf("http://%s:%d%s", alias, port, healthPath)
+	return exec.Command("docker", "run", "--rm", "--network", "aetherhost-net", "alpine:3.20", "wget", "-q", "-O", "-", url).Run()
 }

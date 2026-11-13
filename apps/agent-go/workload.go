@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-const wordpressHealthURL = "http://localhost/fpm-ping"
-
 var (
 	imagePattern         = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,200}$`)
 	healthPathPattern    = regexp.MustCompile(`^/[a-zA-Z0-9._/-]{0,80}$`)
@@ -40,7 +38,7 @@ func rejectTenantCompose(compose string) bool {
 }
 
 func isWorkload(app Application) bool {
-	return app.Runtime != "wordpress" && strings.TrimSpace(app.DockerImage) != ""
+	return app.Runtime == "wordpress" || strings.TrimSpace(app.DockerImage) != ""
 }
 
 func safeAppName(name string) string {
@@ -104,15 +102,17 @@ func validCustomDomain(domain string) bool {
 }
 
 type WorkloadPlan struct {
-	Compose     string
-	AppEnv      string
-	PostgresEnv string
-	MariaDbEnv  string
-	RedisEnv    string
-	Alias       string
-	Containers  []string
-	Port        int
-	HealthPath  string
+	Compose      string
+	AppEnv       string
+	WordPressEnv string
+	PostgresEnv  string
+	MariaDbEnv   string
+	RedisEnv     string
+	ConfigFiles  map[string]string
+	Alias        string
+	Containers   []string
+	Port         int
+	HealthPath   string
 }
 
 func buildWorkload(app Application, postgresPass, mariaDbPass, redisPass string) (WorkloadPlan, error) {
@@ -123,6 +123,11 @@ func buildWorkload(app Application, postgresPass, mariaDbPass, redisPass string)
 // not the display name. Display names may be reused, while the deployment name
 // controls Compose project names, container names, and persistent volume names.
 func workloadDeploymentName(app Application) string {
+	// Existing WordPress stacks used the normalized display name as their
+	// Compose project. Retaining it preserves their current volume names.
+	if app.Runtime == "wordpress" {
+		return safeAppName(app.Name)
+	}
 	if id := safeAppName(app.ID); id != "" && id != "app" {
 		return id
 	}
@@ -131,7 +136,7 @@ func workloadDeploymentName(app Application) string {
 
 func buildWorkloadWithIdentity(app Application, identity, postgresPass, mariaDbPass, redisPass string) (WorkloadPlan, error) {
 	if app.Runtime == "wordpress" {
-		return WorkloadPlan{}, fmt.Errorf("wordpress is not a workload")
+		return buildWordPressWorkload(app, identity, mariaDbPass, redisPass)
 	}
 	identity = safeAppName(identity)
 	if identity == "" || identity == "app" {
@@ -254,16 +259,13 @@ func writeAPI(b *strings.Builder, apiName, image, identity, publicName string, p
 	b.WriteString("    labels:\n")
 	b.WriteString("      - \"traefik.enable=true\"\n")
 	b.WriteString("      - \"traefik.docker.network=aetherhost-net\"\n")
-	baseDomain := os.Getenv("BASE_DOMAIN")
-	if baseDomain == "" {
-		baseDomain = "localhost"
-	}
+	baseDomain := osBaseDomain()
 	if customDomain != "" {
 		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`) || Host(`%s`)\"\n", identity, publicName, baseDomain, customDomain)
 	} else {
 		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.rule=Host(`%s.%s`)\"\n", identity, publicName, baseDomain)
 	}
-	if baseDomain != "localhost" && baseDomain != "127.0.0.1" && !strings.HasSuffix(baseDomain, ".localhost") {
+	if shouldUseTLS(baseDomain) {
 		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.entrypoints=websecure\"\n", identity)
 		fmt.Fprintf(b, "      - \"traefik.http.routers.%s-app.tls.certresolver=letsencrypt\"\n", identity)
 	}
@@ -284,6 +286,18 @@ func writeAPI(b *strings.Builder, apiName, image, identity, publicName string, p
 			fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", redisName)
 		}
 	}
+}
+
+func osBaseDomain() string {
+	baseDomain := os.Getenv("BASE_DOMAIN")
+	if baseDomain == "" {
+		return "localhost"
+	}
+	return baseDomain
+}
+
+func shouldUseTLS(baseDomain string) bool {
+	return baseDomain != "localhost" && baseDomain != "127.0.0.1" && !strings.HasSuffix(baseDomain, ".localhost")
 }
 
 func writeWorker(b *strings.Builder, workerName, image string, withPostgres, withMariaDb, withRedis bool, pgName, mariaDbName, redisName string) {

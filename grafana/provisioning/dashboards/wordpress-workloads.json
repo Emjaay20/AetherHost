@@ -1,0 +1,10 @@
+{
+  "title": "AetherHost WordPress Workloads",
+  "tags": ["aetherhost", "wordpress"],
+  "panels": [
+    {"type": "timeseries", "title": "PHP-FPM workers", "targets": [{"expr": "aetherhost_wordpress_php_fpm_active_workers"}, {"expr": "aetherhost_wordpress_php_fpm_idle_workers"}, {"expr": "aetherhost_wordpress_php_fpm_listen_queue"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}},
+    {"type": "timeseries", "title": "MariaDB connections and limit", "targets": [{"expr": "aetherhost_wordpress_mariadb_connections"}, {"expr": "aetherhost_wordpress_mariadb_max_connections"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}},
+    {"type": "timeseries", "title": "Redis cache activity", "targets": [{"expr": "rate(aetherhost_wordpress_redis_keyspace_hits_total[5m])"}, {"expr": "rate(aetherhost_wordpress_redis_keyspace_misses_total[5m])"}, {"expr": "aetherhost_wordpress_redis_used_memory_bytes"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}},
+    {"type": "stat", "title": "Ingress readiness", "targets": [{"expr": "aetherhost_wordpress_ready"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}}
+  ]
+}

@@ -43,6 +43,7 @@ model Application {
   withRedis             Boolean  @default(false)
   port                  Int      @default(3000)
   healthPath            String   @default("/health")
+  workloadMemoryMb      Int      @default(1024)
   commitMessage         String?
   createdAt             DateTime @default(now())
   tenant                Tenant   @relation(fields: [tenantId], references: [id])
