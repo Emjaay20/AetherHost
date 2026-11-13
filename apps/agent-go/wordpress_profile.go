@@ -74,6 +74,9 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	fmt.Fprintf(b, "    container_name: %s\n", nginxName)
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html:ro\n      - ./wordpress-nginx.conf:/etc/nginx/conf.d/default.conf:ro\n")
 	writeServiceLifecycle(b, resources.NginxMB, 96, true)
+	// nginx binds the routed HTTP port, so it receives only the one capability
+	// needed after the default capability drop.
+	b.WriteString("    cap_add:\n      - NET_BIND_SERVICE\n")
 	b.WriteString("    labels:\n")
 	b.WriteString("      - \"traefik.enable=true\"\n")
 	b.WriteString("      - \"traefik.docker.network=aetherhost-net\"\n")
@@ -99,7 +102,10 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 
 func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string, resources WordPressResources) {
 	fmt.Fprintf(b, "  %s:\n", phpName)
-	b.WriteString("    image: wordpress:php8.3-fpm-alpine\n")
+	// Keep the legacy major PHP version for data-preserving migrations. Runtime
+	// upgrades are a separate, tested customer change rather than a side effect
+	// of moving onto the workload contract.
+	b.WriteString("    image: wordpress:php8.2-fpm-alpine\n")
 	fmt.Fprintf(b, "    container_name: %s\n", phpName)
 	b.WriteString("    env_file:\n      - wordpress.env\n")
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./wordpress-php-fpm.conf:/usr/local/etc/php-fpm.d/zz-aetherhost.conf:ro\n")
@@ -112,7 +118,9 @@ func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string,
 
 func writeWordPressMariaDB(b *strings.Builder, mariaName string, resources WordPressResources) {
 	fmt.Fprintf(b, "  %s:\n", mariaName)
-	b.WriteString("    image: mariadb:11.4\n")
+	// Existing WordPress volumes were initialized by MariaDB 10.11. Do not turn
+	// the contract migration into a database-major-version upgrade.
+	b.WriteString("    image: mariadb:10.11\n")
 	fmt.Fprintf(b, "    container_name: %s\n", mariaName)
 	b.WriteString("    env_file:\n      - mariadb.env\n")
 	b.WriteString("    volumes:\n      - db_data:/var/lib/mysql\n      - ./wordpress-mariadb.cnf:/etc/mysql/conf.d/zz-aetherhost.cnf:ro\n")
@@ -174,7 +182,6 @@ func wordpressNginxConfig() string {
     location ~ /\. { deny all; access_log off; log_not_found off; }
     location ~* \.(jpg|jpeg|gif|png|css|js|ico|webp|woff2)$ { expires max; log_not_found off; access_log off; }
     location = /wp-login.php {
-        limit_req zone=wp_login burst=5 nodelay;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_pass php:9000;
