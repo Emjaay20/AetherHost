@@ -36,7 +36,7 @@ test('stale Next.js src/app scaffold is removed and root layout has AetherHost t
   assert.match(layoutContent, /AetherHost \| Agency Dashboard/);
 });
 
-test('OpsInsightPanel and ApplicationCardItem support per-project AI diagnostics and Redeploy', () => {
+test('OpsInsightPanel and ApplicationCardItem support per-project AI diagnostics, Redeploy, and dual-domain legacy dropdown', () => {
   const opsPanel = fs.readFileSync(
     path.join(dashboardRoot, 'components', 'OpsInsightPanel.tsx'),
     'utf8',
@@ -49,6 +49,9 @@ test('OpsInsightPanel and ApplicationCardItem support per-project AI diagnostics
     'utf8',
   );
   assert.match(cardItem, /redeployApplication/);
+  assert.match(cardItem, /isLegacyApplication/);
+  assert.match(cardItem, /getLegacyAppUrl/);
+  assert.match(cardItem, /\.com\.ng/);
 });
 
 test('proxy.ts enforces admin route protection on /admin(.*)', () => {

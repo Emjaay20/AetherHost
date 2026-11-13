@@ -31,15 +31,15 @@ export function validateCustomDomain(
   }
 
   const baseDomain = (
-    process.env.BASE_DOMAIN || 'aetherhost.com.ng'
+    process.env.BASE_DOMAIN || 'aetherhost.app'
   ).toLowerCase();
-  if (
-    normalized === baseDomain ||
-    normalized.endsWith(`.${baseDomain}`)
-  ) {
-    throw new BadRequestException(
-      `Cannot use "${normalized}" as a custom domain: it is reserved by the platform. Subdomains on ${baseDomain} are assigned automatically.`,
-    );
+  const reservedDomains = [baseDomain, 'aetherhost.app', 'aetherhost.com.ng'];
+  for (const reserved of reservedDomains) {
+    if (normalized === reserved || normalized.endsWith(`.${reserved}`)) {
+      throw new BadRequestException(
+        `Cannot use "${normalized}" as a custom domain: it is reserved by the platform. Subdomains on ${baseDomain} are assigned automatically.`,
+      );
+    }
   }
 
   return normalized;

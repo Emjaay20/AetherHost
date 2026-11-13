@@ -48,7 +48,7 @@ export default function CustomDomainModal({
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 
-  const defaultCnameTarget = `${safeName}.aetherhost.com.ng`
+  const defaultCnameTarget = `${safeName}.aetherhost.app`
 
   const isInitializedRef = useRef(false)
 

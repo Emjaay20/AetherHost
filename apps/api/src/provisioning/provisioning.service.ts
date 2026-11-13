@@ -137,7 +137,7 @@ export class ProvisioningService {
           eventType: 'deployment_success',
           message: result.message || 'Deployment completed successfully. Health probe 200 OK.',
           details: { Runtime: app.runtime, Tenant: app.tenantId },
-          url: `https://console.aetherhost.com.ng`,
+          url: `https://console.aetherhost.app`,
         });
         return { status: 'running', message: result.message };
       }
@@ -156,7 +156,7 @@ export class ProvisioningService {
         eventType: 'deployment_failed',
         message: result.message || 'Deployment failed to provision or pass health checks.',
         details: { Runtime: app.runtime, Tenant: app.tenantId },
-        url: `https://console.aetherhost.com.ng`,
+        url: `https://console.aetherhost.app`,
       });
       return { status: 'failed', message: result.message };
     } catch (err: any) {
@@ -175,7 +175,7 @@ export class ProvisioningService {
         eventType: 'deployment_failed',
         message: `Provisioning error: ${err.message}`,
         details: { Runtime: app.runtime, Tenant: app.tenantId },
-        url: `https://console.aetherhost.com.ng`,
+        url: `https://console.aetherhost.app`,
       });
       return { status: 'failed', error: err.message };
     }

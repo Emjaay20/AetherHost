@@ -237,7 +237,7 @@ Visit the dashboard at [http://localhost:3002](http://localhost:3002) and explor
 ### 1-Line CLI Quick Install
 Install the official `aether` binary directly to your terminal:
 ```bash
-curl -fsSL https://console.aetherhost.com.ng/install.sh | bash
+curl -fsSL https://console.aetherhost.app/install.sh | bash
 ```
 *(Or install via Cargo from source: `cargo install --git https://github.com/Emjaay20/AetherHost.git aether-cli`)*
 

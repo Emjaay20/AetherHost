@@ -2,7 +2,7 @@
 set -e
 
 # AetherHost CLI Installer
-# Usage: curl -fsSL https://console.aetherhost.com.ng/install.sh | bash
+# Usage: curl -fsSL https://console.aetherhost.app/install.sh | bash
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -35,7 +35,7 @@ echo ""
 echo -e "${GREEN}${BOLD}✓ Success! AetherHost CLI is installed.${NC}"
 echo ""
 echo -e "${BOLD}Next Steps:${NC}"
-echo -e "  1. Generate your personal API Key at: ${CYAN}https://console.aetherhost.com.ng/settings${NC}"
+echo -e "  1. Generate your personal API Key at: ${CYAN}https://console.aetherhost.app/settings${NC}"
 echo -e "  2. Log in from your terminal:"
 echo -e "     ${BOLD}aether login --token <YOUR_API_KEY>${NC}"
 echo -e "  3. Verify connection:"

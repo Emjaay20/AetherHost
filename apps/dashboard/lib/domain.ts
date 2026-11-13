@@ -23,18 +23,33 @@ export function getAppUrl(safeName: string, path = '') {
     return `/preview/${safeName}${cleanPath}`
   }
 
-  let baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'localhost'
-  let protocol = 'http:'
+  let baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'aetherhost.app'
+  let protocol = 'https:'
 
   if (typeof window !== 'undefined') {
     const host = window.location.hostname
-    if (host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('.localhost')) {
-      baseDomain = host.replace(/^console\./, '').replace(/^app\./, '').replace(/^dashboard\./, '')
-    }
-    if (window.location.protocol === 'https:') {
+    if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.localhost')) {
+      baseDomain = host
+      protocol = window.location.protocol
+    } else {
+      baseDomain = 'aetherhost.app'
       protocol = 'https:'
     }
   }
 
   return `${protocol}//${safeName}.${baseDomain}${cleanPath}`
+}
+
+export function getLegacyAppUrl(safeName: string, path = '') {
+  const cleanPath = path ? (path.startsWith('/') ? path : `/${path}`) : ''
+  return `https://${safeName}.aetherhost.com.ng${cleanPath}`
+}
+
+export const LEGACY_MIGRATION_CUTOFF = '2026-11-13T21:00:00.000Z'
+
+export function isLegacyApplication(createdAt?: string | Date | null): boolean {
+  if (!createdAt) return false
+  const date = new Date(createdAt)
+  if (isNaN(date.getTime())) return false
+  return date.getTime() <= new Date(LEGACY_MIGRATION_CUTOFF).getTime()
 }

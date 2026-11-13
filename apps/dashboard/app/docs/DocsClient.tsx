@@ -207,7 +207,7 @@ export default function DocsClient() {
             </p>
             <CodeBlock
               id="install"
-              text="curl -fsSL https://console.aetherhost.com.ng/install.sh | bash"
+              text="curl -fsSL https://console.aetherhost.app/install.sh | bash"
               copied={copied}
               onCopy={copy}
             />
@@ -221,7 +221,7 @@ export default function DocsClient() {
               </li>
               <li>
                 Save it locally. The CLI writes <code className="text-zinc-100">~/.aether/config.json</code> and talks to{' '}
-                <code className="text-zinc-100">https://api.aetherhost.com.ng</code>.
+                <code className="text-zinc-100">https://api.aetherhost.app</code>.
               </li>
             </ol>
             <CodeBlock id="login" text="aether login --token <YOUR_API_KEY>" copied={copied} onCopy={copy} />
@@ -332,7 +332,7 @@ export default function DocsClient() {
                 </tbody>
               </table>
             </div>
-            <pre className="mt-4 overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950 p-4 text-xs leading-6 text-zinc-300">{`*.aetherhost.com.ng
+            <pre className="mt-4 overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950 p-4 text-xs leading-6 text-zinc-300">{`*.aetherhost.app (and legacy *.aetherhost.com.ng)
         │
         ▼
      Traefik

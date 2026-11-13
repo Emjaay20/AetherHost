@@ -137,7 +137,7 @@ export class NotificationsService {
         elements: [
           {
             type: 'mrkdwn',
-            text: `AetherHost DevOps & Reliability Control Plane • <https://console.aetherhost.com.ng|Open Console>${payload.url ? ` • <${payload.url}|View Deployment>` : ''}`,
+            text: `AetherHost DevOps & Reliability Control Plane • <https://console.aetherhost.app|Open Console>${payload.url ? ` • <${payload.url}|View Deployment>` : ''}`,
           },
         ],
       },
@@ -181,7 +181,7 @@ export class NotificationsService {
         Tenant: tenantId,
         'Release Check': 'Preflight Verification',
       },
-      url: 'https://console.aetherhost.com.ng',
+      url: 'https://console.aetherhost.app',
     };
 
     const result = await this.sendSlackAlert(payload);

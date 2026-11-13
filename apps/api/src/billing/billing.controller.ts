@@ -112,8 +112,8 @@ export class BillingController {
         planId: body.planId,
       },
       reference: `${tenantId}:${body.planId}`,
-      success_url: `${process.env.FRONTEND_URL || 'https://aetherhost.com.ng'}/billing?success=true`,
-      cancel_url: `${process.env.FRONTEND_URL || 'https://aetherhost.com.ng'}/billing?canceled=true`,
+      success_url: `${process.env.FRONTEND_URL || 'https://aetherhost.app'}/billing?success=true`,
+      cancel_url: `${process.env.FRONTEND_URL || 'https://aetherhost.app'}/billing?canceled=true`,
       webhook_url: webhookUrl,
     };
 
