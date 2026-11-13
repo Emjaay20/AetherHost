@@ -239,7 +239,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.aetherhost-api.rule=Host(`api.aetherhost.app`) || Host(`api.${BASE_DOMAIN}`)"
+      - "traefik.http.routers.aetherhost-api.rule=Host(`api.aetherhost.app`) || Host(`api.aetherhost.com.ng`)"
       - "traefik.http.routers.aetherhost-api.entrypoints=websecure"
       - "traefik.http.routers.aetherhost-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.aetherhost-api.loadbalancer.server.port=3000"
@@ -287,7 +287,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
-      - "traefik.http.routers.aetherhost-dashboard.rule=Host(`console.aetherhost.app`) || Host(`aetherhost.app`) || Host(`console.${BASE_DOMAIN}`) || Host(`${BASE_DOMAIN}`)"
+      - "traefik.http.routers.aetherhost-dashboard.rule=Host(`console.aetherhost.app`) || Host(`aetherhost.app`) || Host(`console.aetherhost.com.ng`) || Host(`aetherhost.com.ng`)"
       - "traefik.http.routers.aetherhost-dashboard.entrypoints=websecure"
       - "traefik.http.routers.aetherhost-dashboard.tls.certresolver=letsencrypt"
       - "traefik.http.services.aetherhost-dashboard.loadbalancer.server.port=3000"
