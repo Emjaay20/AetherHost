@@ -29,7 +29,7 @@ enum Commands {
     Login {
         #[arg(short, long, help = "Authentication token or API key")]
         token: Option<String>,
-        #[arg(short, long, help = "Control plane URL (default: https://api.aetherhost.com.ng)")]
+        #[arg(short, long, help = "Control plane URL (default: https://api.aetherhost.app)")]
         url: Option<String>,
     },
 

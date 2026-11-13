@@ -102,12 +102,12 @@ export default function ApiKeyManager() {
         <div className="mt-4 p-3 bg-muted/40 border border-border/50 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2 font-mono text-xs text-foreground overflow-x-auto">
             <Terminal className="w-3.5 h-3.5 text-primary shrink-0" />
-            <span>curl -fsSL https://console.aetherhost.com.ng/install.sh | bash</span>
+            <span>curl -fsSL https://console.aetherhost.app/install.sh | bash</span>
           </div>
           <button
             type="button"
             onClick={() => {
-              navigator.clipboard.writeText('curl -fsSL https://console.aetherhost.com.ng/install.sh | bash')
+              navigator.clipboard.writeText('curl -fsSL https://console.aetherhost.app/install.sh | bash')
               setInstallerCopied(true)
               setTimeout(() => setInstallerCopied(false), 2000)
             }}

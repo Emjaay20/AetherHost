@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound, Globe, Container } from 'lucide-react'
+import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound, Globe, Container, ChevronDown, Copy, Check, ExternalLink } from 'lucide-react'
 import { safeAppName } from '../lib/app-name'
-import { getAppUrl } from '../lib/domain'
+import { getAppUrl, getLegacyAppUrl, isLegacyApplication } from '../lib/domain'
 import { redeployApplication } from '../app/actions'
 import DeploymentLogViewer from './DeploymentLogViewer'
 import AiProjectModal from './AiProjectModal'
@@ -17,6 +17,7 @@ export interface ApplicationItem {
   name: string
   runtime: string
   status: string
+  createdAt?: string | Date | null
   githubRepo?: string | null
   customDomain?: string | null
   dockerImage?: string | null
@@ -40,6 +41,24 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRedeploying, setIsRedeploying] = useState(false)
   const [localStatus, setLocalStatus] = useState(app.status)
+  const [legacyDropdownOpen, setLegacyDropdownOpen] = useState(false)
+  const [copiedLegacy, setCopiedLegacy] = useState(false)
+  const [visitDropdownOpen, setVisitDropdownOpen] = useState(false)
+  const legacyMenuRef = useRef<HTMLDivElement>(null)
+  const visitMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (legacyMenuRef.current && !legacyMenuRef.current.contains(event.target as Node)) {
+        setLegacyDropdownOpen(false)
+      }
+      if (visitMenuRef.current && !visitMenuRef.current.contains(event.target as Node)) {
+        setVisitDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     setCurrentDomain(app.customDomain || null)
@@ -96,6 +115,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   }
 
   const safeName = safeAppName(app.name)
+  const isLegacy = isLegacyApplication(app.createdAt)
 
   return (
     <div className="group p-4 rounded-xl border border-border/50 bg-card hover:border-border transition-all shadow-sm hover:shadow-md flex flex-col justify-between">
@@ -115,6 +135,135 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
 
             <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <p className="max-w-full truncate font-mono text-xs text-muted-foreground">{app.id}</p>
+
+              {/* Primary .app URL */}
+              <a
+                href={getAppUrl(safeName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20"
+                title="Primary Domain (aetherhost.app)"
+              >
+                <Globe className="w-3 h-3 text-cyan-400" />
+                <span className="max-w-[150px] truncate sm:max-w-[210px]">{`${safeName}.aetherhost.app`}</span>
+                <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
+              </a>
+
+              {/* Legacy .com.ng Dropdown (Only for legacy pre-migration apps) */}
+              {isLegacy && (
+                <div className="relative inline-block" ref={legacyMenuRef}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setLegacyDropdownOpen(!legacyDropdownOpen)
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-300 hover:text-amber-200 transition-colors bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 shadow-xs"
+                    title="Dual-Domain active: Click to view legacy aetherhost.com.ng domain"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span>.com.ng</span>
+                    <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-150 ${legacyDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {legacyDropdownOpen && (
+                    <div
+                      className="absolute left-0 mt-1.5 w-76 rounded-xl bg-zinc-900/95 backdrop-blur-md border border-amber-500/30 shadow-2xl p-3 z-50 text-left"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                          <span className="text-[11px] font-semibold text-zinc-100">Legacy Domain Active</span>
+                        </div>
+                        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Dual-Route
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-zinc-400 mb-2 leading-snug">
+                        This application is dual-bound. Both URLs are live with SSL until the <code className="text-zinc-300">.com.ng</code> domain expires:
+                      </p>
+
+                      <div className="space-y-1.5 mb-3">
+                        {/* Legacy URL item */}
+                        <div className="p-2 rounded-lg bg-zinc-950/80 border border-amber-500/20 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="block text-[10px] text-zinc-500 font-mono">Legacy (.com.ng)</span>
+                            <span className="block font-mono text-xs text-amber-300 truncate select-all">
+                              {`${safeName}.aetherhost.com.ng`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(getLegacyAppUrl(safeName))
+                                setCopiedLegacy(true)
+                                setTimeout(() => setCopiedLegacy(false), 2000)
+                              }}
+                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              title="Copy legacy URL"
+                            >
+                              {copiedLegacy ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                            </button>
+                            <a
+                              href={getLegacyAppUrl(safeName)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              title="Open in new tab"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Primary URL item */}
+                        <div className="p-2 rounded-lg bg-zinc-950/80 border border-cyan-500/20 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="block text-[10px] text-cyan-400/70 font-mono">Primary (.app)</span>
+                            <span className="block font-mono text-xs text-cyan-300 truncate select-all">
+                              {`${safeName}.aetherhost.app`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={getAppUrl(safeName)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              title="Open primary URL"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <a
+                          href={getLegacyAppUrl(safeName)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-center py-1 px-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-medium border border-amber-500/30 transition-colors"
+                        >
+                          Visit .com.ng
+                        </a>
+                        <a
+                          href={getAppUrl(safeName)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 text-center py-1 px-2 rounded-md bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-xs font-medium border border-cyan-500/30 transition-colors"
+                        >
+                          Visit .app
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {app.githubRepo && (
                 <a
                   href={app.githubRepo.replace(/\.git$/, '')}
@@ -276,14 +425,67 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             )}
 
             {/* Visit Button */}
-            <a 
-              href={getAppUrl(safeName)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-medium text-foreground/80 hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/50 hover:bg-muted/50"
-            >
-              Visit
-            </a>
+            {isLegacy ? (
+              <div className="relative inline-flex rounded-lg shadow-xs" ref={visitMenuRef}>
+                <a
+                  href={getAppUrl(safeName)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-medium text-foreground/80 hover:text-foreground transition-colors px-2.5 py-1.5 rounded-l-lg border border-r-0 border-border/50 hover:bg-muted/50 inline-flex items-center gap-1"
+                  title="Visit primary URL (.app)"
+                >
+                  Visit
+                </a>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setVisitDropdownOpen(!visitDropdownOpen)
+                  }}
+                  className="px-1.5 py-1.5 rounded-r-lg border border-border/50 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Choose domain to visit"
+                >
+                  <ChevronDown className={`w-3 h-3 transition-transform ${visitDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {visitDropdownOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-1.5 w-52 rounded-xl bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 shadow-xl py-1.5 z-50 text-left"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <a
+                      href={getAppUrl(safeName)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors"
+                      onClick={() => setVisitDropdownOpen(false)}
+                    >
+                      <span className="font-medium text-cyan-300">Open .app (Primary)</span>
+                      <ExternalLink className="w-3 h-3 text-zinc-400" />
+                    </a>
+                    <a
+                      href={getLegacyAppUrl(safeName)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800 transition-colors"
+                      onClick={() => setVisitDropdownOpen(false)}
+                    >
+                      <span className="text-amber-300">Open .com.ng (Legacy)</span>
+                      <ExternalLink className="w-3 h-3 text-zinc-400" />
+                    </a>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <a 
+                href={getAppUrl(safeName)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-foreground/80 hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/50 hover:bg-muted/50"
+              >
+                Visit
+              </a>
+            )}
 
             {/* Delete Button */}
             <button

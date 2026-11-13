@@ -17,7 +17,7 @@ export default function SlackAlertManager() {
     setResult(null)
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.aetherhost.com.ng'
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.aetherhost.app'
       const response = await fetch(`${apiUrl}/v1/notifications/slack/test`, {
         method: 'POST',
         headers: {

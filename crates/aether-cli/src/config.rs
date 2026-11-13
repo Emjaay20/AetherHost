@@ -13,7 +13,7 @@ impl Default for CliConfig {
     fn default() -> Self {
         Self {
             api_url: std::env::var("AETHER_API_URL")
-                .unwrap_or_else(|_| "https://api.aetherhost.com.ng".to_string()),
+                .unwrap_or_else(|_| "https://api.aetherhost.app".to_string()),
             token: std::env::var("AETHER_TOKEN").ok(),
             agent_key: std::env::var("AETHER_AGENT_KEY").ok(),
         }

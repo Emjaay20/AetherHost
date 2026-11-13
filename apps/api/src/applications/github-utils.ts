@@ -55,7 +55,7 @@ export async function ensureGithubWebhook(
   const token = await getGithubToken(tenantId);
   if (!token) return false;
 
-  const baseDomain = process.env.BASE_DOMAIN || 'aetherhost.com.ng';
+  const baseDomain = process.env.BASE_DOMAIN || 'aetherhost.app';
   const webhookUrl =
     process.env.GITHUB_WEBHOOK_URL ||
     (process.env.API_BASE_URL
