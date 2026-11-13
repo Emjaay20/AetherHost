@@ -123,10 +123,10 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          # Start in reporting mode so existing dependency debt does not block
-          # a safe deployment. Promote this to a blocking gate after findings
-          # are triaged and documented.
-          exit-code: '0'
+          # High and critical findings with an available upstream fix block a
+          # release. Unfixed findings remain visible without forcing a risky
+          # upgrade solely to clear a gate.
+          exit-code: '1'
 
   deploy:
     name: Continuous Deployment (Contabo VPS)
