@@ -70,6 +70,9 @@ Contributing factors were:
 - A malformed Git checkout is preserved before a clean clone; a failed clone
   restores the preserved checkout instead of leaving an empty project folder.
 - CI deploys from `/srv/aetherhost/control`, not the legacy `/opt` path.
+- Production deployment fails closed when the control-plane checkout has
+  tracked or untracked source drift, preventing direct VPS edits from being
+  silently built and released by CI.
 - Backup and restore timers are verified after every layout migration.
 - The next controls are Slack alerts for backup and restore failures, blocking
   CI security scans after finding triage, and documented data-access auditing.
