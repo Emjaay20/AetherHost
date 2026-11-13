@@ -15,7 +15,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 colored = "2.1"
 comfy-table = "7.1"
-indicatif = "0.17"
+indicatif = "0.18"
 dirs = "5.0"
 
 [[bin]]
