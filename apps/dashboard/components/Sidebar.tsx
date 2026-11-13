@@ -23,9 +23,9 @@ export default function Sidebar({
   const percentUsed = limit > 0 ? Math.min((usage / limit) * 100, 100) : 0
 
   const itemClass = (path: string) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${
+    `flex items-center gap-3 px-3 py-2 rounded-md font-medium text-sm transition-colors ${
       activePath === path
-        ? 'bg-primary/10 text-primary border border-primary/20'
+        ? 'bg-muted text-foreground'
         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
     }`
 
@@ -40,25 +40,25 @@ export default function Sidebar({
       <aside
         id="app-sidebar"
         data-open={open ? 'true' : 'false'}
-        className="app-sidebar fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r border-border/40 bg-background/95 backdrop-blur-xl lg:static lg:z-auto lg:h-screen lg:max-w-none lg:translate-x-0 lg:bg-background/50"
+        className="app-sidebar fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r border-border bg-background lg:static lg:z-auto lg:h-screen lg:max-w-none lg:translate-x-0"
       >
-        <div className="flex h-16 shrink-0 items-center justify-between border-b border-border/40 px-6">
-          <Link href="/console" onClick={onClose} className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-primary to-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-              <Server className="h-4 w-4 text-white" />
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-5">
+          <Link href="/console" onClick={onClose} className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-card text-foreground">
+              <Server className="h-3.5 w-3.5" />
             </div>
-            <span className="font-bold tracking-wide">AetherHost</span>
+            <span className="font-semibold text-sm tracking-tight text-foreground">AetherHost</span>
           </Link>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
             aria-label="Close sidebar"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <nav className="flex-1 space-y-1.5 overflow-y-auto p-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           <Link href="/console" onClick={onClose} className={itemClass('/console')}>
             <LayoutGrid className="h-4 w-4" /> Applications
           </Link>
@@ -82,47 +82,44 @@ export default function Sidebar({
             </>
           )}
         </nav>
-        <div className="mt-auto p-4 space-y-2">
+        <div className="mt-auto p-3 space-y-2">
           {activePath.startsWith('/admin') ? (
-            <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-inner">
+            <div className="rounded-lg border border-border bg-card p-3.5">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">System Live</span>
+                  <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">System Live</span>
                 </div>
-                <span className="rounded-full border border-primary/30 bg-primary/20 px-2 py-0.5 text-[10px] font-mono font-semibold text-primary">
+                <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-mono font-medium text-foreground">
                   OPERATOR
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-normal">
                 Control plane active. Multi-tenant fleet telemetry.
               </p>
               <Link
                 href="/console"
                 onClick={onClose}
-                className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-foreground hover:text-primary transition-colors"
               >
                 <ArrowLeft className="h-3 w-3" /> Back to Console
               </Link>
             </div>
           ) : (
-            <div className="relative overflow-hidden rounded-xl border border-border/50 bg-card p-4 shadow-inner">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Plan Usage</h4>
-                <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                  {planId ? planId.toUpperCase() : 'Starter'}
+            <div className="rounded-lg border border-border bg-card p-3.5">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Plan Usage</h4>
+                <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-mono font-medium text-foreground">
+                  {planId ? planId.toUpperCase() : 'STARTER'}
                 </span>
               </div>
-              <div className="mb-2 flex items-end gap-1">
-                <span className="text-2xl font-bold">{usage}</span>
-                <span className="mb-1 text-sm text-muted-foreground">/ {limit} apps</span>
+              <div className="mb-2 flex items-baseline gap-1">
+                <span className="text-xl font-semibold tabular-nums text-foreground">{usage}</span>
+                <span className="text-xs text-muted-foreground">/ {limit} apps</span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                  className={`h-full rounded-full transition-all duration-300 ${percentUsed >= 90 ? 'bg-red-500' : percentUsed >= 80 ? 'bg-amber-500' : 'bg-foreground/40'}`}
                   style={{ width: `${percentUsed}%` }}
                 />
               </div>

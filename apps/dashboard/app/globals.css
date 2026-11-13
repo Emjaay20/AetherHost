@@ -4,14 +4,18 @@
 @theme {
   --color-background: #09090b;
   --color-foreground: #fafafa;
-  --color-primary: #3b82f6;
-  --color-primary-foreground: #ffffff;
-  --color-muted: #27272a;
+  --color-primary: #38bdf8;
+  --color-primary-foreground: #09090b;
+  --color-muted: #18181b;
   --color-muted-foreground: #a1a1aa;
   --color-border: #27272a;
-  --color-card: #09090b;
+  --color-card: #111113;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
   
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @layer base {
@@ -21,8 +25,6 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    background-image: radial-gradient(circle at 50% -20%, #1a1a24 0%, #09090b 40%);
-    background-attachment: fixed;
   }
 }
 

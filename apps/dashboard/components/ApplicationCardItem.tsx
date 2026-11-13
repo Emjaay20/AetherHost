@@ -2,7 +2,24 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Box, Sparkles, Terminal, GitBranch, ArrowUpRight, RotateCcw, Loader2, KeyRound, Globe, Container, ChevronDown, Copy, Check, ExternalLink } from 'lucide-react'
+import {
+  Box,
+  Sparkles,
+  Terminal,
+  GitBranch,
+  ArrowUpRight,
+  RotateCcw,
+  Loader2,
+  KeyRound,
+  Globe,
+  Container,
+  ChevronDown,
+  Copy,
+  Check,
+  ExternalLink,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { safeAppName } from '../lib/app-name'
 import { getAppUrl, getLegacyAppUrl, isLegacyApplication } from '../lib/domain'
 import { redeployApplication } from '../app/actions'
@@ -44,8 +61,12 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const [legacyDropdownOpen, setLegacyDropdownOpen] = useState(false)
   const [copiedLegacy, setCopiedLegacy] = useState(false)
   const [visitDropdownOpen, setVisitDropdownOpen] = useState(false)
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
+  const [showLogs, setShowLogs] = useState(false)
+
   const legacyMenuRef = useRef<HTMLDivElement>(null)
   const visitMenuRef = useRef<HTMLDivElement>(null)
+  const actionMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -54,6 +75,9 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
       }
       if (visitMenuRef.current && !visitMenuRef.current.contains(event.target as Node)) {
         setVisitDropdownOpen(false)
+      }
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
+        setActionMenuOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -118,17 +142,17 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const isLegacy = isLegacyApplication(app.createdAt)
 
   return (
-    <div className="group p-4 rounded-xl border border-border/50 bg-card hover:border-border transition-all shadow-sm hover:shadow-md flex flex-col justify-between">
+    <div className="p-4 rounded-lg border border-border bg-card transition-colors flex flex-col justify-between">
       <div className="flex flex-wrap items-center justify-between gap-4 w-full">
         {/* Left: Icon & Details */}
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center border border-border/50 group-hover:scale-105 transition-transform">
-            <Box className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+          <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center border border-border">
+            <Box className="w-5 h-5 text-muted-foreground" />
           </div>
           <div>
-          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h4 className="font-semibold text-sm">{app.name}</h4>
-              <span className="px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <span className="px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded-md border border-border text-muted-foreground">
                 {app.runtime}
               </span>
             </div>
@@ -141,12 +165,12 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                 href={getAppUrl(safeName)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20"
+                className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
                 title="Primary Domain (aetherhost.app)"
               >
-                <Globe className="w-3 h-3 text-cyan-400" />
+                <Globe className="w-3.5 h-3.5 text-muted-foreground" />
                 <span className="max-w-[150px] truncate sm:max-w-[210px]">{`${safeName}.aetherhost.app`}</span>
-                <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
+                <ArrowUpRight className="w-3 h-3 opacity-60" />
               </a>
 
               {/* Legacy .com.ng Dropdown (Only for legacy pre-migration apps) */}
@@ -158,39 +182,39 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                       e.stopPropagation()
                       setLegacyDropdownOpen(!legacyDropdownOpen)
                     }}
-                    className="inline-flex items-center gap-1 text-[11px] font-mono text-amber-300 hover:text-amber-200 transition-colors bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 shadow-xs"
+                    className="inline-flex items-center gap-1 text-xs font-mono text-amber-500 hover:text-amber-400 transition-colors px-1.5 py-0.5 rounded-md border border-border hover:bg-muted"
                     title="Dual-Domain active: Click to view legacy aetherhost.com.ng domain"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
                     <span>.com.ng</span>
-                    <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-150 ${legacyDropdownOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${legacyDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {legacyDropdownOpen && (
                     <div
-                      className="absolute left-0 mt-1.5 w-76 rounded-xl bg-zinc-900/95 backdrop-blur-md border border-amber-500/30 shadow-2xl p-3 z-50 text-left"
+                      className="absolute left-0 mt-1.5 w-76 rounded-lg bg-card border border-border shadow-xl p-3 z-50 text-left"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-zinc-800">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
                         <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                          <span className="text-[11px] font-semibold text-zinc-100">Legacy Domain Active</span>
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span className="text-xs font-semibold text-foreground">Legacy Domain Active</span>
                         </div>
-                        <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <span className="text-xs uppercase font-mono px-1.5 py-0.5 rounded border border-border text-muted-foreground">
                           Dual-Route
                         </span>
                       </div>
 
-                      <p className="text-[11px] text-zinc-400 mb-2 leading-snug">
-                        This application is dual-bound. Both URLs are live with SSL until the <code className="text-zinc-300">.com.ng</code> domain expires:
+                      <p className="text-xs text-muted-foreground mb-2 leading-snug">
+                        This application is dual-bound. Both URLs are live with SSL until the <code className="text-foreground">.com.ng</code> domain expires:
                       </p>
 
                       <div className="space-y-1.5 mb-3">
                         {/* Legacy URL item */}
-                        <div className="p-2 rounded-lg bg-zinc-950/80 border border-amber-500/20 flex items-center justify-between gap-2">
+                        <div className="p-2 rounded-md bg-muted/30 border border-border flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <span className="block text-[10px] text-zinc-500 font-mono">Legacy (.com.ng)</span>
-                            <span className="block font-mono text-xs text-amber-300 truncate select-all">
+                            <span className="block text-xs text-muted-foreground font-mono">Legacy (.com.ng)</span>
+                            <span className="block font-mono text-xs text-amber-500 truncate select-all">
                               {`${safeName}.aetherhost.com.ng`}
                             </span>
                           </div>
@@ -202,16 +226,16 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                                 setCopiedLegacy(true)
                                 setTimeout(() => setCopiedLegacy(false), 2000)
                               }}
-                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               title="Copy legacy URL"
                             >
-                              {copiedLegacy ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              {copiedLegacy ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                             </button>
                             <a
                               href={getLegacyAppUrl(safeName)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               title="Open in new tab"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
@@ -220,10 +244,10 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                         </div>
 
                         {/* Primary URL item */}
-                        <div className="p-2 rounded-lg bg-zinc-950/80 border border-cyan-500/20 flex items-center justify-between gap-2">
+                        <div className="p-2 rounded-md bg-muted/30 border border-border flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <span className="block text-[10px] text-cyan-400/70 font-mono">Primary (.app)</span>
-                            <span className="block font-mono text-xs text-cyan-300 truncate select-all">
+                            <span className="block text-xs text-muted-foreground font-mono">Primary (.app)</span>
+                            <span className="block font-mono text-xs text-foreground truncate select-all">
                               {`${safeName}.aetherhost.app`}
                             </span>
                           </div>
@@ -232,7 +256,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                               href={getAppUrl(safeName)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               title="Open primary URL"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
@@ -246,7 +270,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                           href={getLegacyAppUrl(safeName)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 text-center py-1 px-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs font-medium border border-amber-500/30 transition-colors"
+                          className="flex-1 text-center py-1 px-2 rounded-md bg-muted hover:bg-muted/80 text-foreground text-xs font-medium border border-border transition-colors"
                         >
                           Visit .com.ng
                         </a>
@@ -254,7 +278,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                           href={getAppUrl(safeName)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 text-center py-1 px-2 rounded-md bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-xs font-medium border border-cyan-500/30 transition-colors"
+                          className="flex-1 text-center py-1 px-2 rounded-md bg-muted hover:bg-muted/80 text-foreground text-xs font-medium border border-border transition-colors"
                         >
                           Visit .app
                         </a>
@@ -269,11 +293,11 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                   href={app.githubRepo.replace(/\.git$/, '')}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white transition-colors"
+                  className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <GitBranch className="w-3 h-3 text-zinc-500" />
+                  <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
                   <span className="max-w-[160px] truncate sm:max-w-[240px]">{app.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
-                  <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
+                  <ArrowUpRight className="w-3 h-3 opacity-60" />
                 </a>
               )}
               {currentDomain && (
@@ -281,20 +305,20 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                   href={`https://${currentDomain}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 hover:text-emerald-300 transition-colors bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"
+                  className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
                   title="Connected Custom Domain"
                 >
-                  <Globe className="w-3 h-3 text-emerald-400" />
+                  <Globe className="w-3.5 h-3.5 text-muted-foreground" />
                   <span className="max-w-[160px] truncate sm:max-w-[240px]">{currentDomain}</span>
-                  <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
+                  <ArrowUpRight className="w-3 h-3 opacity-60" />
                 </a>
               )}
               {currentDockerImage && (
                 <span
-                  className="inline-flex items-center gap-1 text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20"
+                  className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground"
                   title={`Container Image: ${currentDockerImage}`}
                 >
-                  <Container className="w-3 h-3 text-cyan-400" />
+                  <Container className="w-3.5 h-3.5 text-muted-foreground" />
                   <span className="max-w-[140px] truncate sm:max-w-[200px]">{currentDockerImage}</span>
                 </span>
               )}
@@ -303,20 +327,14 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
         </div>
 
         {/* Right: Status & Actions */}
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-6">
+        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4">
           {/* Status Badge */}
           <div className="flex items-center gap-2">
             <div className="relative flex h-2 w-2">
               {localStatus === 'running' ? (
-                <>
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                </>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               ) : localStatus === 'failed' ? (
-                <>
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                </>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               ) : (
                 <>
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -327,7 +345,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             <span
               className={`text-xs font-medium capitalize ${
                 localStatus === 'running'
-                  ? 'text-green-500'
+                  ? 'text-emerald-500'
                   : localStatus === 'failed'
                     ? 'text-red-400'
                     : 'text-amber-500'
@@ -337,104 +355,20 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             </span>
           </div>
 
-          {/* Action Buttons */}
+          {/* Action Buttons: 2 visible (Visit, Logs) + overflow menu */}
           <div className="flex items-center gap-2">
-            {/* Redeploy Button */}
-            <button
-              type="button"
-              onClick={handleRedeploy}
-              disabled={isRedeploying}
-              className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-sm disabled:opacity-50 ${
-                localStatus === 'failed' || localStatus === 'pending'
-                  ? 'text-emerald-300 hover:text-emerald-200 border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25'
-                  : 'text-zinc-300 hover:text-foreground border-border/50 hover:bg-muted/50'
-              }`}
-              title="Trigger fresh container build & redeploy"
-            >
-              {isRedeploying ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <RotateCcw className="w-3.5 h-3.5" />
-              )}
-              <span>{isRedeploying ? 'Deploying...' : 'Redeploy'}</span>
-            </button>
-
-            {/* Env Vars Button */}
-            <button
-              type="button"
-              onClick={() => setEnvModalOpen(true)}
-              className="text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors px-3 py-1.5 rounded-lg border border-amber-500/30 hover:bg-amber-500/10 flex items-center gap-1.5 shadow-sm"
-              title="Configure Environment Variables & Secrets"
-            >
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Env</span>
-            </button>
-
-            {/* Update Container Image Button */}
-            <button
-              type="button"
-              onClick={() => setImageModalOpen(true)}
-              className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-sm ${
-                currentDockerImage
-                  ? 'text-cyan-400 hover:text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/10'
-                  : 'text-slate-400 hover:text-slate-300 border-slate-700/80 hover:bg-slate-800/60'
-              }`}
-              title="Update Container Image without losing database, users, or domains"
-            >
-              <Container className="w-3.5 h-3.5" />
-              <span>Image</span>
-            </button>
-
-            {/* Custom Domain Button */}
-            <button
-              type="button"
-              onClick={() => setDomainModalOpen(true)}
-              className={`text-xs font-medium transition-colors px-3 py-1.5 rounded-lg border flex items-center gap-1.5 shadow-sm ${
-                currentDomain
-                  ? 'text-emerald-400 hover:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/10'
-                  : 'text-indigo-400 hover:text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/10'
-              }`}
-              title="Connect or configure Custom Domain"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Domain</span>
-            </button>
-
-            {/* AI Architect Button */}
-            <button
-              type="button"
-              onClick={() => setAiModalOpen(true)}
-              className="text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10 flex items-center gap-1.5 shadow-sm"
-              title="Prompt AI Architect to modify code and push to GitHub"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              AI Architect
-            </button>
-
-            {/* Web IDE Button */}
-            {(app.runtime === 'docker' || app.aiFiles) && !app.dockerImage && (
-              <a 
-                href={getAppUrl(`${safeName}-ide`)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-cyan-400 hover:text-cyan-300 transition-colors px-3 py-1.5 rounded-lg border border-cyan-500/30 hover:bg-cyan-500/10 flex items-center gap-1"
-              >
-                <Terminal className="w-3 h-3" />
-                IDE
-              </a>
-            )}
-
-            {/* Visit Button */}
+            {/* Action 1: Visit Button */}
             {isLegacy ? (
-              <div className="relative inline-flex rounded-lg shadow-xs" ref={visitMenuRef}>
+              <div className="relative inline-flex rounded-md" ref={visitMenuRef}>
                 <a
                   href={getAppUrl(safeName)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-medium text-foreground/80 hover:text-foreground transition-colors px-2.5 py-1.5 rounded-l-lg border border-r-0 border-border/50 hover:bg-muted/50 inline-flex items-center gap-1"
+                  className="text-xs font-medium text-foreground hover:bg-muted transition-colors px-2.5 py-1.5 rounded-l-md border border-r-0 border-border inline-flex items-center gap-1"
                   title="Visit primary URL (.app)"
                 >
-                  Visit
+                  <span>Visit</span>
+                  <ArrowUpRight className="w-3 h-3 opacity-60" />
                 </a>
                 <button
                   type="button"
@@ -442,7 +376,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                     e.stopPropagation()
                     setVisitDropdownOpen(!visitDropdownOpen)
                   }}
-                  className="px-1.5 py-1.5 rounded-r-lg border border-border/50 hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+                  className="px-1.5 py-1.5 rounded-r-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   title="Choose domain to visit"
                 >
                   <ChevronDown className={`w-3 h-3 transition-transform ${visitDropdownOpen ? 'rotate-180' : ''}`} />
@@ -450,28 +384,28 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
 
                 {visitDropdownOpen && (
                   <div
-                    className="absolute right-0 top-full mt-1.5 w-52 rounded-xl bg-zinc-900/95 backdrop-blur-md border border-zinc-700/80 shadow-xl py-1.5 z-50 text-left"
+                    className="absolute right-0 top-full mt-1.5 w-52 rounded-md bg-card border border-border shadow-xl py-1 z-50 text-left"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <a
                       href={getAppUrl(safeName)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-800 transition-colors"
+                      className="flex items-center justify-between px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
                       onClick={() => setVisitDropdownOpen(false)}
                     >
-                      <span className="font-medium text-cyan-300">Open .app (Primary)</span>
-                      <ExternalLink className="w-3 h-3 text-zinc-400" />
+                      <span className="font-medium">Open .app (Primary)</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                     </a>
                     <a
                       href={getLegacyAppUrl(safeName)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800 transition-colors"
+                      className="flex items-center justify-between px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
                       onClick={() => setVisitDropdownOpen(false)}
                     >
-                      <span className="text-amber-300">Open .com.ng (Legacy)</span>
-                      <ExternalLink className="w-3 h-3 text-zinc-400" />
+                      <span className="text-amber-500">Open .com.ng (Legacy)</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                     </a>
                   </div>
                 )}
@@ -481,21 +415,130 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                 href={getAppUrl(safeName)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs font-medium text-foreground/80 hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border/50 hover:bg-muted/50"
+                className="text-xs font-medium text-foreground hover:bg-muted transition-colors px-2.5 py-1.5 rounded-md border border-border inline-flex items-center gap-1"
               >
-                Visit
+                <span>Visit</span>
+                <ArrowUpRight className="w-3 h-3 opacity-60" />
               </a>
             )}
 
-            {/* Delete Button */}
+            {/* Action 2: Logs Toggle Button */}
             <button
               type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="text-xs font-medium text-red-500 hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10 disabled:opacity-50"
+              onClick={() => setShowLogs(!showLogs)}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors px-2.5 py-1.5 rounded-md border border-border inline-flex items-center gap-1.5"
+              title="Toggle Deployment Logs"
             >
-              Delete
+              <Terminal className="w-3.5 h-3.5" />
+              <span>Logs</span>
             </button>
+
+            {/* Overflow "⋯" Menu */}
+            <div className="relative inline-block" ref={actionMenuRef}>
+              <button
+                type="button"
+                onClick={() => setActionMenuOpen(!actionMenuOpen)}
+                className="p-1.5 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="More actions"
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+
+              {actionMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 w-48 rounded-md bg-card border border-border shadow-xl py-1 z-50 text-left text-xs"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false)
+                      handleRedeploy()
+                    }}
+                    disabled={isRedeploying}
+                    className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-muted text-foreground transition-colors disabled:opacity-50"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${isRedeploying ? 'animate-spin' : ''}`} />
+                    <span>{isRedeploying ? 'Redeploying...' : 'Redeploy'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false)
+                      setEnvModalOpen(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-muted text-foreground transition-colors"
+                  >
+                    <KeyRound className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Environment Variables</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false)
+                      setImageModalOpen(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-muted text-foreground transition-colors"
+                  >
+                    <Container className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Container Image</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false)
+                      setDomainModalOpen(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-muted text-foreground transition-colors"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Custom Domain</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false)
+                      setAiModalOpen(true)
+                    }}
+                    className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-muted text-foreground transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>AI Architect</span>
+                  </button>
+
+                  {(app.runtime === 'docker' || app.aiFiles) && !app.dockerImage && (
+                    <a
+                      href={getAppUrl(`${safeName}-ide`)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-muted text-foreground transition-colors"
+                    >
+                      <Terminal className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>Web IDE</span>
+                    </a>
+                  )}
+
+                  <div className="my-1 border-t border-border" />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionMenuOpen(false)
+                      handleDelete()
+                    }}
+                    disabled={isDeleting}
+                    className="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-destructive/10 text-red-500 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{isDeleting ? 'Deleting...' : 'Delete Application'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -504,6 +547,8 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
       <DeploymentLogViewer
         appId={app.id}
         status={localStatus}
+        isOpen={showLogs}
+        onToggle={() => setShowLogs(!showLogs)}
         onRedeployTriggered={() => {
           setLocalStatus('pending')
           router.refresh()

@@ -140,13 +140,13 @@ export default function ApiKeyManager() {
 
       {/* New Key Alert Banner */}
       {newKey && (
-        <section className="p-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-2 text-amber-500 font-semibold text-sm">
+        <section className="p-4 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-3">
+          <div className="flex items-center gap-2 text-amber-500 font-semibold text-xs">
             <ShieldAlert className="w-4 h-4" />
             <span>Copy your API key now. It will not be shown again.</span>
           </div>
 
-          <div className="flex items-center justify-between bg-background border border-border rounded-xl p-3 font-mono text-xs">
+          <div className="flex items-center justify-between bg-background border border-border rounded-md p-2.5 font-mono text-xs">
             <span className="truncate pr-4 select-all text-foreground">{newKey}</span>
             <button
               onClick={() => copyToClipboard(newKey)}

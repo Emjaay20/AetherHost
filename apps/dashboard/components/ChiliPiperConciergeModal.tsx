@@ -53,19 +53,19 @@ export default function ChiliPiperConciergeModal({ isOpen, onClose }: ChiliPiper
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg rounded-2xl border border-border/70 bg-card p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-xl">
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
 
         <div className="flex items-center gap-3 mb-5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-blue-500 text-white shadow-md">
-            <Sparkles className="h-5 w-5" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted border border-border text-muted-foreground">
+            <Sparkles className="h-4 w-4" />
           </div>
           <div>
             <h3 className="text-base font-bold text-foreground">AetherHost Enterprise Onboarding</h3>
@@ -154,7 +154,7 @@ export default function ChiliPiperConciergeModal({ isOpen, onClose }: ChiliPiper
               </div>
             </div>
 
-            <div className="rounded-lg bg-muted/30 border border-border/40 p-3 text-[11px] text-muted-foreground flex items-center gap-2">
+            <div className="rounded-md bg-muted/30 border border-border p-3 text-xs text-muted-foreground flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-400 shrink-0" />
               <span>Chili Piper will instantly qualify and load our EMEA CSM team's real-time availability.</span>
             </div>

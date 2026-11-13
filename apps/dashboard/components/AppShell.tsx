@@ -74,7 +74,7 @@ export default function AppShell({
       />
       <main className="flex min-h-screen min-w-0 flex-1 flex-col overflow-hidden">
         {banner}
-        <header className="sticky top-0 z-30 flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-background/80 px-4 py-3 backdrop-blur-xl sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"

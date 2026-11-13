@@ -145,21 +145,21 @@ export default function CustomDomainModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div
-        className="relative w-full max-w-lg bg-[#0d0f12] border border-border/60 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-lg bg-card border border-border rounded-lg shadow-xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border/40 bg-card/40">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-card">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+            <div className="w-8 h-8 rounded-md bg-muted border border-border flex items-center justify-center text-muted-foreground">
               <Globe className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 Custom Domain
-                <span className="text-[10px] font-mono font-normal px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span className="text-xs font-mono font-normal px-2 py-0.5 rounded-md border border-border text-muted-foreground">
                   Starter & Above
                 </span>
               </h3>
@@ -171,30 +171,30 @@ export default function CustomDomainModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSave} className="p-6 space-y-5">
+        <form onSubmit={handleSave} className="p-5 space-y-4">
           {error && (
-            <div className="p-3 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
+            <div className="p-3 rounded-md bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2">
+            <div className="p-3 rounded-md bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2">
               <Check className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
           )}
 
           {/* Domain Input */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label className="text-xs font-medium text-foreground flex items-center justify-between">
               <span>Domain Name</span>
               {initialCustomDomain && (
@@ -202,7 +202,7 @@ export default function CustomDomainModal({
                   href={`https://${initialCustomDomain}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-blue-400 hover:underline flex items-center gap-1"
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   Visit https://{initialCustomDomain} <ExternalLink className="w-3 h-3" />
                 </a>
@@ -214,61 +214,61 @@ export default function CustomDomainModal({
                 placeholder="example.com or app.example.com"
                 value={domainInput}
                 onChange={(e) => setDomainInput(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-muted/40 border border-border/60 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/60 font-mono"
+                className="w-full px-3 py-2 rounded-md bg-background border border-border text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary font-mono"
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Enter your root domain (e.g. <code className="text-foreground">mybrand.com</code>) or subdomain (e.g. <code className="text-foreground">shop.mybrand.com</code>).
             </p>
           </div>
 
           {/* DNS Configuration Instructions */}
-          <div className="p-4 rounded-xl bg-muted/20 border border-border/40 space-y-3">
+          <div className="p-4 rounded-md bg-muted/20 border border-border space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
               <span>Required DNS Records at your Registrar</span>
             </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Add either an <strong className="text-foreground">A record</strong> (for apex/root domain) or a <strong className="text-foreground">CNAME record</strong> (for subdomains) in Cloudflare, Namecheap, GoDaddy, etc.:
             </p>
 
             <div className="space-y-2 text-xs font-mono">
               {/* A Record */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <div className="flex items-center justify-between p-2.5 rounded-md bg-muted/40 border border-border">
                 <div>
-                  <span className="text-blue-400 font-semibold mr-2">A</span>
-                  <span className="text-zinc-400 mr-2">@</span>
+                  <span className="text-foreground font-semibold mr-2">A</span>
+                  <span className="text-muted-foreground mr-2">@</span>
                   <span className="text-foreground">{SERVER_IP}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleCopy(SERVER_IP, 'ip')}
-                  className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-foreground px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors"
                 >
-                  {copiedIp ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedIp ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedIp ? 'Copied' : 'Copy IP'}</span>
                 </button>
               </div>
 
               {/* CNAME Record */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <div className="flex items-center justify-between p-2.5 rounded-md bg-muted/40 border border-border">
                 <div className="truncate mr-2">
-                  <span className="text-purple-400 font-semibold mr-2">CNAME</span>
-                  <span className="text-zinc-400 mr-2">www</span>
+                  <span className="text-foreground font-semibold mr-2">CNAME</span>
+                  <span className="text-muted-foreground mr-2">www</span>
                   <span className="text-foreground">{defaultCnameTarget}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleCopy(defaultCnameTarget, 'cname')}
-                  className="shrink-0 flex items-center gap-1 text-[11px] text-zinc-400 hover:text-foreground px-2 py-1 rounded bg-white/5 hover:bg-white/10 transition-colors"
+                  className="shrink-0 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md bg-muted hover:bg-muted/80 transition-colors"
                 >
-                  {copiedCname ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedCname ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                   <span>{copiedCname ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
             </div>
 
-            <p className="text-[10px] text-zinc-500 italic">
+            <p className="text-xs text-muted-foreground italic">
               Traefik edge router automatically provisions and auto-renews free Let&apos;s Encrypt SSL/TLS certificates once DNS propagates.
             </p>
           </div>
@@ -281,7 +281,7 @@ export default function CustomDomainModal({
                   type="button"
                   onClick={handleRemove}
                   disabled={isRemoving || isSaving}
-                  className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  className="text-xs text-red-500 hover:text-red-400 px-3 py-1.5 rounded-md hover:bg-red-500/10 transition-colors flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isRemoving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                   <span>Disconnect</span>
@@ -293,14 +293,14 @@ export default function CustomDomainModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="text-xs text-muted-foreground hover:text-foreground px-3.5 py-2 rounded-xl hover:bg-muted/50 transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md border border-border hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSaving || isRemoving}
-                className="text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl transition-colors flex items-center gap-1.5 shadow-sm shadow-blue-500/20 disabled:opacity-50"
+                className="text-xs font-medium text-primary-foreground bg-primary hover:bg-primary/90 px-3.5 py-1.5 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
                 {isSaving ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
