@@ -134,6 +134,7 @@ jobs:
           scan-ref: .
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore
           # Start in reporting mode so existing dependency debt does not block
           # a safe deployment. Promote this to a blocking gate after findings
           # are triaged and documented.
