@@ -7,11 +7,17 @@ set -euo pipefail
 readonly platform_dir="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
 readonly projects_dir="${PROJECTS_ROOT:-/srv/aetherhost/projects}"
 readonly config_file="/etc/aetherhost/backup.env"
-readonly work_dir="$(mktemp -d /var/tmp/aetherhost-backup.XXXXXX)"
+# Restic chooses an incremental parent based on the source path. A random
+# mktemp path made every scheduled backup look unrelated to its predecessor,
+# forcing full scans. This fixed, root-owned path preserves that relationship.
+readonly work_dir="/var/lib/aetherhost/backup-staging"
 readonly restic_cache_dir="${RESTIC_CACHE_DIR:-/var/cache/aetherhost/restic}"
 
 cleanup() {
-  rm -rf "$work_dir"
+  # Never accept a configurable deletion target. Only clear children of the
+  # dedicated staging directory after checking its exact canonical location.
+  [[ "$work_dir" == "/var/lib/aetherhost/backup-staging" && -d "$work_dir" ]] || return 0
+  find "$work_dir" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 }
 trap cleanup EXIT
 
@@ -35,7 +41,9 @@ if [[ ! -f "$platform_dir/docker-compose.prod.yml" ]] || [[ ! -d "$projects_dir"
   echo "Missing AetherHost control-plane or projects directory. Run the layout migration first." >&2
   exit 1
 fi
-install -d -m 0700 "$restic_cache_dir"
+install -d -m 0700 "$restic_cache_dir" "$work_dir"
+cleanup
+export HOME="${HOME:-/root}"
 export XDG_CACHE_HOME="$restic_cache_dir"
 
 # Google Drive is a valid backup target. Rate limiting is applied to the rclone

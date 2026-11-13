@@ -20,6 +20,12 @@ systemctl list-timers --all 'aetherhost-*'
 
 Configure Google Drive before enabling a real backup run: see [Google Drive setup](../deploy/backup/GOOGLE_DRIVE_SETUP.md).
 
+Backups stage data only in `/var/lib/aetherhost/backup-staging`, a fixed
+root-owned path. This is intentional: Restic can then identify the preceding
+snapshot and perform incremental work. The service has a four-hour maximum
+runtime; a timeout is a failed backup that requires investigation, never a
+successful recovery point.
+
 ## Failure alerts
 
 Backup, restore-drill, and Docker-maintenance failures can notify an
