@@ -6,6 +6,8 @@ description = "Official Developer CLI for AetherHost PaaS"
 
 [dependencies]
 aether-core = { workspace = true }
+aether-authz = { workspace = true }
+aether-telemetry = { workspace = true }
 clap = { version = "4.5", features = ["derive"] }
 tokio = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
@@ -18,8 +20,4 @@ dirs = "5.0"
 
 [[bin]]
 name = "aether"
-path = "src/main.rs"
-
-[[bin]]
-name = "aether-cli"
 path = "src/main.rs"

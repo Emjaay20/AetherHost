@@ -1,0 +1,17 @@
+[package]
+name = "aether-authz"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance fine-grained authorization engine (RBAC/ABAC) for AetherHost platform"
+
+[dependencies]
+aether-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
+tower = { version = "0.4", features = ["util"] }

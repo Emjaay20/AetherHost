@@ -79,7 +79,7 @@ jobs:
           go test -v ./...
 
   rust-crates:
-    name: Rust Crates (aether-core, aether-cli, aether-logd, aether-router)
+    name: Rust Platform Crates (aether-core, aether-authz, aether-telemetry, aether-cli, aether-logd, aether-router)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -92,10 +92,21 @@ jobs:
       - name: Setup Rust toolchain
         # stable branch, pinned at 2026-11-11
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          components: clippy, rustfmt
 
-      - name: Run Cargo check & unit tests
+      - name: Cache Cargo dependencies & build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates -> target
+
+      - name: Enforce strict platform clippy lints
         run: |
-          cargo test --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Cargo workspace tests & doc tests
+        run: |
+          cargo test --workspace --verbose
 
   security:
     name: Security and Dependency Checks

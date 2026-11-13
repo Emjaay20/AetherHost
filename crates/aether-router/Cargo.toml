@@ -6,6 +6,8 @@ description = "High-performance edge reverse proxy and bandwidth meter for Aethe
 
 [dependencies]
 aether-core = { workspace = true }
+aether-authz = { workspace = true }
+aether-telemetry = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }

@@ -1,4 +1,7 @@
-use aether_core::{build_http_client, constant_time_eq, extract_app_subdomain};
+use aether_core::{
+    build_http_client, constant_time_eq, extract_app_subdomain, CircuitBreaker, PlatformError,
+};
+use aether_telemetry::MetricsRegistry;
 use axum::{
     body::Bytes,
     extract::{Request, State},
@@ -11,6 +14,7 @@ use std::{
     collections::HashMap,
     net::SocketAddr,
     sync::{Arc, RwLock},
+    time::Instant,
 };
 use tracing::{info, warn};
 
@@ -21,6 +25,8 @@ struct MeterState {
     default_backend: Arc<String>,
     http_client: reqwest::Client,
     metrics_token: Option<String>,
+    circuit_breaker: CircuitBreaker,
+    telemetry: MetricsRegistry,
 }
 
 impl MeterState {
@@ -30,6 +36,12 @@ impl MeterState {
             default_backend: Arc::new(default_backend),
             http_client: build_http_client(30),
             metrics_token,
+            circuit_breaker: CircuitBreaker::new(
+                "edge-upstream-backend",
+                5,
+                std::time::Duration::from_secs(10),
+            ),
+            telemetry: MetricsRegistry::new("aether-router"),
         }
     }
 }
@@ -128,7 +140,9 @@ async fn metrics_handler(
         .counters
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let out = format_prometheus_metrics(&map);
+    let mut out = format_prometheus_metrics(&map);
+    out.push('\n');
+    out.push_str(&state.telemetry.render_prometheus());
 
     (
         [(
@@ -141,6 +155,7 @@ async fn metrics_handler(
 }
 
 async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Response {
+    let start_time = Instant::now();
     let host = req
         .headers()
         .get("host")
@@ -152,7 +167,7 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
 
     let method = req.method().clone();
     let uri = req.uri().clone();
-    let path_and_query = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/");
+    let path_and_query = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/").to_string();
 
     let target_url = format!("{}{}", state.default_backend, path_and_query);
 
@@ -161,6 +176,12 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
         Ok(b) => b,
         Err(e) => {
             warn!("Failed to read request body: {}", e);
+            state.telemetry.record_request(
+                method.as_str(),
+                &path_and_query,
+                StatusCode::BAD_REQUEST.as_u16(),
+                start_time.elapsed(),
+            );
             return (StatusCode::BAD_REQUEST, "Payload too large or corrupted").into_response();
         }
     };
@@ -177,7 +198,7 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
         entry.0 += ingress_len;
     }
 
-    let mut fwd_req = state.http_client.request(method, &target_url);
+    let mut fwd_req = state.http_client.request(method.clone(), &target_url);
 
     for (k, v) in parts.headers.iter() {
         if k != "host" && k != "content-length" {
@@ -187,7 +208,13 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
     fwd_req = fwd_req.header("Host", host);
     fwd_req = fwd_req.body(body_bytes);
 
-    match fwd_req.send().await {
+    let target_url_clone = target_url.clone();
+    let send_result = state
+        .circuit_breaker
+        .call(|| async { fwd_req.send().await })
+        .await;
+
+    match send_result {
         Ok(resp) => {
             let status = StatusCode::from_u16(resp.status().as_u16())
                 .unwrap_or(StatusCode::BAD_GATEWAY);
@@ -205,6 +232,13 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
                 entry.1 += egress_len;
             }
 
+            state.telemetry.record_request(
+                method.as_str(),
+                &path_and_query,
+                status.as_u16(),
+                start_time.elapsed(),
+            );
+
             let mut res = Response::builder().status(status);
             for (k, v) in headers.iter() {
                 res = res.header(k.as_str(), v.as_bytes());
@@ -215,8 +249,37 @@ async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Respons
                     (StatusCode::INTERNAL_SERVER_ERROR, "Proxy build error").into_response()
                 })
         }
+        Err(PlatformError::CircuitOpen {
+            service,
+            retry_after_secs,
+        }) => {
+            warn!(
+                "Circuit breaker tripped for {}: retry after {}s",
+                service, retry_after_secs
+            );
+            state.telemetry.record_request(
+                method.as_str(),
+                &path_and_query,
+                StatusCode::SERVICE_UNAVAILABLE.as_u16(),
+                start_time.elapsed(),
+            );
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!(
+                    "Service Unavailable: Upstream circuit breaker open. Retry after {}s",
+                    retry_after_secs
+                ),
+            )
+                .into_response()
+        }
         Err(e) => {
-            warn!("Proxy forwarding error to {}: {}", target_url, e);
+            warn!("Proxy forwarding error to {}: {}", target_url_clone, e);
+            state.telemetry.record_request(
+                method.as_str(),
+                &path_and_query,
+                StatusCode::BAD_GATEWAY.as_u16(),
+                start_time.elapsed(),
+            );
             (StatusCode::BAD_GATEWAY, format!("Bad Gateway: {}", e)).into_response()
         }
     }
