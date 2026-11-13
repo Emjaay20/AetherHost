@@ -8,3 +8,31 @@ groups:
           severity: warning
         annotations:
           summary: "High AI Proxy Request Rate"
+      - alert: WordPressWorkerPoolSaturated
+        expr: increase(aetherhost_wordpress_php_fpm_max_children_reached[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WordPress PHP-FPM worker pool saturated"
+      - alert: WordPressMariaDBConnectionsNearLimit
+        expr: aetherhost_wordpress_mariadb_connections / clamp_min(aetherhost_wordpress_mariadb_max_connections, 1) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WordPress MariaDB connections above 80 percent"
+      - alert: WordPressReadinessFailed
+        expr: aetherhost_wordpress_ready == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WordPress ingress readiness check is failing"
+      - alert: WordPressRedisEvicting
+        expr: increase(aetherhost_wordpress_redis_evicted_keys_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WordPress Redis is evicting cache keys"

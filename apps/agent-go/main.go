@@ -167,6 +167,7 @@ func main() {
 	defer stop()
 
 	go startTelemetryReporter(ctx, controlPlaneURL)
+	startWordPressMetricsServer()
 
 	logger.Info("AetherHost Go Agent started; polling control plane", slog.String("control_plane_url", controlPlaneURL))
 

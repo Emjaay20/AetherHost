@@ -46,3 +46,18 @@ end-to-end WordPress container run, seeded data migration, cache activation,
 load test, and database-failure drill have not been claimed as complete. The
 next stage must run those checks locally, record command output and measured
 latency/error values, and only then decide whether to deploy this profile.
+
+## Observability implementation
+
+The second source stage adds one internal agent Prometheus endpoint rather than
+separate PHP, MariaDB, Redis, and nginx exporter containers for every tenant.
+It collects PHP-FPM worker state through nginx loopback, MariaDB status and
+limits through the private container, and Redis cache counters through the
+private container. Prometheus scrapes the agent over the control-plane Docker
+network; Grafana and alerts cover worker saturation, database connection
+pressure, ingress readiness, and Redis eviction.
+
+Nginx FastCGI-cache hit/miss metrics are intentionally not reported: the new
+profile does not enable a generic PHP cache that could accidentally cache
+personalized or authenticated responses. Cache claims will be added only after
+an explicit cache design and measured validation.

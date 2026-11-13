@@ -92,6 +92,9 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	fmt.Fprintf(b, "        aliases:\n          - %s\n", nginxName)
 	b.WriteString("    depends_on:\n")
 	fmt.Fprintf(b, "      %s:\n        condition: service_started\n", phpName)
+	b.WriteString("    healthcheck:\n")
+	b.WriteString("      test: [\"CMD-SHELL\", \"wget -q -O - http://127.0.0.1/.aetherhost/ready >/dev/null\"]\n")
+	b.WriteString("      interval: 5s\n      timeout: 3s\n      retries: 20\n")
 }
 
 func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string, resources WordPressResources) {
@@ -158,6 +161,15 @@ func wordpressNginxConfig() string {
         fastcgi_param SCRIPT_NAME /fpm-ping;
         fastcgi_pass php:9000;
     }
+    location = /fpm-status {
+        allow 127.0.0.1;
+        deny all;
+        access_log off;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /fpm-status;
+        fastcgi_param SCRIPT_NAME /fpm-status;
+        fastcgi_pass php:9000;
+    }
     location / { try_files $uri $uri/ /index.php?$args; }
     location ~ /\. { deny all; access_log off; log_not_found off; }
     location ~* \.(jpg|jpeg|gif|png|css|js|ico|webp|woff2)$ { expires max; log_not_found off; access_log off; }
@@ -188,6 +200,7 @@ request_slowlog_timeout = 5s
 slowlog = /tmp/www-slow.log
 ping.path = /fpm-ping
 ping.response = pong
+pm.status_path = /fpm-status
 php_admin_value[memory_limit] = %dM
 php_admin_value[max_execution_time] = 60
 php_admin_value[upload_max_filesize] = 50M

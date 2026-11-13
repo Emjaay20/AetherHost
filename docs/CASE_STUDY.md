@@ -26,3 +26,26 @@ Distinguished explicitly between liveness (`/v1/health` for process state) and r
 
 ## Conclusion
 AetherHost isn't a mock WordPress deployment tool. It's a senior-level architectural proof of concept demonstrating how to orchestrate distributed systems, asynchronous event flows, rigorous API boundaries, and bulletproof billing cycles.
+
+## WordPress workload evidence: pending local execution
+
+The WordPress runtime now uses the same generated workload contract as a
+containerized Go, Rust, Node, or Python application. It has a private PHP,
+MariaDB, and Redis graph behind one nginx ingress service; memory-derived
+runtime tuning; generated protected credential files; and agent-collected
+Prometheus metrics. The design and source-level verification are documented in
+[ADR 017](architecture/adr/017-wordpress-workload-profile.md).
+
+No benchmark values are published yet. The Docker daemon was unavailable in
+the development environment used for this change, so no p50/p95/p99, RPS,
+cache-hit, backup duration, or recovery-time values have been invented. To
+produce the record, run a local profile first and save the output:
+
+```bash
+WORDPRESS_URL=http://demo.localhost k6 run scripts/wordpress-load-test.js
+```
+
+The report must state host specification, profile memory budget, WordPress and
+image versions, command line, p50/p95/p99, error rate, and the result of the
+MariaDB failure/restore drill. It should compare anonymous traffic with the
+explicit bypass scenario rather than claiming a cache benefit without evidence.

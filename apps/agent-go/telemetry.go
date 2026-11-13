@@ -105,6 +105,8 @@ func startTelemetryReporter(ctx context.Context, controlPlaneURL string) {
 		case <-ticker.C:
 		}
 
+		refreshWordPressMetrics()
+
 		// Run docker stats
 		cmd := exec.Command("docker", "stats", "--no-stream", "--format", "{{.Name}}|{{.MemUsage}}|{{.NetIO}}")
 		output, err := cmd.Output()
