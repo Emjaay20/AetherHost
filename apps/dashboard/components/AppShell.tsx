@@ -35,7 +35,8 @@ export default function AppShell({
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    setOpen(false)
+    const closeDrawer = window.setTimeout(() => setOpen(false), 0)
+    return () => window.clearTimeout(closeDrawer)
   }, [pathname])
 
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function AppShell({
   }, [])
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-screen w-full overflow-hidden">
       <Sidebar
         usage={usage}
         limit={limit}
@@ -72,7 +73,7 @@ export default function AppShell({
         open={open}
         onClose={() => setOpen(false)}
       />
-      <main className="flex min-h-screen min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
         {banner}
         <header className="sticky top-0 z-30 flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-4 py-2.5 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2">

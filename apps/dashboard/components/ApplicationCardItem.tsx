@@ -9,13 +9,10 @@ import {
   GitBranch,
   ArrowUpRight,
   RotateCcw,
-  Loader2,
   KeyRound,
   Globe,
   Container,
   ChevronDown,
-  Copy,
-  Check,
   ExternalLink,
   MoreHorizontal,
   Trash2,
@@ -58,21 +55,15 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const [isDeleting, setIsDeleting] = useState(false)
   const [isRedeploying, setIsRedeploying] = useState(false)
   const [localStatus, setLocalStatus] = useState(app.status)
-  const [legacyDropdownOpen, setLegacyDropdownOpen] = useState(false)
-  const [copiedLegacy, setCopiedLegacy] = useState(false)
   const [visitDropdownOpen, setVisitDropdownOpen] = useState(false)
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
 
-  const legacyMenuRef = useRef<HTMLDivElement>(null)
   const visitMenuRef = useRef<HTMLDivElement>(null)
   const actionMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (legacyMenuRef.current && !legacyMenuRef.current.contains(event.target as Node)) {
-        setLegacyDropdownOpen(false)
-      }
       if (visitMenuRef.current && !visitMenuRef.current.contains(event.target as Node)) {
         setVisitDropdownOpen(false)
       }
@@ -142,194 +133,49 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const isLegacy = isLegacyApplication(app.createdAt)
 
   return (
-    <div className="p-4 rounded-lg border border-border bg-card transition-colors flex flex-col justify-between">
-      <div className="flex flex-wrap items-center justify-between gap-4 w-full">
-        {/* Left: Icon & Details */}
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-md bg-muted flex items-center justify-center border border-border">
-            <Box className="w-5 h-5 text-muted-foreground" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="font-semibold text-sm">{app.name}</h4>
-              <span className="px-2 py-0.5 text-xs font-mono uppercase tracking-wider rounded-md border border-border text-muted-foreground">
-                {app.runtime}
-              </span>
+    <div className={`px-3 py-2 transition-colors ${localStatus === 'failed' ? 'bg-red-500/[0.03]' : ''}`}>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_6.5rem_auto] lg:items-center">
+        <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(11rem,1fr)_minmax(0,1.6fr)] lg:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
+              <Box className="h-4 w-4 text-muted-foreground" />
             </div>
-
-            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <p className="max-w-full truncate font-mono text-xs text-muted-foreground">{app.id}</p>
-
-              {/* Primary .app URL */}
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <h4 className="truncate text-sm font-semibold">{app.name}</h4>
+                <span className="shrink-0 rounded-md border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {app.runtime}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-xs text-muted-foreground">
+            <span className="shrink-0 text-muted-foreground/70">{app.id.slice(0, 8)}</span>
+            {app.githubRepo && (
               <a
-                href={getAppUrl(safeName)}
+                href={app.githubRepo.replace(/\.git$/, '')}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-                title="Primary Domain (aetherhost.app)"
+                className="flex min-w-0 items-center gap-1 truncate hover:text-foreground"
+                title={app.githubRepo}
               >
-                <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="max-w-[150px] truncate sm:max-w-[210px]">{`${safeName}.aetherhost.app`}</span>
-                <ArrowUpRight className="w-3 h-3 opacity-60" />
+                <GitBranch className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{app.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
               </a>
-
-              {/* Legacy .com.ng Dropdown (Only for legacy pre-migration apps) */}
-              {isLegacy && (
-                <div className="relative inline-block" ref={legacyMenuRef}>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setLegacyDropdownOpen(!legacyDropdownOpen)
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-mono text-amber-500 hover:text-amber-400 transition-colors px-1.5 py-0.5 rounded-md border border-border hover:bg-muted"
-                    title="Dual-Domain active: Click to view legacy aetherhost.com.ng domain"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    <span>.com.ng</span>
-                    <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${legacyDropdownOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {legacyDropdownOpen && (
-                    <div
-                      className="absolute left-0 mt-1.5 w-76 rounded-lg bg-card border border-border shadow-xl p-3 z-50 text-left"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          <span className="text-xs font-semibold text-foreground">Legacy Domain Active</span>
-                        </div>
-                        <span className="text-xs uppercase font-mono px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                          Dual-Route
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-muted-foreground mb-2 leading-snug">
-                        This application is dual-bound. Both URLs are live with SSL until the <code className="text-foreground">.com.ng</code> domain expires:
-                      </p>
-
-                      <div className="space-y-1.5 mb-3">
-                        {/* Legacy URL item */}
-                        <div className="p-2 rounded-md bg-muted/30 border border-border flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <span className="block text-xs text-muted-foreground font-mono">Legacy (.com.ng)</span>
-                            <span className="block font-mono text-xs text-amber-500 truncate select-all">
-                              {`${safeName}.aetherhost.com.ng`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(getLegacyAppUrl(safeName))
-                                setCopiedLegacy(true)
-                                setTimeout(() => setCopiedLegacy(false), 2000)
-                              }}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Copy legacy URL"
-                            >
-                              {copiedLegacy ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                            <a
-                              href={getLegacyAppUrl(safeName)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Open in new tab"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          </div>
-                        </div>
-
-                        {/* Primary URL item */}
-                        <div className="p-2 rounded-md bg-muted/30 border border-border flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <span className="block text-xs text-muted-foreground font-mono">Primary (.app)</span>
-                            <span className="block font-mono text-xs text-foreground truncate select-all">
-                              {`${safeName}.aetherhost.app`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <a
-                              href={getAppUrl(safeName)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Open primary URL"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <a
-                          href={getLegacyAppUrl(safeName)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 text-center py-1 px-2 rounded-md bg-muted hover:bg-muted/80 text-foreground text-xs font-medium border border-border transition-colors"
-                        >
-                          Visit .com.ng
-                        </a>
-                        <a
-                          href={getAppUrl(safeName)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex-1 text-center py-1 px-2 rounded-md bg-muted hover:bg-muted/80 text-foreground text-xs font-medium border border-border transition-colors"
-                        >
-                          Visit .app
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {app.githubRepo && (
-                <a
-                  href={app.githubRepo.replace(/\.git$/, '')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="max-w-[160px] truncate sm:max-w-[240px]">{app.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
-                  <ArrowUpRight className="w-3 h-3 opacity-60" />
-                </a>
-              )}
-              {currentDomain && (
-                <a
-                  href={`https://${currentDomain}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
-                  title="Connected Custom Domain"
-                >
-                  <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="max-w-[160px] truncate sm:max-w-[240px]">{currentDomain}</span>
-                  <ArrowUpRight className="w-3 h-3 opacity-60" />
-                </a>
-              )}
-              {currentDockerImage && (
-                <span
-                  className="inline-flex items-center gap-1 text-xs font-mono text-muted-foreground"
-                  title={`Container Image: ${currentDockerImage}`}
-                >
-                  <Container className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="max-w-[140px] truncate sm:max-w-[200px]">{currentDockerImage}</span>
-                </span>
-              )}
-            </div>
+            )}
+            {currentDomain && (
+              <a href={`https://${currentDomain}`} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate hover:text-foreground" title={currentDomain}>
+                {currentDomain}
+              </a>
+            )}
+            {currentDockerImage && <span className="min-w-0 truncate" title={currentDockerImage}>{currentDockerImage}</span>}
           </div>
         </div>
 
         {/* Right: Status & Actions */}
-        <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:gap-4">
+        <div className="flex items-center gap-3 lg:contents">
           {/* Status Badge */}
-          <div className="flex items-center gap-2">
+          <div className="flex w-[6.5rem] shrink-0 items-center gap-2 whitespace-nowrap">
             <div className="relative flex h-2 w-2">
               {localStatus === 'running' ? (
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -356,7 +202,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
           </div>
 
           {/* Action Buttons: 2 visible (Visit, Logs) + overflow menu */}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             {/* Action 1: Visit Button */}
             {isLegacy ? (
               <div className="relative inline-flex rounded-md" ref={visitMenuRef}>
@@ -404,7 +250,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
                       className="flex items-center justify-between px-3 py-2 text-xs text-foreground hover:bg-muted transition-colors"
                       onClick={() => setVisitDropdownOpen(false)}
                     >
-                      <span className="text-amber-500">Open .com.ng (Legacy)</span>
+                      <span>Open .com.ng (Legacy)</span>
                       <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                     </a>
                   </div>

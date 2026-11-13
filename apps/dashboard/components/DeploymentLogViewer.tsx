@@ -160,6 +160,11 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
 
   const combinedLogText = logs.map(l => l.logContent).join('\n')
 
+  // Healthy deployments keep the list dense; their existing Logs button is
+  // the single way to open this panel. Failed deployments retain the visible
+  // diagnostic call to action below the row.
+  if (!expanded && status !== 'failed') return null
+
   return (
     <div className="w-full mt-3 pt-3 border-t border-border">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

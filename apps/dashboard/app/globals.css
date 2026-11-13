@@ -52,3 +52,31 @@
     transform: translateX(0);
   }
 }
+
+@media (min-width: 1024px) {
+  html[data-sidebar="collapsed"] .app-sidebar {
+    width: 3.5rem;
+  }
+
+  html[data-sidebar="collapsed"] .sidebar-label,
+  html[data-sidebar="collapsed"] .sidebar-usage,
+  html[data-sidebar="collapsed"] .sidebar-admin-status,
+  html[data-sidebar="collapsed"] .sidebar-divider-label,
+  html[data-sidebar="collapsed"] .sidebar-toggle-expanded {
+    display: none;
+  }
+
+  html:not([data-sidebar="collapsed"]) .sidebar-toggle-collapsed {
+    display: none;
+  }
+
+  html[data-sidebar="collapsed"] .sidebar-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  html[data-sidebar="collapsed"] .sidebar-brand {
+    justify-content: center;
+  }
+}

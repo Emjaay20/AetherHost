@@ -4,11 +4,10 @@ import EventsPanel from '../../../components/EventsPanel'
 import OpsInsightPanel from '../../../components/OpsInsightPanel'
 import AiProvisioningPrompt from '../../../components/AiProvisioningPrompt'
 import AutoRefresh from '../../../components/AutoRefresh'
-import ApplicationCardItem, { type ApplicationItem } from '../../../components/ApplicationCardItem'
+import DeploymentList from '../../../components/DeploymentList'
 import AppShell from '../../../components/AppShell'
 import { Server, Activity, Box, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
-import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { stopImpersonating } from '../../admin/actions';
 
@@ -57,13 +56,17 @@ export default async function Dashboard() {
   
   const storageUsage = numericValue(entitlements?.usage?.storageMb)
   const storageLimit = numericValue(entitlements?.limits?.storageMb) || 512
+  const storageUnlimited = storageLimit >= UNLIMITED_LIMIT
   const storagePercent = Math.min((storageUsage / storageLimit) * 100, 100)
 
   const bandwidthUsage = numericValue(entitlements?.usage?.bandwidthMb)
   const bandwidthLimit = numericValue(entitlements?.limits?.bandwidthMb) || 10240
+  const bandwidthUnlimited = bandwidthLimit >= UNLIMITED_LIMIT
   const bandwidthPercent = Math.min((bandwidthUsage / bandwidthLimit) * 100, 100)
 
   const planId = entitlements?.planId || 'starter'
+  const aiLimit = numericValue(entitlements?.limits?.aiRequests)
+  const aiUnlimited = aiLimit >= UNLIMITED_LIMIT
 
   return (
     <AppShell
@@ -135,7 +138,7 @@ export default async function Dashboard() {
                 </div>
                 <div>
                   <span className="block text-2xl sm:text-3xl font-semibold leading-none tracking-tight tabular-nums text-foreground">{apps.length}</span>
-                  <span className="mt-2 block text-xs text-muted-foreground">of {limit >= UNLIMITED_LIMIT ? 'Unlimited' : limit} deployments</span>
+                  <span className="mt-2 block text-xs text-muted-foreground">{limit >= UNLIMITED_LIMIT ? 'Unlimited' : `of ${limit} deployments`}</span>
                 </div>
               </div>
 
@@ -145,18 +148,20 @@ export default async function Dashboard() {
                   <HardDrive className="w-4 h-4" />
                   <h3 className="text-xs font-medium uppercase tracking-wider">Storage Usage</h3>
                 </div>
-                <div className="space-y-2">
+                <div className={storageUnlimited ? '' : 'space-y-2'}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="block text-2xl sm:text-3xl font-semibold leading-none tracking-tight tabular-nums text-foreground">{formatMegabytes(storageUsage)}</span>
-                    <span className="text-xs font-mono text-muted-foreground">{formatPercent(storagePercent)}</span>
+                    {!storageUnlimited && <span className="text-xs font-mono text-muted-foreground">{formatPercent(storagePercent)}</span>}
                   </div>
-                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${storagePercent >= 90 ? 'bg-red-500' : storagePercent >= 80 ? 'bg-amber-500' : 'bg-foreground/40'}`}
-                      style={{ width: `${storagePercent}%` }}
-                    />
-                  </div>
-                  <span className="block text-xs text-muted-foreground">of {formatLimit(storageLimit)}</span>
+                  {!storageUnlimited && (
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${storagePercent >= 90 ? 'bg-red-500' : storagePercent >= 80 ? 'bg-amber-500' : 'bg-foreground/40'}`}
+                        style={{ width: `${storagePercent}%` }}
+                      />
+                    </div>
+                  )}
+                  <span className={`block text-xs text-muted-foreground ${storageUnlimited ? 'mt-2' : ''}`}>{storageUnlimited ? 'Unlimited' : `of ${formatLimit(storageLimit)}`}</span>
                 </div>
               </div>
 
@@ -166,18 +171,20 @@ export default async function Dashboard() {
                   <Activity className="w-4 h-4" />
                   <h3 className="text-xs font-medium uppercase tracking-wider">Bandwidth (30d)</h3>
                 </div>
-                <div className="space-y-2">
+                <div className={bandwidthUnlimited ? '' : 'space-y-2'}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="block text-2xl sm:text-3xl font-semibold leading-none tracking-tight tabular-nums text-foreground">{formatMegabytes(bandwidthUsage)}</span>
-                    <span className="text-xs font-mono text-muted-foreground">{formatPercent(bandwidthPercent)}</span>
+                    {!bandwidthUnlimited && <span className="text-xs font-mono text-muted-foreground">{formatPercent(bandwidthPercent)}</span>}
                   </div>
-                  <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${bandwidthPercent >= 90 ? 'bg-red-500' : bandwidthPercent >= 80 ? 'bg-amber-500' : 'bg-foreground/40'}`}
-                      style={{ width: `${bandwidthPercent}%` }}
-                    />
-                  </div>
-                  <span className="block text-xs text-muted-foreground">of {formatLimit(bandwidthLimit)}</span>
+                  {!bandwidthUnlimited && (
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${bandwidthPercent >= 90 ? 'bg-red-500' : bandwidthPercent >= 80 ? 'bg-amber-500' : 'bg-foreground/40'}`}
+                        style={{ width: `${bandwidthPercent}%` }}
+                      />
+                    </div>
+                  )}
+                  <span className={`block text-xs text-muted-foreground ${bandwidthUnlimited ? 'mt-2' : ''}`}>{bandwidthUnlimited ? 'Unlimited' : `of ${formatLimit(bandwidthLimit)}`}</span>
                 </div>
               </div>
 
@@ -189,17 +196,13 @@ export default async function Dashboard() {
                 </div>
                 <div>
                   <span className="block text-2xl sm:text-3xl font-semibold leading-none tracking-tight tabular-nums text-foreground">{entitlements?.usage?.aiRequests || 0}</span>
-                  <span className="mt-2 block text-xs text-muted-foreground">of {(entitlements?.limits?.aiRequests || 0) >= UNLIMITED_LIMIT ? 'Unlimited' : entitlements?.limits?.aiRequests || 0} requests</span>
+                  <span className="mt-2 block text-xs text-muted-foreground">{aiUnlimited ? 'Unlimited' : `of ${aiLimit} requests`}</span>
                 </div>
               </div>
             </div>
 
             {/* Applications List */}
             <div>
-              <h2 className="text-base font-semibold mb-3 flex items-center gap-2 text-foreground">
-                Deployments <span className="px-2 py-0.5 rounded-md bg-muted text-xs font-medium text-muted-foreground">{apps.length}</span>
-              </h2>
-              
               {apps.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 px-4 rounded-lg border border-border bg-card text-center">
                   <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center mb-3 text-muted-foreground">
@@ -211,17 +214,7 @@ export default async function Dashboard() {
                   </p>
                   <CreateAppForm limitReached={limitReached} />
                 </div>
-              ) : (
-                <div className="grid gap-2.5">
-                  {apps.map((app: ApplicationItem) => (
-                    <ApplicationCardItem
-                      key={app.id}
-                      app={app}
-                      deleteAction={deleteApplication}
-                    />
-                  ))}
-                </div>
-              )}
+              ) : <DeploymentList apps={apps} deleteAction={deleteApplication} />}
             </div>
 
             {/* Domain Events Log */}
