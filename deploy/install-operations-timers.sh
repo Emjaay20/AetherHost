@@ -11,6 +11,7 @@ fi
 readonly control_plane_root="${CONTROL_PLANE_ROOT:-/srv/aetherhost/control}"
 readonly source_dir="${control_plane_root}/deploy/systemd"
 readonly target_dir="/etc/systemd/system"
+readonly runtime_dir="/usr/local/lib/aetherhost"
 
 install -m 0644 "$source_dir/aetherhost-backup.service" "$target_dir/aetherhost-backup.service"
 install -m 0644 "$source_dir/aetherhost-backup.timer" "$target_dir/aetherhost-backup.timer"
@@ -19,8 +20,10 @@ install -m 0644 "$source_dir/aetherhost-restore-check.timer" "$target_dir/aether
 install -m 0644 "$source_dir/aetherhost-docker-maintenance.service" "$target_dir/aetherhost-docker-maintenance.service"
 install -m 0644 "$source_dir/aetherhost-docker-maintenance.timer" "$target_dir/aetherhost-docker-maintenance.timer"
 install -m 0644 "$source_dir/aetherhost-operation-alert@.service" "$target_dir/aetherhost-operation-alert@.service"
+install -d -m 0750 "$runtime_dir"
+install -m 0750 "${control_plane_root}/deploy/notify-operation-failure.sh" "$runtime_dir/notify-operation-failure.sh"
 
-chmod 0750 "${control_plane_root}/deploy/backup/backup.sh" "${control_plane_root}/deploy/backup/restore-check.sh" "${control_plane_root}/deploy/notify-operation-failure.sh"
+chmod 0750 "${control_plane_root}/deploy/backup/backup.sh" "${control_plane_root}/deploy/backup/restore-check.sh"
 systemctl daemon-reload
 systemctl enable --now aetherhost-docker-maintenance.timer
 if [[ -r /etc/aetherhost/backup.env ]]; then
