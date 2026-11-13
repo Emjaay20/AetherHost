@@ -60,12 +60,6 @@ func TestDeploymentDirectoryCannotEscapeProjectsRoot(t *testing.T) {
 	}
 }
 
-func TestWordPressHealthPaths(t *testing.T) {
-	if !strings.Contains(wordpressHealthURL, "/fpm-ping") {
-		t.Fatal("wordpress health check must hit PHP-FPM")
-	}
-}
-
 func TestRandomPassword(t *testing.T) {
 	p1 := randomPassword()
 	p2 := randomPassword()

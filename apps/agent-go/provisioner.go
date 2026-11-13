@@ -109,8 +109,6 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 		return
 	}
 
-	dbPass := randomPassword()
-
 	if isWorkload(app) {
 		provisionWorkloadApp(app, appLog, safeName, appDir, controlPlaneURL)
 		return
@@ -180,7 +178,7 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 
 	writeEnvFile(app, appDir)
 
-	safeCompose := renderRuntimeCompose(app, safeName, controlPlaneRoot, projectsRoot, baseDomain, dbPass)
+	safeCompose := renderRuntimeCompose(app, safeName, controlPlaneRoot, projectsRoot, baseDomain)
 	if safeCompose != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(safeCompose), 0644)
 	}
@@ -222,7 +220,7 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 		return
 	}
 
-	healthPass := waitForRuntimeHealth(app, appLog, safeName, dbPass, controlPlaneURL)
+	healthPass := waitForRuntimeHealth(app, appLog, safeName, controlPlaneURL)
 	statusStr := "running"
 	containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
 	if !healthPass {
@@ -244,8 +242,12 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 }
 
 func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir, controlPlaneURL string) {
-	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning Workload: %s", time.Now().Format("15:04:05"), app.DockerImage))
-	appLog.Info("provisioning custom docker workload", slog.String("image", app.DockerImage))
+	workloadName := app.DockerImage
+	if app.Runtime == "wordpress" {
+		workloadName = "platform-managed WordPress profile"
+	}
+	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning Workload: %s", time.Now().Format("15:04:05"), workloadName))
+	appLog.Info("provisioning contract workload", slog.String("profile", app.Runtime), slog.String("image", workloadName))
 
 	credentials, err := workloadCredentialsFor(appDir)
 	if err != nil {
@@ -266,6 +268,9 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 
 	_ = os.WriteFile(fmt.Sprintf("%s/docker-compose.yml", appDir), []byte(plan.Compose), 0644)
 	_ = os.WriteFile(fmt.Sprintf("%s/workload.env", appDir), []byte(plan.AppEnv), 0600)
+	if plan.WordPressEnv != "" {
+		_ = os.WriteFile(fmt.Sprintf("%s/wordpress.env", appDir), []byte(plan.WordPressEnv), 0600)
+	}
 	if plan.PostgresEnv != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/postgres.env", appDir), []byte(plan.PostgresEnv), 0600)
 	}
@@ -275,11 +280,27 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	if plan.RedisEnv != "" {
 		_ = os.WriteFile(fmt.Sprintf("%s/redis.env", appDir), []byte(plan.RedisEnv), 0600)
 	}
+	for path, contents := range plan.ConfigFiles {
+		if filepath.Base(path) != path {
+			errMsg := fmt.Sprintf("[%s] Workload config path rejected: %s", time.Now().Format("15:04:05"), path)
+			sendAppLog(controlPlaneURL, app.ID, errMsg)
+			appLog.Error("workload config path rejected", slog.String("path", path))
+			updateAppStatus(controlPlaneURL, app.ID, "failed")
+			return
+		}
+		if err := os.WriteFile(filepath.Join(appDir, path), []byte(contents), 0644); err != nil {
+			errMsg := fmt.Sprintf("[%s] Workload config write failed: %v", time.Now().Format("15:04:05"), err)
+			sendAppLog(controlPlaneURL, app.ID, errMsg)
+			appLog.Error("workload config write failed", slog.String("path", path), slog.String("error", err.Error()))
+			updateAppStatus(controlPlaneURL, app.ID, "failed")
+			return
+		}
+	}
 
 	_ = exec.Command("docker", "network", "create", "aetherhost-net").Run()
 
-	// Pull updated image layers so changes to tag or latest are downloaded
-	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Pulling container image: %s ...", time.Now().Format("15:04:05"), app.DockerImage))
+	// Pull updated image layers so changes to tag or latest are downloaded.
+	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Pulling workload images ...", time.Now().Format("15:04:05")))
 	pullCmd := exec.Command("docker", "compose", "-f", fmt.Sprintf("%s/docker-compose.yml", appDir), "-p", "aetherhost-"+safeName, "pull")
 	pullOut, pullErr := pullCmd.CombinedOutput()
 	if pullErr == nil && len(pullOut) > 0 {
@@ -304,7 +325,7 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 		appLog.Info("waiting for workload health check", slog.String("health_path", plan.HealthPath))
 		healthPass = false
 		for i := 0; i < 120; i++ {
-			if probeContainer(plan.Alias, fmt.Sprintf("http://127.0.0.1:%d%s", plan.Port, plan.HealthPath)) == nil {
+			if probeIngressNetwork(plan.Alias, plan.Port, plan.HealthPath) == nil {
 				healthPass = true
 				break
 			}
@@ -328,7 +349,7 @@ func provisionWorkloadApp(app Application, appLog *slog.Logger, safeName, appDir
 	appLog.Info("workload provisioning finished", slog.String("final_status", statusStr))
 }
 
-func renderRuntimeCompose(app Application, safeName, controlPlaneRoot, projectsRoot, baseDomain, dbPass string) string {
+func renderRuntimeCompose(app Application, safeName, controlPlaneRoot, projectsRoot, baseDomain string) string {
 	hostRule := "`" + safeName + "." + baseDomain + "`"
 	if app.CustomDomain != "" {
 		hostRule += " || Host(`" + app.CustomDomain + "`)"
@@ -358,61 +379,6 @@ networks:
 `, safeName, hostRule, tlsLabels, safeName)
 	}
 
-	if app.Runtime == "wordpress" {
-		return fmt.Sprintf(`
-services:
-  nginx:
-    image: nginx:alpine
-    volumes:
-      - %s/apps/runtimes/wordpress/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - %s/apps/runtimes/wordpress/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - wordpress_data:/var/www/html
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.%s-app.rule=Host(%s)"%s
-      - "traefik.http.services.%s-app.loadbalancer.server.port=80"
-      - "traefik.docker.network=aetherhost-net"
-    networks:
-      - aetherhost-net
-    depends_on:
-      - php
-  php:
-    image: wordpress:php8.2-fpm-alpine
-    volumes:
-      - %s/apps/runtimes/wordpress/php/zzz-custom.conf:/usr/local/etc/php-fpm.d/zzz-custom.conf:ro
-      - wordpress_data:/var/www/html
-    environment:
-      WORDPRESS_DB_HOST: db
-      WORDPRESS_DB_USER: wordpress
-      WORDPRESS_DB_PASSWORD: %s
-      WORDPRESS_DB_NAME: wordpress
-    networks:
-      - aetherhost-net
-    depends_on:
-      - db
-  db:
-    image: mariadb:10.11
-    volumes:
-      - %s/apps/runtimes/wordpress/mariadb.cnf:/etc/mysql/conf.d/mariadb.cnf:ro
-      - db_data:/var/lib/mysql
-    environment:
-      MARIADB_DATABASE: wordpress
-      MARIADB_USER: wordpress
-      MARIADB_PASSWORD: %s
-      MARIADB_RANDOM_ROOT_PASSWORD: "1"
-    networks:
-      - aetherhost-net
-
-volumes:
-  wordpress_data:
-  db_data:
-
-networks:
-  aetherhost-net:
-    external: true
-`, controlPlaneRoot, controlPlaneRoot, safeName, hostRule, tlsLabels, safeName, controlPlaneRoot, dbPass, controlPlaneRoot, dbPass)
-	}
-
 	if app.Runtime == "docker" {
 		return renderDockerRuntimeCompose(app, safeName, projectsRoot, hostRule, tlsLabels)
 	}
@@ -439,21 +405,7 @@ networks:
 `, img, startCmd, projectsRoot, safeName, safeName, hostRule, tlsLabels, safeName)
 }
 
-func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, dbPass, controlPlaneURL string) bool {
-	if app.Runtime == "wordpress" {
-		sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Waiting for Nginx and MariaDB health checks...", time.Now().Format("15:04:05")))
-		appLog.Info("waiting for nginx and mariadb health checks")
-		for i := 0; i < 60; i++ {
-			err1 := exec.Command("docker", "exec", fmt.Sprintf("aetherhost-%s-nginx-1", safeName), "wget", "-q", "-O", "-", wordpressHealthURL).Run()
-			err2 := exec.Command("docker", "exec", fmt.Sprintf("aetherhost-%s-db-1", safeName), "mysqladmin", "ping", "-h", "localhost", "-u", "wordpress", "-p"+dbPass, "--silent").Run()
-			if err1 == nil && err2 == nil {
-				appLog.Info("wordpress health checks passed")
-				return true
-			}
-			time.Sleep(2 * time.Second)
-		}
-		return false
-	}
+func waitForRuntimeHealth(app Application, appLog *slog.Logger, safeName, controlPlaneURL string) bool {
 
 	containerName := fmt.Sprintf("aetherhost-%s-app-1", safeName)
 	appDir := filepath.Join("deployments", safeName)

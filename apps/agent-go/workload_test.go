@@ -22,7 +22,7 @@ func signaldeskApp() Application {
 
 func serviceBlock(t *testing.T, compose, name string) string {
 	t.Helper()
-	token := "  " + name + ":\n"
+	token := "\n  " + name + ":\n"
 	start := strings.Index(compose, token)
 	if start < 0 {
 		t.Fatalf("missing service %s", name)
@@ -146,8 +146,101 @@ func TestWorkloadRejectsUnsafeSpec(t *testing.T) {
 	}
 	app = signaldeskApp()
 	app.Runtime = "wordpress"
-	if isWorkload(app) {
-		t.Fatal("wordpress must stay on its own runtime path")
+	app.DockerImage = ""
+	if !isWorkload(app) {
+		t.Fatal("wordpress must use the workload contract")
+	}
+}
+
+func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
+	app := Application{
+		ID:               "app_legacy_blog_12345678",
+		Name:             "Legacy Blog",
+		Runtime:          "wordpress",
+		CustomDomain:     "blog.example.com",
+		WorkloadMemoryMB: 1024,
+	}
+	identity := workloadDeploymentName(app)
+	if identity != "legacy-blog" {
+		t.Fatalf("wordpress must retain its legacy name-based identity, got %q", identity)
+	}
+	plan, err := buildWorkloadWithIdentity(app, identity, "PostgresPass123", "MariaDbPass123", "RedisPass123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(plan.Compose, "traefik.enable=true") != 1 {
+		t.Fatal("only nginx may be attached to Traefik")
+	}
+	nginx := serviceBlock(t, plan.Compose, "aetherhost-legacy-blog-nginx")
+	php := serviceBlock(t, plan.Compose, "aetherhost-legacy-blog-php")
+	mariadb := serviceBlock(t, plan.Compose, "aetherhost-legacy-blog-mariadb")
+	redis := serviceBlock(t, plan.Compose, "aetherhost-legacy-blog-redis")
+	if !strings.Contains(nginx, "aetherhost-net") || !strings.Contains(nginx, "private:") {
+		t.Fatal("nginx must join ingress and private networks")
+	}
+	for name, service := range map[string]string{"php": php, "mariadb": mariadb, "redis": redis} {
+		if strings.Contains(service, "aetherhost-net") || !strings.Contains(service, "private:") {
+			t.Fatalf("%s must remain private: %s", name, service)
+		}
+		if !strings.Contains(service, "mem_limit:") || !strings.Contains(service, "init: true") || !strings.Contains(service, "stop_grace_period: 30s") {
+			t.Fatalf("%s missed the workload lifecycle controls", name)
+		}
+	}
+	if strings.Contains(plan.Compose, "MariaDbPass123") || strings.Contains(plan.Compose, "RedisPass123") {
+		t.Fatal("wordpress credentials leaked into compose")
+	}
+	if !strings.Contains(plan.WordPressEnv, "WORDPRESS_DB_PASSWORD=MariaDbPass123") || !strings.Contains(plan.WordPressEnv, "WP_REDIS_HOST") {
+		t.Fatal("wordpress database and Redis configuration was not generated in a protected env file")
+	}
+	if !strings.Contains(plan.Compose, "name: aetherhost-legacy-blog_wordpress_data") || !strings.Contains(plan.Compose, "name: aetherhost-legacy-blog_db_data") {
+		t.Fatal("legacy WordPress volume names were not preserved")
+	}
+	if plan.Alias != "aetherhost-legacy-blog-nginx" || plan.Port != 80 || plan.HealthPath != "/.aetherhost/ready" {
+		t.Fatalf("wordpress must be health-checked through nginx, got %+v", plan)
+	}
+	for _, path := range []string{"wordpress-nginx.conf", "wordpress-php-fpm.conf", "wordpress-mariadb.cnf"} {
+		if plan.ConfigFiles[path] == "" {
+			t.Fatalf("missing generated config %s", path)
+		}
+	}
+}
+
+func TestWordPressTuningScalesWithBudgetAndStaysBounded(t *testing.T) {
+	smallResources, err := wordpressResources(1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	largeResources, err := wordpressResources(1536)
+	if err != nil {
+		t.Fatal(err)
+	}
+	small, err := deriveWordPressTuning(smallResources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	large, err := deriveWordPressTuning(largeResources)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if large.PHPMaxChildren < small.PHPMaxChildren || large.MariaBufferMB < small.MariaBufferMB || large.MariaMaxConns < small.MariaMaxConns {
+		t.Fatalf("larger budget did not scale tuning: small=%+v large=%+v", small, large)
+	}
+	for name, profile := range map[string]struct {
+		resources WordPressResources
+		tuning    WordPressTuning
+	}{
+		"small": {smallResources, small},
+		"large": {largeResources, large},
+	} {
+		resources, tuning := profile.resources, profile.tuning
+		phpWorstCase := tuning.OPcacheMB + phpFixedReserveMB + tuning.PHPMaxChildren*(tuning.PHPMemoryMB+phpWorkerBudgetMB)
+		if phpWorstCase > resources.PHPMB {
+			t.Fatalf("%s php budget can exceed limit: %d > %d", name, phpWorstCase, resources.PHPMB)
+		}
+		dbWorstCase := tuning.MariaBufferMB + databaseFixedReserveMB + tuning.MariaMaxConns*databaseConnectionBudget
+		if dbWorstCase > resources.MariaMB {
+			t.Fatalf("%s database budget can exceed limit: %d > %d", name, dbWorstCase, resources.MariaMB)
+		}
 	}
 }
 

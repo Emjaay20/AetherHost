@@ -32,6 +32,24 @@ describe('assertWorkloadSpec', () => {
     expect(() => assertWorkloadSpec({ runtime: 'nodejs' })).not.toThrow();
   });
 
+  it('accepts WordPress as a platform-managed workload with a bounded memory budget', () => {
+    expect(() =>
+      assertWorkloadSpec({
+        runtime: 'wordpress',
+        workloadMemoryMb: 1536,
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a WordPress memory budget outside the supported profile range', () => {
+    expect(() =>
+      assertWorkloadSpec({
+        runtime: 'wordpress',
+        workloadMemoryMb: 512,
+      }),
+    ).toThrow(BadRequestException);
+  });
+
   it('accepts protected environment variables for a GitHub/source deployment', () => {
     expect(() =>
       assertWorkloadSpec({

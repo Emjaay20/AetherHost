@@ -53,6 +53,7 @@ export class ApplicationsService {
     withRedis?: boolean,
     port?: number,
     healthPath?: string,
+    workloadMemoryMb?: number,
   ): Promise<Application> {
     const validatedDomain = validateCustomDomain(customDomain);
     assertWorkloadSpec({
@@ -65,6 +66,7 @@ export class ApplicationsService {
       withRedis,
       port,
       healthPath,
+      workloadMemoryMb,
     });
     const normalizedName = safeAppName(name);
     return this.prisma.$transaction(async (tx) => {
@@ -203,6 +205,7 @@ export class ApplicationsService {
           withRedis,
           port,
           healthPath,
+          workloadMemoryMb,
         },
       });
 
