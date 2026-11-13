@@ -5,6 +5,7 @@
 //! Provides sub-microsecond in-memory policy evaluation, role inheritance,
 //! tenant boundary enforcement, LRU evaluation caching, and structured audit logs.
 
+pub mod actix;
 pub mod audit;
 pub mod cache;
 pub mod engine;
@@ -12,6 +13,7 @@ pub mod middleware;
 pub mod model;
 pub mod policy;
 
+pub use actix::{authorize_actix, ActixAuthzError, ActixAuthzErrorResponse};
 pub use audit::{AuditRecord, AuditSink, InMemoryAuditSink, TracingAuditSink};
 pub use cache::EvaluationCache;
 pub use engine::{AuthzEngine, AuthzEngineBuilder};

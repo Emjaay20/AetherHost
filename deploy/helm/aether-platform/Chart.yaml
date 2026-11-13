@@ -1,0 +1,9 @@
+apiVersion: v2
+name: aether-platform
+description: Production Helm Chart for AetherHost Core Platform Subsystem (aether-router & aether-logd)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Team Core
+    email: platform@aetherhost.app

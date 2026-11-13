@@ -11,6 +11,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
+actix-web = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }

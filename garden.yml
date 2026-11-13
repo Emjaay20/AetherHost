@@ -1,0 +1,71 @@
+kind: Project
+apiVersion: garden.io/v1
+name: aetherhost
+environments:
+  - name: local
+    defaultNamespace: aetherhost-dev
+  - name: staging
+    defaultNamespace: aetherhost-staging
+    production: false
+
+providers:
+  - name: kubernetes
+    environments: [local, staging]
+    context: k3d-aetherhost-local
+    buildMode: cluster-buildkit
+
+---
+kind: Build
+apiVersion: garden.io/v1
+name: aether-platform-image
+description: "Builds multi-binary Rust platform container (aether-router, aether-logd, aether-cli)"
+type: container
+source:
+  path: .
+  include:
+    - crates/**/*
+    - Cargo.lock
+    - Cargo.toml
+spec:
+  dockerfile: crates/Dockerfile
+
+---
+kind: Deploy
+apiVersion: garden.io/v1
+name: aether-platform
+description: "Deploys AetherHost Platform Helm Chart into developer Kubernetes namespace"
+type: helm
+dependencies:
+  - build.aether-platform-image
+spec:
+  chart:
+    path: deploy/helm/aether-platform
+  values:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    podDisruptionBudget:
+      enabled: false
+    image:
+      repository: ${actions.build.aether-platform-image.outputs.deploymentImageId}
+      tag: latest
+    env:
+      RUST_LOG: "debug"
+      DEFAULT_BACKEND: "http://host.docker.internal:3000"
+
+---
+kind: Test
+apiVersion: garden.io/v1
+name: test-platform-rust
+description: "Runs cargo clippy and test suite inside developer environment"
+type: container
+dependencies:
+  - build.aether-platform-image
+spec:
+  image: rust:1.82-bookworm
+  command:
+    - cargo
+    - test
+    - --manifest-path
+    - crates/Cargo.toml
+    - --workspace

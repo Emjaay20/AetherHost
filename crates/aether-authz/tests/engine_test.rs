@@ -218,3 +218,31 @@ fn test_audit_sink_records_evaluations() {
     assert_eq!(record.action, Action::Read);
     assert!(record.decision.is_allowed());
 }
+
+#[test]
+fn test_actix_authorize_evaluation() {
+    use actix_web::ResponseError;
+    use aether_authz::authorize_actix;
+
+    let policy = Policy::builder("actix_allow", Effect::Allow)
+        .name("Actix Allow Read")
+        .role("operator")
+        .resource_kind("telemetry")
+        .action(Action::Read)
+        .same_tenant()
+        .build();
+
+    let engine = AuthzEngine::builder().with_policy(policy).build();
+
+    let valid_subject = Subject::new("op_1", "tenant_prod").with_role("operator");
+    let resource = Resource::new("telemetry", "metrics_1", "tenant_prod");
+    let valid_ctx = EvaluationContext::new(valid_subject, resource.clone(), Action::Read);
+
+    assert!(authorize_actix(&engine, &valid_ctx).is_ok());
+
+    let invalid_subject = Subject::new("guest", "tenant_prod");
+    let invalid_ctx = EvaluationContext::new(invalid_subject, resource, Action::Read);
+
+    let err = authorize_actix(&engine, &invalid_ctx).unwrap_err();
+    assert_eq!(err.status_code(), actix_web::http::StatusCode::FORBIDDEN);
+}

@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod config;
 pub mod error;
 pub mod resilience;
@@ -5,6 +6,7 @@ pub mod resilience;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+pub use batch::BatchIngestor;
 pub use config::{validate_port, validate_secret, Environment};
 pub use error::PlatformError;
 pub use resilience::{CircuitBreaker, CircuitState};
@@ -141,5 +143,45 @@ mod tests {
         .is_ok());
         assert!(validate_secret("AGENT_KEY", Some("dev-key"), Environment::Production).is_err());
         assert!(validate_secret("AGENT_KEY", None, Environment::Development).is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_batch_ingestor_count_and_drain() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let flush_counter = std::sync::Arc::new(AtomicUsize::new(0));
+        let item_counter = std::sync::Arc::new(AtomicUsize::new(0));
+
+        let fc = flush_counter.clone();
+        let ic = item_counter.clone();
+
+        let ingestor = BatchIngestor::new(
+            3,
+            Duration::from_millis(50),
+            100,
+            move |batch: Vec<String>| {
+                let fc = fc.clone();
+                let ic = ic.clone();
+                async move {
+                    fc.fetch_add(1, Ordering::SeqCst);
+                    ic.fetch_add(batch.len(), Ordering::SeqCst);
+                }
+            },
+        );
+
+        // Push 3 items -> triggers count-based flush
+        ingestor.push("item1".to_string()).await.unwrap();
+        ingestor.push("item2".to_string()).await.unwrap();
+        ingestor.push("item3".to_string()).await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(flush_counter.load(Ordering::SeqCst), 1);
+        assert_eq!(item_counter.load(Ordering::SeqCst), 3);
+
+        // Push 1 item and shutdown -> drain triggers
+        ingestor.push("item4".to_string()).await.unwrap();
+        ingestor.shutdown().await;
+
+        assert_eq!(flush_counter.load(Ordering::SeqCst), 2);
+        assert_eq!(item_counter.load(Ordering::SeqCst), 4);
     }
 }

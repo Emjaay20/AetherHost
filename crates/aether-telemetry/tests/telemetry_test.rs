@@ -78,3 +78,20 @@ async fn test_axum_telemetry_middleware_integration() {
     let metrics_output = registry.render_prometheus();
     assert!(metrics_output.contains("method=\"GET\",route=\"/api/test\",status=\"200\""));
 }
+
+#[tokio::test]
+async fn test_actix_telemetry_handler() {
+    use aether_telemetry::record_actix_request;
+
+    let registry = MetricsRegistry::new("actix-monolith");
+    record_actix_request(
+        &registry,
+        "POST",
+        "/api/quotes/quote_1/approve",
+        200,
+        Duration::from_millis(15),
+    );
+
+    let output = registry.render_prometheus();
+    assert!(output.contains("http_requests_total{service=\"actix-monolith\",method=\"POST\",route=\"/api/quotes/quote_1/approve\",status=\"200\"} 1"));
+}
