@@ -45,7 +45,6 @@ func buildWordPressWorkload(app Application, identity, mariaDBPassword, redisPas
 	// WordPress deployment continues to use its posts/uploads and database.
 	fmt.Fprintf(&b, "  wordpress_data:\n    name: aetherhost-%s_wordpress_data\n", identity)
 	fmt.Fprintf(&b, "  db_data:\n    name: aetherhost-%s_db_data\n", identity)
-	fmt.Fprintf(&b, "  redis_data:\n    name: aetherhost-%s_redis_data\n", identity)
 
 	wordpressEnv := fmt.Sprintf("WORDPRESS_DB_HOST=%s\nWORDPRESS_DB_USER=wordpress\nWORDPRESS_DB_PASSWORD=%s\nWORDPRESS_DB_NAME=wordpress\nREDIS_PASSWORD=%s\nWORDPRESS_CONFIG_EXTRA=define('WP_REDIS_HOST', '%s'); define('WP_REDIS_PORT', 6379); define('WP_REDIS_PASSWORD', getenv('REDIS_PASSWORD'));\n", mariaName, mariaDBPassword, redisPassword, redisName)
 	mariaEnv := fmt.Sprintf("MARIADB_DATABASE=wordpress\nMARIADB_USER=wordpress\nMARIADB_PASSWORD=%s\nMARIADB_RANDOM_ROOT_PASSWORD=1\n", mariaDBPassword)
@@ -136,8 +135,10 @@ func writeWordPressRedis(b *strings.Builder, redisName string, resources WordPre
 	b.WriteString("    image: redis:7-alpine\n")
 	fmt.Fprintf(b, "    container_name: %s\n", redisName)
 	b.WriteString("    env_file:\n      - redis.env\n")
-	b.WriteString("    command: [\"sh\", \"-c\", \"exec redis-server --appendonly yes --requirepass \\\"$$REDIS_PASSWORD\\\"\"]\n")
-	b.WriteString("    volumes:\n      - redis_data:/data\n")
+	// Redis is an object cache, not a source of record. Disable persistence so
+	// the unprivileged upstream image never needs to mutate a root-owned volume.
+	// WordPress content remains in wordpress_data and MariaDB's db_data volume.
+	b.WriteString("    command: [\"sh\", \"-c\", \"exec redis-server --save \\\"\\\" --appendonly no --requirepass \\\"$$REDIS_PASSWORD\\\"\"]\n")
 	writeServiceLifecycle(b, resources.RedisMB, 128, true)
 	b.WriteString("    networks:\n      private: {}\n")
 	b.WriteString("    healthcheck:\n")

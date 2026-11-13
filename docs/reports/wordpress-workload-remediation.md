@@ -30,6 +30,9 @@ host or tenant application was changed.
   existing posts, uploads, and databases during a redeploy.
 - Added a one-time migration from the legacy generated Compose password into
   the protected workload credential record before the legacy file is replaced.
+- Changed the WordPress Redis sidecar to a non-persistent cache after the first
+  live disposable smoke test showed the persistent append-only mode could not
+  initialise its data directory under the restricted runtime permissions.
 
 ## Verification performed
 
