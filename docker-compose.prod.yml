@@ -17,6 +17,9 @@ services:
       - "--log.level=INFO"
       # Docker Provider
       - "--providers.docker=true"
+      # Discover routes through the read-only proxy rather than mounting the
+      # Docker daemon directly into the internet-facing reverse proxy.
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy-readonly:2375"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=aetherhost-net"
       # Entrypoints: HTTP (80) and HTTPS (443)
@@ -40,8 +43,9 @@ services:
       - "443:443"
       - "127.0.0.1:8082:8082"
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "traefik_acme:/etc/traefik/acme"
+    depends_on:
+      - docker-socket-proxy-readonly
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8082/ping || exit 1"]
       interval: 10s
@@ -54,6 +58,7 @@ services:
           memory: 512M
     networks:
       - aetherhost-net
+      - control-plane-net
 
   # =========================================================================
   # 2. Database: PostgreSQL 16 (Internal Network Only - Never Exposed to Public IP)
@@ -138,6 +143,36 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+    networks:
+      - control-plane-net
+
+  # Traefik only needs Docker discovery. Keep its view of the daemon separate
+  # from the provisioning agent's write-capable proxy, and explicitly deny
+  # container execution, image builds and all POST operations here.
+  docker-socket-proxy-readonly:
+    image: tecnativa/docker-socket-proxy:0.3
+    container_name: aetherhost-docker-proxy-readonly
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      SERVICES: 1
+      EVENTS: 1
+      INFO: 1
+      PING: 1
+      VERSION: 1
+      BUILD: 0
+      EXEC: 0
+      POST: 0
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
     networks:
       - control-plane-net
 

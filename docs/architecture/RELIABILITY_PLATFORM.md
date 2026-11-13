@@ -11,8 +11,9 @@ flowchart LR
     api --> postgres["Control-plane PostgreSQL\nprivate network"]
     api --> redis["Control-plane Redis\nprivate network"]
     api --> agent["Go runtime agent\nauthenticated control channel"]
-    agent --> docker["Docker socket proxy"]
+    agent --> docker["Provisioning Docker socket proxy"]
     docker --> workload["Tenant workload\nresource-limited container"]
+    edge --> discovery["Read-only Docker discovery proxy"]
     edge["Traefik edge\nTLS + routing"] --> workload
     internet["Internet"] --> edge
     workload --> appdb["Optional Postgres or MariaDB\nprivate only"]
@@ -24,7 +25,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     internet["Public internet"] -->|"80 / 443"| edge["Traefik ingress"]
-    ssh["Operator SSH key"] -->|"22"| access["Hardened operator access"]
+    ssh["Operator access"] -->|"22"| access["VPS administration"]
 
     subgraph platform["AetherHost VPS"]
         subgraph ingress["Shared ingress network"]
@@ -38,7 +39,8 @@ flowchart TB
             pg["Platform Postgres"]
             redis["Platform Redis"]
             agent["Go agent"]
-            proxy["Docker socket proxy"]
+            proxy["Provisioning Docker socket proxy"]
+            discovery["Read-only Traefik discovery proxy"]
         end
         subgraph tenant["Per-workload private network"]
             app
@@ -82,7 +84,7 @@ sequenceDiagram
 | Availability | readiness checks, restart policy, health probes, safe failure teardown | deployment log and health result |
 | Capacity | CPU, memory and PID ceilings; 10GB bounded BuildKit cache | dashboard telemetry and maintenance logs |
 | Data integrity | private credentialed data services; encrypted off-host backups | backup report and weekly restore drill |
-| Security | no public datastore ports, non-privileged workload defaults, least-privilege Docker proxy | compose output and security review |
+| Security | no public datastore ports, non-privileged workload defaults, separated read-only Docker discovery for ingress | compose output and security review |
 | Developer experience | one deployment contract for app, worker and optional data services | generated workload manifest and runbook |
 
 ## Compatibility rules
