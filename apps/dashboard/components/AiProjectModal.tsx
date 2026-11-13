@@ -130,18 +130,18 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
             initial={{ opacity: 0, scale: 0.98, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 10 }}
-            className="w-full h-[95vh] max-w-[98vw] bg-[#09090b] border border-border/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            className="w-full h-[95vh] max-w-[98vw] bg-card border border-border rounded-lg shadow-2xl flex flex-col overflow-hidden"
           >
             {/* Top Navigation Bar */}
-            <header className="h-14 px-4 border-b border-border/50 bg-[#0c0d12] flex items-center justify-between shrink-0">
+            <header className="h-14 px-4 border-b border-border bg-card flex items-center justify-between shrink-0">
               {/* Left: Branding & App Details */}
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                <div className="w-8 h-8 rounded-md bg-muted border border-border flex items-center justify-center text-muted-foreground">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-sm text-foreground">{app.name}</span>
-                  <span className="px-2 py-0.5 text-[10px] font-mono uppercase rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <span className="px-2 py-0.5 text-xs font-mono uppercase rounded-md border border-border text-muted-foreground">
                     {app.runtime}
                   </span>
                   {app.githubRepo && (
@@ -149,9 +149,9 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                       href={app.githubRepo.replace(/\.git$/, '')}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-zinc-400 hover:text-white px-2 py-0.5 rounded bg-muted/30 border border-border/30 transition-colors"
+                      className="hidden sm:inline-flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground px-2 py-0.5 rounded-md bg-muted border border-border transition-colors"
                     >
-                      <GitBranch className="w-3 h-3" />
+                      <GitBranch className="w-3.5 h-3.5" />
                       <span className="max-w-[120px] truncate">{app.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
                       <ArrowUpRight className="w-2.5 h-2.5 opacity-60" />
                     </a>
@@ -272,7 +272,7 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                       </button>
                     </div>
 
-                    <div className="text-[11px] text-muted-foreground font-mono">
+                    <div className="text-xs text-muted-foreground font-mono">
                       Groq OSS 120B
                     </div>
                   </div>
@@ -286,25 +286,25 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                           <div className="space-y-2">
                             <label className="text-xs font-medium text-foreground/90 flex items-center justify-between">
                               <span>Prompt the AI Architect</span>
-                              <span className="text-[11px] text-muted-foreground font-normal">
+                              <span className="text-xs text-muted-foreground font-normal">
                                 Commits directly to GitHub & updates live preview
                               </span>
                             </label>
-                            <div className="relative rounded-2xl bg-gradient-to-b from-blue-500/20 to-purple-500/10 p-[1px] shadow-inner focus-within:from-blue-500 focus-within:to-indigo-500 transition-all">
+                            <div className="relative rounded-md border border-border bg-background">
                               <textarea
                                 rows={4}
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 disabled={loading}
                                 placeholder="e.g. Add a GET /api/todos route that returns tasks, and update the homepage UI with an interactive task list and live status dashboard..."
-                                className="w-full bg-[#0e0f15] rounded-[15px] p-3.5 text-xs sm:text-sm resize-none focus:outline-none transition-all placeholder:text-muted-foreground/50 text-foreground"
+                                className="w-full bg-transparent rounded-md p-3 text-xs resize-none focus:outline-none transition-all placeholder:text-muted-foreground/50 text-foreground"
                               />
                             </div>
                           </div>
 
                           {/* Quick Suggestions */}
                           <div className="space-y-2">
-                            <span className="text-[11px] text-muted-foreground block">Quick Actions:</span>
+                            <span className="text-xs text-muted-foreground block">Quick Actions:</span>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                               {SUGGESTIONS.map((s) => (
                                 <button
@@ -312,9 +312,9 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                                   type="button"
                                   disabled={loading}
                                   onClick={() => setPrompt(s)}
-                                  className="text-[11px] p-2 rounded-xl bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground border border-border/40 transition-colors text-left flex items-start gap-1.5"
+                                  className="text-xs p-2 rounded-md bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors text-left flex items-start gap-1.5"
                                 >
-                                  <ChevronRight className="w-3 h-3 shrink-0 mt-0.5 text-blue-400" />
+                                  <ChevronRight className="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground" />
                                   <span>{s}</span>
                                 </button>
                               ))}
@@ -323,23 +323,23 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
 
                           {/* Action Button */}
                           <div className="pt-2 flex items-center justify-between">
-                            <span className="text-[11px] text-zinc-500">
+                            <span className="text-xs text-muted-foreground">
                               Instant code synthesis & container hot-reload
                             </span>
                             <button
                               type="submit"
                               disabled={loading || !prompt.trim()}
-                              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-500 hover:to-indigo-500 transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none shadow-lg shadow-blue-500/25"
+                              className="flex items-center gap-2 px-4 py-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                             >
                               {loading ? (
                                 <>
                                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  Architecting & Deploying...
+                                  <span>Architecting & Deploying...</span>
                                 </>
                               ) : (
                                 <>
                                   <Sparkles className="w-3.5 h-3.5" />
-                                  Generate & Deploy
+                                  <span>Generate & Deploy</span>
                                 </>
                               )}
                             </button>
@@ -363,7 +363,7 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                               </p>
                             )}
                             {result.commitMessage && (
-                              <div className="pl-6 flex items-center gap-2 pt-1 font-mono text-[11px] text-emerald-300/80">
+                              <div className="pl-6 flex items-center gap-2 pt-1 font-mono text-xs text-emerald-300/80">
                                 <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30">
                                   git commit
                                 </span>
@@ -376,7 +376,7 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                                   href={result.githubRepo.replace(/\.git$/, '') + '/commits/main'}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 underline font-medium"
+                                  className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 underline font-medium"
                                 >
                                   View on GitHub
                                   <ArrowUpRight className="w-3 h-3" />
@@ -430,9 +430,9 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
                                   <button
                                     type="button"
                                     onClick={() => handleCopyCode(activeFile.content)}
-                                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded bg-muted/30 hover:bg-muted/60 transition-colors"
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded bg-muted/30 hover:bg-muted/60 transition-colors"
                                   >
-                                    {copiedFile ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                                    {copiedFile ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                                     <span>{copiedFile ? 'Copied' : 'Copy'}</span>
                                   </button>
                                 </div>
@@ -490,7 +490,7 @@ export default function AiProjectModal({ app, isOpen, onClose }: AiProjectModalP
 
                     {/* External Link */}
                     <div className="flex items-center gap-2">
-                      <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
+                      <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                         <span>Live</span>
                       </div>

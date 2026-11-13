@@ -93,8 +93,8 @@ export default function ChiliPiperEscalation({
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg rounded-2xl border border-border/60 bg-card p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-xl">
             <button
               type="button"
               onClick={() => {
@@ -180,7 +180,7 @@ export default function ChiliPiperEscalation({
                   </select>
                 </div>
 
-                <div className="rounded-lg bg-muted/40 p-3 text-[11px] text-muted-foreground space-y-1">
+                <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
                   <div className="flex items-center gap-1.5 font-medium text-foreground">
                     <Clock className="h-3.5 w-3.5 text-primary" /> 15-Minute Guaranteed Response Window
                   </div>

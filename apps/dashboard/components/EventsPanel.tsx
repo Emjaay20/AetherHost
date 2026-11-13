@@ -11,11 +11,11 @@ function getEventMeta(eventName: string) {
     case 'ApplicationProvisioned':
       return { icon: Database, color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
     case 'AIRequestCompleted':
-      return { icon: Sparkles, color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' }
+      return { icon: Sparkles, color: 'text-foreground', bg: 'bg-muted', border: 'border-border' }
     case 'TenantProvisioned':
-      return { icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10', border: 'border-purple-500/20' }
+      return { icon: Cpu, color: 'text-foreground', bg: 'bg-muted', border: 'border-border' }
     default:
-      return { icon: Activity, color: 'text-gray-500', bg: 'bg-gray-500/10', border: 'border-gray-500/20' }
+      return { icon: Activity, color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' }
   }
 }
 
@@ -31,44 +31,44 @@ export default function EventsPanel({ events }: { events: DomainEventItem[] }) {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="mt-8 rounded-2xl border border-border/50 bg-card overflow-hidden shadow-sm">
+    <div className="mt-8 rounded-lg border border-border bg-card overflow-hidden">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors duration-200"
+        className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center text-muted-foreground border border-border/50">
+          <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground border border-border">
             <Terminal className="w-4 h-4" />
           </div>
           <h2 className="text-sm font-semibold text-foreground">Domain Events Log</h2>
-          <span className="px-2 py-0.5 rounded-full bg-muted/50 text-[10px] font-medium text-muted-foreground border border-border/50">
+          <span className="px-2 py-0.5 rounded-md bg-muted text-xs font-mono text-muted-foreground border border-border">
             {events.length} Events
           </span>
         </div>
         <div className="text-muted-foreground">
-          {isOpen ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </div>
       </button>
 
       {isOpen && (
-        <div className="border-t border-border/50 bg-background/30 backdrop-blur-sm max-h-[500px] overflow-y-auto">
+        <div className="border-t border-border bg-card max-h-[500px] overflow-y-auto">
           {events.length === 0 ? (
-            <div className="p-12 flex flex-col items-center justify-center text-muted-foreground">
-              <Activity className="w-8 h-8 mb-3 opacity-20" />
-              <p className="text-sm font-medium">No system events recorded yet.</p>
+            <div className="p-8 flex flex-col items-center justify-center text-muted-foreground">
+              <Activity className="w-6 h-6 mb-2 opacity-30" />
+              <p className="text-xs font-medium">No system events recorded yet.</p>
             </div>
           ) : (
-            <div className="divide-y divide-border/50">
+            <div className="divide-y divide-border">
               {events.map((event: DomainEventItem, i: number) => {
                 const meta = getEventMeta(event.eventName)
                 const Icon = meta.icon
                 
                 return (
-                  <div key={i} className="p-4 flex flex-col hover:bg-muted/50 transition-colors duration-200">
+                  <div key={i} className="p-4 flex flex-col hover:bg-muted/40 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                       {/* Header */}
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${meta.bg} ${meta.border} ${meta.color} shrink-0`}>
+                        <div className={`w-8 h-8 rounded-md flex items-center justify-center border ${meta.bg} ${meta.border} ${meta.color} shrink-0`}>
                           <Icon className="w-4 h-4" />
                         </div>
                         <div>
@@ -76,11 +76,11 @@ export default function EventsPanel({ events }: { events: DomainEventItem[] }) {
                             {event.eventName}
                           </h4>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                               {new Date(event.createdAt).toLocaleString()}
                             </span>
                             {event.applicationId && (
-                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-md bg-muted border border-border/50 text-muted-foreground">
+                              <span className="text-xs font-mono px-1.5 py-0.5 rounded-md bg-muted border border-border text-muted-foreground">
                                 app: {event.applicationId.split('_').pop()}
                               </span>
                             )}
@@ -92,13 +92,11 @@ export default function EventsPanel({ events }: { events: DomainEventItem[] }) {
                     {/* Payload Data */}
                     {event.payload && Object.keys(event.payload).length > 0 && (
                       <div className="mt-3 ml-11">
-                        <div className="relative group">
-                          <pre className="text-[10px] font-mono leading-relaxed text-muted-foreground bg-[#0a0a0a] border border-border/40 p-3 rounded-lg overflow-x-auto shadow-inner scrollbar-thin scrollbar-thumb-white/10">
-                            <code className="text-zinc-300">
-                              {JSON.stringify(event.payload, null, 2)}
-                            </code>
-                          </pre>
-                        </div>
+                        <pre className="text-xs font-mono leading-relaxed text-muted-foreground bg-muted/30 border border-border p-3 rounded-md overflow-x-auto">
+                          <code>
+                            {JSON.stringify(event.payload, null, 2)}
+                          </code>
+                        </pre>
                       </div>
                     )}
                   </div>

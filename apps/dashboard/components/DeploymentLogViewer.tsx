@@ -17,11 +17,21 @@ interface DeploymentLogViewerProps {
   appId: string
   status: string
   onRedeployTriggered?: () => void
+  isOpen?: boolean
+  onToggle?: () => void
 }
 
-export default function DeploymentLogViewer({ appId, status, onRedeployTriggered }: DeploymentLogViewerProps) {
+export default function DeploymentLogViewer({ appId, status, onRedeployTriggered, isOpen, onToggle }: DeploymentLogViewerProps) {
   const [logs, setLogs] = useState<DeploymentLogEntry[]>([])
-  const [expanded, setExpanded] = useState(false)
+  const [internalExpanded, setInternalExpanded] = useState(false)
+  const expanded = isOpen !== undefined ? isOpen : internalExpanded
+  const setExpanded = (val: boolean) => {
+    if (onToggle) {
+      onToggle()
+    } else {
+      setInternalExpanded(val)
+    }
+  }
   const [loading, setLoading] = useState(false)
   const [debugging, setDebugging] = useState(false)
   const [fixing, setFixing] = useState(false)
@@ -151,7 +161,7 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
   const combinedLogText = logs.map(l => l.logContent).join('\n')
 
   return (
-    <div className="w-full mt-3 pt-3 border-t border-border/30">
+    <div className="w-full mt-3 pt-3 border-t border-border">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <button 
           type="button"
@@ -161,13 +171,13 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
               ? 'text-red-400 hover:text-red-300' 
               : status === 'pending' || redeploying
                 ? 'text-amber-400 hover:text-amber-300'
-                : 'text-zinc-400 hover:text-foreground'
+                : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <Terminal className="w-3.5 h-3.5" />
           <span>
             {status === 'failed' 
-              ? (expanded ? 'Hide Error Logs & AI Debugger' : 'View Error Logs & Analyze Failure') 
+              ? (expanded ? 'Hide Error Logs & Diagnostic' : 'View Error Logs & Analyze Failure') 
               : status === 'pending' || redeploying
                 ? (expanded ? 'Hide Live Logs' : 'Stream Live Build Logs...')
                 : (expanded ? 'Hide Logs' : 'View Deployment & Container Logs')}
@@ -183,9 +193,9 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                 setExpanded(true)
                 handleDebug()
               }}
-              className="flex items-center gap-1 text-[11px] font-medium text-purple-300 hover:text-purple-200 px-2.5 py-1 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-500/30 transition-colors"
+              className="flex items-center gap-1 text-xs font-medium text-foreground px-2.5 py-1 rounded-md bg-muted hover:bg-muted/80 border border-border transition-colors"
             >
-              <Sparkles className="w-3 h-3" />
+              <Sparkles className="w-3 h-3 text-muted-foreground" />
               <span>Analyze Failure with AI</span>
             </button>
           )}
@@ -204,9 +214,9 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                 <button
                   type="button"
                   onClick={handleCopy}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/80 transition-colors"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/80 transition-colors"
                 >
-                  {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                  {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                   <span>{copied ? 'Copied' : 'Copy'}</span>
                 </button>
               )}
@@ -231,16 +241,16 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className={`mt-2 rounded-xl border overflow-hidden shadow-2xl ${
-              status === 'failed' ? 'bg-[#0d090a] border-red-950/60' : 'bg-[#08090c] border-zinc-800/60'
+            <div className={`mt-2 rounded-lg border overflow-hidden ${
+              status === 'failed' ? 'bg-[#0d090a] border-red-950/60' : 'bg-card border-border'
             }`}>
               {/* Terminal header */}
-              <div className="px-3.5 py-2 bg-black/60 border-b border-white/5 flex items-center justify-between text-[11px] font-mono text-zinc-400">
+              <div className="px-3.5 py-2 bg-muted/40 border-b border-border flex items-center justify-between text-xs font-mono text-muted-foreground">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500/80"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500/80"></span>
-                  <span className="ml-2 text-zinc-500">deployment-stdout.log</span>
+                  <span className="w-2 h-2 rounded-full bg-red-500/80"></span>
+                  <span className="w-2 h-2 rounded-full bg-amber-500/80"></span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500/80"></span>
+                  <span className="ml-2 text-muted-foreground">deployment-stdout.log</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {(status === 'pending' || redeploying) && (
@@ -248,7 +258,7 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                       <Loader2 className="w-3 h-3 animate-spin" /> Live Streaming
                     </span>
                   )}
-                  <span className="text-zinc-600 font-mono text-[10px]">{logs.length} entries</span>
+                  <span className="text-muted-foreground font-mono text-xs">{logs.length} entries</span>
                 </div>
               </div>
 
@@ -270,7 +280,7 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                     Container exited or failed provisioning before writing stdout logs. Click &ldquo;Analyze Failure with AI&rdquo; below to diagnose configuration, or click &ldquo;Redeploy&rdquo; to rebuild and restart.
                   </div>
                 ) : (
-                  <div className="text-zinc-500 italic py-2">
+                  <div className="text-muted-foreground italic py-2">
                     No deployment logs recorded yet. Application is healthy.
                   </div>
                 )}
@@ -288,7 +298,7 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                         type="button"
                         onClick={handleRedeploy}
                         disabled={redeploying}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground hover:bg-muted/80 border border-border rounded-md text-xs font-medium transition-colors disabled:opacity-50"
                       >
                         {redeploying ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
                         {redeploying ? 'Redeploying...' : 'Redeploy Now'}
@@ -297,7 +307,7 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                         type="button"
                         onClick={handleFix}
                         disabled={fixing || debugging || redeploying}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 text-purple-200 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
                       >
                         {fixing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                         {fixing ? 'Fixing & deploying...' : 'Fix & Redeploy with AI'}
@@ -306,30 +316,30 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                         type="button"
                         onClick={handleDebug}
                         disabled={debugging}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground hover:bg-muted/80 border border-border rounded-md text-xs font-medium transition-colors disabled:opacity-50"
                       >
-                        {debugging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {debugging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3 text-muted-foreground" />}
                         {debugging ? 'Analyzing...' : aiResponse ? 'Re-Analyze with AI' : 'Analyze Failure with AI'}
                       </button>
                     </div>
                   </div>
 
                   {aiResponse && (
-                    <div className="rounded-xl bg-purple-950/30 border border-purple-500/30 overflow-hidden">
-                      <div className="px-3.5 py-2 bg-purple-950/50 border-b border-purple-500/20 flex items-center justify-between">
+                    <div className="rounded-md bg-muted/40 border border-border overflow-hidden">
+                      <div className="px-3.5 py-2 bg-muted/60 border-b border-border flex items-center justify-between">
                         <button
                           type="button"
                           onClick={() => setAiCollapsed(!aiCollapsed)}
-                          className="flex items-center gap-2 text-purple-300 font-medium text-xs hover:text-purple-200 transition-colors"
+                          className="flex items-center gap-2 text-foreground font-medium text-xs hover:text-foreground/80 transition-colors"
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
+                          <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
                           <span>AI Root-Cause Diagnosis & Fix</span>
                           {aiCollapsed ? <ChevronDown className="w-3.5 h-3.5 opacity-70" /> : <ChevronUp className="w-3.5 h-3.5 opacity-70" />}
                         </button>
                         <button
                           type="button"
                           onClick={() => setAiResponse(null)}
-                          className="p-1 rounded hover:bg-purple-500/20 text-purple-300/70 hover:text-purple-200 transition-colors"
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                           title="Close diagnosis"
                         >
                           <X className="w-3.5 h-3.5" />

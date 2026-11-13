@@ -319,9 +319,9 @@ export default function EnvVarsModal({
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
     >
-      <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-2xl bg-card border border-border rounded-lg shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
           <div className="flex items-center gap-3">
@@ -332,7 +332,7 @@ export default function EnvVarsModal({
               <h3 className="font-semibold text-base text-foreground flex items-center gap-2">
                 Environment Variables
                 {hasDraft && (
-                  <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-medium">
+                  <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-md font-medium">
                     Draft Restored
                   </span>
                 )}
@@ -472,7 +472,7 @@ export default function EnvVarsModal({
                 rows={10}
                 className="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 text-xs font-mono text-foreground focus:outline-none focus:border-primary resize-none placeholder:text-muted-foreground/40"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Paste or edit multi-line key=value pairs. Lines starting with # are treated as comments.
               </p>
             </div>
@@ -480,20 +480,20 @@ export default function EnvVarsModal({
 
           {/* Feedback messages */}
           {error && (
-            <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
+            <div className="p-3 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 text-xs">
               {error}
             </div>
           )}
           {successMsg && (
-            <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
+            <div className="p-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
               {successMsg}
             </div>
           )}
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground">
+        <div className="p-4 border-t border-border bg-card flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
             Variables are securely saved to the container&apos;s <span className="font-mono text-slate-300">.env</span> file.
           </p>
 

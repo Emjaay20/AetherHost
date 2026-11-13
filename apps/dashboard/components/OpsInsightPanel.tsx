@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { generateOpsInsight } from '../app/actions'
 import {
-  Sparkles,
+  Activity,
   AlertCircle,
   Loader2,
   ChevronDown,
@@ -45,7 +45,8 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<OpsInsightResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [drawerOpen, setDrawerOpen] = useState(true)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [panelExpanded, setPanelExpanded] = useState(false)
   const [openSections, setOpenSections] = useState<Record<number, boolean>>({ 0: true })
   const [copied, setCopied] = useState(false)
 
@@ -62,6 +63,7 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
 
     setLoading(true)
     setError(null)
+    setPanelExpanded(true)
 
     try {
       const res = await generateOpsInsight(scopeToUse)
@@ -148,37 +150,39 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
   }
 
   return (
-    <div className="mt-8 rounded-2xl bg-card border border-border/50 shadow-sm relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
-
+    <div className="mt-8 rounded-lg bg-card border border-border overflow-hidden">
       {/* Header & Controls */}
-      <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 text-foreground z-10">
-          <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 border border-purple-500/20 shadow-sm shrink-0">
-            <Sparkles className="w-4 h-4" />
+      <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={() => setPanelExpanded(!panelExpanded)}
+          className="flex items-center gap-3 text-foreground text-left"
+        >
+          <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center text-muted-foreground border border-border shrink-0">
+            <Activity className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-sm text-foreground">AI Ops Insight</h3>
-              <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px] font-medium">
-                Per-Project & Workspace Diagnostics
+              <h3 className="font-semibold text-sm text-foreground">Operational Diagnostics</h3>
+              <span className="px-1.5 py-0.5 rounded-md border border-border text-muted-foreground text-xs font-mono">
+                Diagnostics
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Select a specific project or the entire workspace to diagnose logs, events, and health checks.
+              Automated log analysis and health diagnostics across workspace projects.
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Project Selector + Generate Button */}
-        <div className="z-10 flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
-          <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[230px] sm:flex-1">
+        <div className="flex w-full flex-wrap items-center gap-2.5 lg:w-auto">
+          <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[220px] sm:flex-1">
             <select
               value={selectedScope}
               onChange={(e) => setSelectedScope(e.target.value)}
               disabled={loading}
               aria-label="Select project for AI insight"
-              className="w-full bg-background border border-border/70 rounded-xl px-3.5 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition-all"
+              className="w-full bg-background border border-border rounded-md px-3 py-1.5 text-xs font-medium text-foreground focus:outline-none focus:border-primary"
             >
               <option value="all">
                 All Projects — Workspace Overview ({apps.length})
@@ -195,7 +199,7 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
             type="button"
             onClick={() => handleGenerate()}
             disabled={loading}
-            className="px-4 py-2 rounded-xl font-medium text-xs transition-all duration-200 active:scale-95 shadow-sm bg-purple-600 text-white hover:bg-purple-500 border border-purple-500/50 disabled:opacity-50 flex items-center gap-2 shrink-0"
+            className="px-3.5 py-1.5 rounded-md font-medium text-xs bg-muted hover:bg-muted/80 text-foreground border border-border disabled:opacity-50 flex items-center gap-2 shrink-0 transition-colors"
           >
             {loading ? (
               <>
@@ -203,10 +207,7 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
                 <span>Analyzing...</span>
               </>
             ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Generate Insight</span>
-              </>
+              <span>Run Diagnostic</span>
             )}
           </button>
         </div>
@@ -214,8 +215,8 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
 
       {/* Quick Diagnose Pills for Failed / Pending Projects */}
       {attentionApps.length > 0 && (
-        <div className="px-5 pb-4 flex flex-wrap items-center gap-2 border-t border-border/30 pt-3 bg-muted/10">
-          <span className="text-[11px] text-muted-foreground font-medium">
+        <div className="px-4 pb-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 bg-muted/20">
+          <span className="text-xs text-muted-foreground font-medium">
             Needs Attention:
           </span>
           {attentionApps.map((app) => (
@@ -224,19 +225,19 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
               type="button"
               disabled={loading}
               onClick={() => handleGenerate(app.id)}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors flex items-center gap-1.5 disabled:opacity-50 ${
+              className={`text-xs font-medium px-2.5 py-1 rounded-md border transition-colors flex items-center gap-1.5 disabled:opacity-50 ${
                 app.status === 'failed'
-                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/30'
-                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                  ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  app.status === 'failed' ? 'bg-red-400' : 'bg-amber-400'
+                  app.status === 'failed' ? 'bg-red-500' : 'bg-amber-500'
                 }`}
               />
               <span>Diagnose {app.name}</span>
-              <span className="opacity-70 font-mono text-[10px]">({app.runtime})</span>
+              <span className="opacity-70 font-mono text-xs">({app.runtime})</span>
             </button>
           ))}
         </div>
@@ -244,7 +245,7 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
 
       {/* Error Banner */}
       {error && (
-        <div className="mx-5 mb-5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-between gap-3 relative z-10">
+        <div className="mx-4 mb-4 p-3 rounded-md bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <p className="text-xs font-medium">{error}</p>
@@ -259,44 +260,44 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
         </div>
       )}
 
-      {/* Collapsible Vercel/Render-Style Insight Drawer */}
+      {/* Collapsible Insight Drawer */}
       {result && (
-        <div className="border-t border-border/50 bg-[#090a0f] relative z-10">
-          {/* Sticky Drawer Toolbar */}
-          <div className="px-5 py-2.5 bg-muted/20 border-b border-border/40 flex flex-wrap items-center justify-between gap-3">
+        <div className="border-t border-border bg-card">
+          {/* Drawer Toolbar */}
+          <div className="px-4 py-2 bg-muted/40 border-b border-border flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => setDrawerOpen(!drawerOpen)}
-              className="flex items-center gap-2 text-xs font-medium text-foreground hover:text-purple-300 transition-colors"
+              className="flex items-center gap-2 text-xs font-medium text-foreground hover:text-foreground/80 transition-colors"
             >
               {drawerOpen ? (
-                <ChevronDown className="w-4 h-4 text-purple-400" />
+                <ChevronDown className="w-4 h-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-purple-400" />
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
               )}
               <span className="flex items-center gap-1.5">
                 {result.applicationId ? (
-                  <Box className="w-3.5 h-3.5 text-purple-400" />
+                  <Box className="w-3.5 h-3.5 text-muted-foreground" />
                 ) : (
-                  <Layers className="w-3.5 h-3.5 text-purple-400" />
+                  <Layers className="w-3.5 h-3.5 text-muted-foreground" />
                 )}
                 <span>
-                  Insight Report:{' '}
-                  <strong className="text-purple-300">
+                  Diagnostic Report:{' '}
+                  <strong className="text-foreground">
                     {result.applicationName || 'Workspace Overview'}
                   </strong>
                 </span>
               </span>
-              <span className="text-[11px] text-muted-foreground font-normal ml-1">
+              <span className="text-xs text-muted-foreground font-normal ml-1">
                 ({sections.length} {sections.length === 1 ? 'section' : 'sections'})
               </span>
             </button>
 
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="hidden sm:inline-flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded border border-border/40 text-muted-foreground font-mono">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="hidden sm:inline-flex items-center gap-1 bg-muted px-2 py-0.5 rounded-md border border-border text-muted-foreground font-mono">
                 {result.model}
               </span>
-              <span className="hidden sm:inline-flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded border border-border/40 text-emerald-400 font-mono">
+              <span className="hidden sm:inline-flex items-center gap-1 bg-muted px-2 py-0.5 rounded-md border border-border text-muted-foreground font-mono">
                 ${result.costUsd?.toFixed(5)}
               </span>
 
@@ -304,7 +305,7 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
                 <button
                   type="button"
                   onClick={toggleAllSections}
-                  className="px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40 transition-colors"
+                  className="px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border transition-colors"
                 >
                   {allExpanded ? 'Collapse All' : 'Expand All'}
                 </button>
@@ -313,17 +314,17 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
               <button
                 type="button"
                 onClick={handleCopy}
-                className="flex items-center gap-1 px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40 transition-colors"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border transition-colors"
                 title="Copy report"
               >
-                {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                 <span>{copied ? 'Copied' : 'Copy'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setDrawerOpen(!drawerOpen)}
-                className="px-2 py-0.5 rounded bg-muted/40 hover:bg-muted/70 text-muted-foreground hover:text-foreground border border-border/40 transition-colors flex items-center gap-1"
+                className="px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border transition-colors flex items-center gap-1"
                 title={drawerOpen ? 'Minimize report' : 'Expand report'}
               >
                 {drawerOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -333,31 +334,31 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
               <button
                 type="button"
                 onClick={() => setResult(null)}
-                className="p-1 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-300 transition-colors"
-                title="Close insight report"
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title="Close report"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Drawer Body with Collapsible Accordion Sections & Max Height */}
+          {/* Drawer Body with Collapsible Accordion Sections */}
           {drawerOpen && (
-            <div className="p-4 max-h-[380px] overflow-y-auto divide-y divide-border/40 space-y-2">
+            <div className="p-4 max-h-[380px] overflow-y-auto divide-y divide-border space-y-2">
               {sections.map((sec, idx) => {
                 const isOpen = !!openSections[idx]
                 return (
                   <div
                     key={idx}
-                    className="rounded-xl border border-border/40 bg-background/40 overflow-hidden"
+                    className="rounded-md border border-border bg-card overflow-hidden"
                   >
                     <button
                       type="button"
                       onClick={() => toggleSection(idx)}
-                      className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-muted/30 transition-colors"
+                      className="w-full px-3.5 py-2 flex items-center justify-between text-left hover:bg-muted/40 transition-colors"
                     >
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-5 h-5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[11px] font-mono flex items-center justify-center">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-md bg-muted border border-border text-muted-foreground text-xs font-mono flex items-center justify-center">
                           {idx + 1}
                         </span>
                         <span className="text-xs font-semibold text-foreground">
@@ -372,16 +373,16 @@ export default function OpsInsightPanel({ apps = [] }: OpsInsightPanelProps) {
                     </button>
 
                     {isOpen && (
-                      <div className="px-4 pb-3.5 pt-2 border-t border-border/30 bg-black/20">
+                      <div className="px-4 pb-3.5 pt-2 border-t border-border bg-muted/10">
                         <article
                           className="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed
-                            prose-headings:text-purple-300 prose-headings:font-semibold prose-headings:text-xs
+                            prose-headings:text-foreground prose-headings:font-semibold prose-headings:text-xs
                             prose-p:my-1.5 prose-li:my-0.5
-                            prose-a:text-purple-400 hover:prose-a:text-purple-300
+                            prose-a:text-primary hover:prose-a:underline
                             prose-strong:text-foreground prose-strong:font-semibold
                             prose-table:border-collapse prose-th:bg-muted/50 prose-th:p-2 prose-td:p-2
-                            prose-td:border-t prose-td:border-border/50 prose-th:border-b prose-th:border-border/50
-                            prose-code:text-purple-300 prose-code:bg-purple-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
+                            prose-td:border-t prose-td:border-border prose-th:border-b prose-th:border-border
+                            prose-code:text-foreground prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none
                             prose-ul:list-disc prose-ul:pl-4
                             prose-ol:list-decimal prose-ol:pl-4"
                         >
