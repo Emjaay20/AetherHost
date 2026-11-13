@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Checkout repository
         # v4.4.0
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Enable Corepack & pnpm
         run: |
@@ -64,7 +64,7 @@ jobs:
     steps:
       - name: Checkout repository
         # v4.4.0
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Go
         # v5.6.0
@@ -87,7 +87,7 @@ jobs:
     steps:
       - name: Checkout repository
         # v4.4.0
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Rust toolchain
         # stable branch, pinned at 2026-11-11
@@ -114,7 +114,7 @@ jobs:
     steps:
       - name: Checkout repository
         # v4.4.0
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Detect accidentally committed secrets
         # v2.3.9
