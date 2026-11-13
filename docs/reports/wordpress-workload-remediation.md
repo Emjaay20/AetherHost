@@ -41,6 +41,9 @@ changed.
 - Made nginx readiness traverse PHP-FPM's ping endpoint instead of returning a
   static nginx response. A running nginx process alone is not sufficient proof
   that WordPress can execute PHP.
+- Rendered the tenant-specific PHP service name into nginx FastCGI upstreams.
+  A literal `php` upstream cannot resolve because the workload's services are
+  intentionally uniquely named per deployment.
 - Removed `innodb_redo_log_capacity` from the MariaDB 10.11 profile after live
   validation showed that the server rejects that MySQL-specific setting during
   its startup configuration check.
@@ -60,6 +63,9 @@ changed.
 - The second disposable VPS run confirmed the Redis correction and exposed the
   host-path and MariaDB configuration defects before traffic could be served.
   Its resources are likewise disposable and are removed after validation.
+- The third disposable VPS run proved MariaDB, Redis, and PHP could start, then
+  exposed the nginx FastCGI upstream-name defect before the workload could be
+  marked ready. It is also disposable and will be removed after validation.
 
 ## Validation still required before production rollout
 
