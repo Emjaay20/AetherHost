@@ -59,6 +59,7 @@ func buildWordPressWorkload(app Application, identity, mariaDBPassword, redisPas
 			"wordpress-nginx.conf":   wordpressNginxConfig(phpName),
 			"wordpress-php-fpm.conf": wordpressPHPFPMConfig(tuning),
 			"wordpress-mariadb.cnf":  wordpressMariaDBConfig(tuning),
+			"wordpress-ready.php":    wordpressReadyScript(),
 		},
 		Alias:      nginxName,
 		Containers: []string{nginxName, phpName, mariaName, redisName},
@@ -71,7 +72,7 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	fmt.Fprintf(b, "  %s:\n", nginxName)
 	b.WriteString("    image: nginx:1.27-alpine\n")
 	fmt.Fprintf(b, "    container_name: %s\n", nginxName)
-	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html:ro\n      - ./wordpress-nginx.conf:/etc/nginx/conf.d/default.conf:ro\n")
+	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html:ro\n      - ./wordpress-nginx.conf:/etc/nginx/conf.d/default.conf:ro\n      - ./wordpress-ready.php:/var/www/html/aetherhost-ready.php:ro\n")
 	writeServiceLifecycle(b, resources.NginxMB, 96, true)
 	// nginx binds the routed HTTP port, initializes its private cache directory,
 	// then drops its workers to the nginx user and group. Grant only the four
@@ -108,7 +109,7 @@ func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string,
 	b.WriteString("    image: wordpress:php8.2-fpm-alpine\n")
 	fmt.Fprintf(b, "    container_name: %s\n", phpName)
 	b.WriteString("    env_file:\n      - wordpress.env\n")
-	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./wordpress-php-fpm.conf:/usr/local/etc/php-fpm.d/zz-aetherhost.conf:ro\n")
+	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./wordpress-php-fpm.conf:/usr/local/etc/php-fpm.d/zz-aetherhost.conf:ro\n      - ./wordpress-ready.php:/var/www/html/aetherhost-ready.php:ro\n")
 	writeServiceLifecycle(b, resources.PHPMB, 192, true)
 	// PHP-FPM starts as root, prepares the mounted WordPress files, and drops
 	// its workers to www-data. Retain only the capabilities needed for that
@@ -172,8 +173,8 @@ func wordpressNginxConfig(phpName string) string {
     location = /.aetherhost/ready {
         access_log off;
         include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME /fpm-ping;
-        fastcgi_param SCRIPT_NAME /fpm-ping;
+        fastcgi_param SCRIPT_FILENAME $document_root/aetherhost-ready.php;
+        fastcgi_param SCRIPT_NAME /aetherhost-ready.php;
         fastcgi_pass php:9000;
     }
     location = /fpm-ping {
@@ -210,6 +211,23 @@ func wordpressNginxConfig(phpName string) string {
 }
 `
 	return strings.ReplaceAll(config, "fastcgi_pass php:9000", fmt.Sprintf("fastcgi_pass %s:9000", phpName))
+}
+
+func wordpressReadyScript() string {
+	return `<?php
+mysqli_report(MYSQLI_REPORT_OFF);
+$db = @new mysqli(getenv('WORDPRESS_DB_HOST'), getenv('WORDPRESS_DB_USER'), getenv('WORDPRESS_DB_PASSWORD'), getenv('WORDPRESS_DB_NAME'));
+if ($db->connect_errno || !$db->query('SELECT 1')) {
+    http_response_code(503);
+    header('Content-Type: text/plain');
+    echo "database unavailable\n";
+    exit;
+}
+$db->close();
+http_response_code(200);
+header('Content-Type: text/plain');
+echo "ready\n";
+`
 }
 
 func wordpressPHPFPMConfig(t WordPressTuning) string {
