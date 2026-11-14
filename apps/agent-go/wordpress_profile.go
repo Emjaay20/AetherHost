@@ -110,9 +110,10 @@ func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string,
 	b.WriteString("    env_file:\n      - wordpress.env\n")
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./wordpress-php-fpm.conf:/usr/local/etc/php-fpm.d/zz-aetherhost.conf:ro\n")
 	writeServiceLifecycle(b, resources.PHPMB, 192, true)
-	// PHP-FPM starts as root and drops its workers to www-data. Retain only the
-	// identity-transition capabilities required for that unprivileged runtime.
-	b.WriteString("    cap_add:\n      - SETGID\n      - SETUID\n")
+	// PHP-FPM starts as root, prepares the mounted WordPress files, and drops
+	// its workers to www-data. Retain only the capabilities needed for that
+	// initialization and unprivileged runtime.
+	b.WriteString("    cap_add:\n      - CHOWN\n      - SETGID\n      - SETUID\n")
 	b.WriteString("    networks:\n      private: {}\n")
 	b.WriteString("    depends_on:\n")
 	fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", mariaName)

@@ -181,8 +181,8 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 	if !strings.Contains(nginx, "cap_drop:\n      - ALL") || !strings.Contains(nginx, "cap_add:\n      - NET_BIND_SERVICE\n      - CHOWN\n      - SETGID\n      - SETUID") {
 		t.Fatal("nginx must retain only the capabilities needed for port binding, startup ownership, and worker privilege drop")
 	}
-	if !strings.Contains(php, "cap_drop:\n      - ALL") || !strings.Contains(php, "cap_add:\n      - SETGID\n      - SETUID") {
-		t.Fatal("PHP-FPM must retain only the capabilities needed to drop workers to www-data")
+	if !strings.Contains(php, "cap_drop:\n      - ALL") || !strings.Contains(php, "cap_add:\n      - CHOWN\n      - SETGID\n      - SETUID") {
+		t.Fatal("PHP-FPM must retain only the capabilities needed to initialize files and drop workers to www-data")
 	}
 	for name, service := range map[string]string{"php": php, "mariadb": mariadb, "redis": redis} {
 		if strings.Contains(service, "aetherhost-net") || !strings.Contains(service, "private:") {
