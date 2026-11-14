@@ -19,13 +19,16 @@ export const options = {
 };
 
 export function anonymous() {
-  const response = http.get(`${baseUrl}/`);
+  // Fresh WordPress deliberately redirects to its installer. Measure the
+  // workload's own response rather than following into an uninstalled route.
+  const response = http.get(`${baseUrl}/`, { redirects: 0 });
   check(response, { 'anonymous request succeeded': (r) => r.status === 200 || r.status === 302 });
   sleep(0.2);
 }
 
 export function cacheBypass() {
   const response = http.get(`${baseUrl}/?aetherhost-cache-bypass=1`, {
+    redirects: 0,
     headers: { Cookie: 'wordpress_logged_in_test=1' },
   });
   check(response, { 'bypassed request succeeded': (r) => r.status === 200 || r.status === 302 });
