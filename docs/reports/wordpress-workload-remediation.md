@@ -44,10 +44,10 @@ changed.
 - Rendered the tenant-specific PHP service name into nginx FastCGI upstreams.
   A literal `php` upstream cannot resolve because the workload's services are
   intentionally uniquely named per deployment.
-- Retained the default capability drop for nginx but restored only `CHOWN` and
-  `NET_BIND_SERVICE`. The upstream nginx entrypoint needs `CHOWN` once to
-  initialise its private cache directory before workers start; the default
-  capability drop otherwise prevented nginx from starting.
+- Retained the default capability drop for nginx but restored only `CHOWN`,
+  `NET_BIND_SERVICE`, `SETGID`, and `SETUID`. The upstream nginx entrypoint
+  needs `CHOWN` once to initialise its private cache directory, then `SETGID`
+  and `SETUID` to drop worker processes to the unprivileged nginx account.
 - Removed `innodb_redo_log_capacity` from the MariaDB 10.11 profile after live
   validation showed that the server rejects that MySQL-specific setting during
   its startup configuration check.
@@ -73,6 +73,10 @@ changed.
 - The fourth disposable VPS run confirmed the generated FastCGI upstream name,
   then identified nginx's least-privilege startup requirement before the
   workload reached traffic readiness.
+- The fifth disposable VPS run confirmed the initial ownership transition and
+  identified the paired worker privilege-drop capability requirement. This
+  validates the need for an explicit, minimal nginx capability set rather than
+  restoring Docker's broad default set.
 
 ## Validation still required before production rollout
 
