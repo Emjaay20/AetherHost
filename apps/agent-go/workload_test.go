@@ -207,7 +207,7 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 	if plan.Alias != "aetherhost-legacy-blog-nginx" || plan.Port != 80 || plan.HealthPath != "/.aetherhost/ready" {
 		t.Fatalf("wordpress must be health-checked through nginx, got %+v", plan)
 	}
-	for _, path := range []string{"wordpress-nginx.conf", "wordpress-php-fpm.conf", "wordpress-mariadb.cnf"} {
+	for _, path := range []string{"wordpress-nginx.conf", "wordpress-php-fpm.conf", "wordpress-mariadb.cnf", "wordpress-ready.php"} {
 		if plan.ConfigFiles[path] == "" {
 			t.Fatalf("missing generated config %s", path)
 		}
@@ -221,6 +221,9 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 	}
 	if strings.Contains(nginxConfig, "location = /.aetherhost/ready { access_log off; return 204; }") {
 		t.Fatal("static nginx readiness must not mask a failed PHP-FPM process")
+	}
+	if !strings.Contains(nginxConfig, "aetherhost-ready.php") || !strings.Contains(plan.ConfigFiles["wordpress-ready.php"], "SELECT 1") {
+		t.Fatal("WordPress readiness must query MariaDB through the managed PHP script")
 	}
 }
 
