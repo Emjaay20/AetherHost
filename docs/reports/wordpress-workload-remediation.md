@@ -48,6 +48,10 @@ changed.
   `NET_BIND_SERVICE`, `SETGID`, and `SETUID`. The upstream nginx entrypoint
   needs `CHOWN` once to initialise its private cache directory, then `SETGID`
   and `SETUID` to drop worker processes to the unprivileged nginx account.
+- Retained PHP-FPM's default capability drop but restored only `SETGID` and
+  `SETUID`. PHP-FPM's root master must use those two capabilities to start its
+  `www-data` workers; without them it accepts FastCGI connections but has no
+  worker capable of answering a request.
 - Removed `innodb_redo_log_capacity` from the MariaDB 10.11 profile after live
   validation showed that the server rejects that MySQL-specific setting during
   its startup configuration check.
@@ -77,6 +81,10 @@ changed.
   identified the paired worker privilege-drop capability requirement. This
   validates the need for an explicit, minimal nginx capability set rather than
   restoring Docker's broad default set.
+- The sixth disposable VPS run confirmed nginx startup, MariaDB, Redis, and
+  FastCGI connectivity, then exposed PHP-FPM worker initialisation failing at
+  its intended `www-data` privilege drop. The same minimal-capability approach
+  is now applied to PHP-FPM.
 
 ## Validation still required before production rollout
 
