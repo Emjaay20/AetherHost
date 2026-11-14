@@ -49,7 +49,8 @@ changed.
   needs `CHOWN` once to initialise its private cache directory, then `SETGID`
   and `SETUID` to drop worker processes to the unprivileged nginx account.
 - Retained PHP-FPM's default capability drop but restored only `CHOWN`,
-  `SETGID`, and `SETUID`. PHP-FPM's root master needs `CHOWN` while the
+  `DAC_OVERRIDE`, `SETGID`, and `SETUID`. PHP-FPM's root master needs `CHOWN`
+  and `DAC_OVERRIDE` while the
   upstream WordPress entrypoint prepares a mounted legacy files volume, then
   uses `SETGID` and `SETUID` to start its `www-data` workers.
 - Removed `innodb_redo_log_capacity` from the MariaDB 10.11 profile after live

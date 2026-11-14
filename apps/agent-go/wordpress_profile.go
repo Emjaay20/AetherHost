@@ -113,7 +113,7 @@ func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string,
 	// PHP-FPM starts as root, prepares the mounted WordPress files, and drops
 	// its workers to www-data. Retain only the capabilities needed for that
 	// initialization and unprivileged runtime.
-	b.WriteString("    cap_add:\n      - CHOWN\n      - SETGID\n      - SETUID\n")
+	b.WriteString("    cap_add:\n      - CHOWN\n      - DAC_OVERRIDE\n      - SETGID\n      - SETUID\n")
 	b.WriteString("    networks:\n      private: {}\n")
 	b.WriteString("    depends_on:\n")
 	fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", mariaName)
