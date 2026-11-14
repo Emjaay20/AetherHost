@@ -178,6 +178,9 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 	if !strings.Contains(nginx, "aetherhost-net") || !strings.Contains(nginx, "private:") {
 		t.Fatal("nginx must join ingress and private networks")
 	}
+	if !strings.Contains(nginx, "cap_drop:\n      - ALL") || !strings.Contains(nginx, "cap_add:\n      - NET_BIND_SERVICE\n      - CHOWN") {
+		t.Fatal("nginx must retain the minimal capabilities needed for port binding and startup ownership")
+	}
 	for name, service := range map[string]string{"php": php, "mariadb": mariadb, "redis": redis} {
 		if strings.Contains(service, "aetherhost-net") || !strings.Contains(service, "private:") {
 			t.Fatalf("%s must remain private: %s", name, service)

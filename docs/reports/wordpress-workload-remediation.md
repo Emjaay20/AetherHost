@@ -44,6 +44,10 @@ changed.
 - Rendered the tenant-specific PHP service name into nginx FastCGI upstreams.
   A literal `php` upstream cannot resolve because the workload's services are
   intentionally uniquely named per deployment.
+- Retained the default capability drop for nginx but restored only `CHOWN` and
+  `NET_BIND_SERVICE`. The upstream nginx entrypoint needs `CHOWN` once to
+  initialise its private cache directory before workers start; the default
+  capability drop otherwise prevented nginx from starting.
 - Removed `innodb_redo_log_capacity` from the MariaDB 10.11 profile after live
   validation showed that the server rejects that MySQL-specific setting during
   its startup configuration check.
@@ -66,6 +70,9 @@ changed.
 - The third disposable VPS run proved MariaDB, Redis, and PHP could start, then
   exposed the nginx FastCGI upstream-name defect before the workload could be
   marked ready. It is also disposable and will be removed after validation.
+- The fourth disposable VPS run confirmed the generated FastCGI upstream name,
+  then identified nginx's least-privilege startup requirement before the
+  workload reached traffic readiness.
 
 ## Validation still required before production rollout
 
