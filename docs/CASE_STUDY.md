@@ -27,7 +27,7 @@ Distinguished explicitly between liveness (`/v1/health` for process state) and r
 ## Conclusion
 AetherHost isn't a mock WordPress deployment tool. It's a senior-level architectural proof of concept demonstrating how to orchestrate distributed systems, asynchronous event flows, rigorous API boundaries, and bulletproof billing cycles.
 
-## WordPress workload evidence: pending local execution
+## WordPress workload evidence
 
 The WordPress runtime now uses the same generated workload contract as a
 containerized Go, Rust, Node, or Python application. It has a private PHP,
@@ -36,10 +36,18 @@ runtime tuning; generated protected credential files; and agent-collected
 Prometheus metrics. The design and source-level verification are documented in
 [ADR 017](architecture/adr/017-wordpress-workload-profile.md).
 
-No benchmark values are published yet. The Docker daemon was unavailable in
-the development environment used for this change, so no p50/p95/p99, RPS,
-cache-hit, backup duration, or recovery-time values have been invented. To
-produce the record, run a local profile first and save the output:
+Controlled VPS validation was completed on 14 November 2026 with a disposable
+1,024 MiB WordPress profile. The deployment passed nginx, PHP-FPM, MariaDB,
+and Redis health checks. A bounded five-worker, 100-request internal check
+received 100 expected `302` fresh-install responses and zero unexpected
+responses. This is a correctness check, not a latency or throughput benchmark.
+
+The test runner now disables redirect following: a fresh WordPress site
+correctly redirects `/` to its installer, while the installer route itself is
+not expected to be available until WordPress setup is complete.
+
+No p50/p95/p99, RPS, cache-hit, backup duration, or recovery-time values are
+published yet. Those measurements will be added only from a dedicated k6 run:
 
 ```bash
 WORDPRESS_URL=http://demo.localhost k6 run scripts/wordpress-load-test.js
