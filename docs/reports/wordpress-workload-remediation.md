@@ -86,13 +86,32 @@ changed.
   its intended `www-data` privilege drop. The same minimal-capability approach
   is now applied to PHP-FPM.
 
-## Validation still required before production rollout
+## Controlled production validation — 14 November 2026
 
-The corrected profile must complete one fresh end-to-end VPS run before it is
-enabled for customer WordPress applications. A seeded legacy-volume migration,
-object-cache activation, load test, and database-failure drill also remain
-required. Measurements and pass/fail evidence belong in this report before any
-customer migration is claimed complete.
+The corrected profile completed a fresh end-to-end VPS run in an isolated,
+disposable tenant. The platform marked the application `running` only after
+the nginx readiness route reached a real PHP-FPM worker.
+
+| Check | Result |
+| --- | --- |
+| nginx health check | healthy |
+| PHP-FPM through nginx `/.aetherhost/ready` | `pong` |
+| PHP-FPM status | two live workers; zero slow requests |
+| MariaDB authenticated health check | `mysqld is alive` |
+| Redis authenticated health check | `PONG` |
+| WordPress root route | `302`, the expected fresh-install redirect |
+
+All disposable containers, volumes, deployment files, deployment logs, the
+application record, and the tenant record were removed immediately after the
+test. No customer data or customer application was changed.
+
+## Validation still required before customer migration
+
+A seeded legacy-volume migration, object-cache plugin activation, load test,
+and database-failure drill remain required before any existing customer
+WordPress application is moved onto this profile. Measurements and pass/fail
+evidence for those separate exercises belong in this report before a customer
+migration is claimed complete.
 
 ## Observability implementation
 
