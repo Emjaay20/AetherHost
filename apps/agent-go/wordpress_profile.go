@@ -73,9 +73,10 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	fmt.Fprintf(b, "    container_name: %s\n", nginxName)
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html:ro\n      - ./wordpress-nginx.conf:/etc/nginx/conf.d/default.conf:ro\n")
 	writeServiceLifecycle(b, resources.NginxMB, 96, true)
-	// nginx binds the routed HTTP port, so it receives only the one capability
-	// needed after the default capability drop.
-	b.WriteString("    cap_add:\n      - NET_BIND_SERVICE\n")
+	// nginx binds the routed HTTP port and its upstream entrypoint chowns its
+	// private cache directory before dropping to the nginx worker user. Grant
+	// only those two capabilities after the default capability drop.
+	b.WriteString("    cap_add:\n      - NET_BIND_SERVICE\n      - CHOWN\n")
 	b.WriteString("    labels:\n")
 	b.WriteString("      - \"traefik.enable=true\"\n")
 	b.WriteString("      - \"traefik.docker.network=aetherhost-net\"\n")
