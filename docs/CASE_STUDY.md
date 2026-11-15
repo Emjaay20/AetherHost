@@ -82,4 +82,5 @@ credential-status boundary have automated tests. A tenant-facing publish flow
 will be added only after it has explicit build-artifact selection, consent,
 and audit records; that boundary is intentional evidence of safe platform
 integration rather than an unfinished shortcut. See
-[the adapter design](integrations/spacefast-external-frontend.md).
+[the adapter design](integrations/spacefast-external-frontend.md) and the
+[private publish validation](validation/2026-11-15-spacefast-private-publish.md).
