@@ -115,6 +115,16 @@ export type TenantPage = {
   meta: { total: number; skip: number; take: number; hasMore: boolean }
 }
 
+export type SpacefastStatus = {
+  enabled: boolean
+  configured: boolean
+  teamIdConfigured: boolean
+  authenticated?: boolean
+  providerRequestId?: string
+  errorCode?: string
+  message: string
+}
+
 export type TenantDetail = {
   catalog: CatalogPlan[]
   tenant: {

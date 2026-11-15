@@ -7,7 +7,7 @@ import { GlobalConfigPanel } from './GlobalConfigPanel'
 import { MeterBar, Panel, PlanPill, Section, StatusPill, TenantLink } from './ui'
 import { age, clock, money, pageHref, pct, when } from './format'
 import { ProvisioningTimeline } from './ProvisioningTimeline'
-import type { Overview, TenantPage } from './types'
+import type { Overview, SpacefastStatus, TenantPage } from './types'
 
 const FLEET = ['running', 'pending', 'failed', 'suspended', 'terminating'] as const
 
@@ -15,10 +15,12 @@ export default function OverviewBoard({
   overview,
   directory,
   q,
+  spacefast,
 }: {
   overview: Overview
   directory: TenantPage
   q: string
+  spacefast?: SpacefastStatus
 }) {
   const counts = overview.fleet.counts
   const other = Object.entries(counts)
@@ -52,6 +54,24 @@ export default function OverviewBoard({
       </div>
 
       <GlobalConfigPanel system={overview.system} />
+
+      <Section kicker="External frontend" title="Spacefast connection">
+        <Panel className="p-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <span className={`h-2 w-2 rounded-full ${spacefast?.configured ? 'bg-emerald-400' : 'bg-muted-foreground'}`} />
+              {spacefast?.configured ? 'Scoped publisher configured' : 'Not configured'}
+            </div>
+            <p className="max-w-2xl text-xs leading-relaxed text-muted-foreground">
+              {spacefast?.message ?? 'The connection status could not be read.'}
+            </p>
+          </div>
+          <div className="text-right text-xs text-muted-foreground">
+            <p>Private Spaces only</p>
+            <p>{spacefast?.teamIdConfigured ? 'Team selected' : 'No team selected'}</p>
+          </div>
+        </Panel>
+      </Section>
 
       <div className="grid lg:grid-cols-5 gap-4">
         <Panel className="lg:col-span-3 p-5 space-y-5">
