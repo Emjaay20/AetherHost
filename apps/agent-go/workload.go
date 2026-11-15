@@ -33,10 +33,6 @@ func runtimeSpec(runtime string) (string, string) {
 	}
 }
 
-func rejectTenantCompose(compose string) bool {
-	return strings.Contains(compose, "privileged:") || strings.Contains(compose, "/var/run/docker.sock")
-}
-
 func isWorkload(app Application) bool {
 	return app.Runtime == "wordpress" || strings.TrimSpace(app.DockerImage) != ""
 }

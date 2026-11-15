@@ -186,34 +186,42 @@ export class AiProvisioningService {
 You are an AI infrastructure architect for a modern PaaS called AetherHost.
 The user wants to deploy a new application.
 Determine a good name for it (lowercase, hyphenated, no spaces).
-Generate a fully working docker-compose.yml file string that satisfies their request.
-Use standard images. The compose file should NOT define any networks.
-Do not expose any ports to the host (no 'ports: - "80:80"'), instead just use 'expose: - "80"'.
-VERY IMPORTANT: You MUST add Traefik labels to the main application container so it routes correctly. Add these exact labels under the main service (replace APP_NAME with the generated name):
-labels:
-  - "traefik.enable=true"
-  - "traefik.docker.network=aetherhost-net"
-  - "traefik.http.routers.APP_NAME.rule=Host(\`APP_NAME.localhost\`)"
-  - "traefik.http.services.APP_NAME.loadbalancer.server.port=80" (adjust port to match what the app listens on, e.g. 8080 or 8000)
-Crucially, generate the actual minimal application code files needed (e.g. src/main.rs, app.py, requirements.txt, Cargo.toml, index.html) and put them in the 'files' array. Include a clean HTML UI or index.html so the live preview looks great. Keep code concise to avoid cutting off the JSON.
+Generate the actual minimal application code files needed (for example,
+package.json + source files, app.py + requirements.txt, Cargo.toml, or index.html).
+Include a clean HTML UI so the live preview is useful. Keep code concise to
+avoid cutting off the JSON.
+
+The platform owns networks, routing, Compose, container privileges, mounts,
+resource limits, and secret injection. Do NOT generate Docker Compose, Traefik
+labels, ports, host paths, Docker socket mounts, privileged settings, or
+container resource settings. They are not part of this API and are ignored.
+
+Generate a Docker-runtime source bundle. Declare only its listening port
+(1-65535) and HTTP healthPath (for example /health). The platform will
+produce the runtime Compose file from that bounded contract.
     ${AI_FILE_RULES}
-    The runtime field should be "docker".
+    The runtime field must be "docker".
 ${generateDesc ? '\nAlso generate a short engaging repository description based on the prompt in the "description" field.' : ''}
 
 User Request: "${userPrompt}"
 
 Respond ONLY with valid JSON in this exact format, with no markdown formatting or backticks. DO NOT output any reasoning blocks or <think> tags. Output the JSON object immediately:
-{"name": "generated-name", "runtime": "docker", "dockerCompose": "version: '3'\\n...", "files": [{"path": "src/app.py", "content": "print('hello')"}]${generateDesc ? ', "description": "generated description"' : ''}}
+{"name": "generated-name", "runtime": "docker", "port": 3000, "healthPath": "/health", "files": [{"path": "src/app.py", "content": "print('hello')"}]${generateDesc ? ', "description": "generated description"' : ''}}
     `.trim();
 
     let parsed: any;
     let usage: any;
     try {
       const generated = await this.generateChecked(tenantId, 'infrastructure-provisioning', prompt, undefined, (candidate) => {
-        if (!candidate.name || !candidate.runtime || !candidate.dockerCompose) {
+        if (!candidate.name || candidate.runtime !== Runtime.DOCKER) {
           throw new Error('Invalid JSON structure returned by LLM');
         }
-        candidate.dockerCompose = normalizeFileContent(String(candidate.dockerCompose));
+        if (!Number.isInteger(candidate.port) || candidate.port < 1 || candidate.port > 65535) {
+          throw new Error('AI deployment port must be an integer between 1 and 65535');
+        }
+        if (typeof candidate.healthPath !== 'string' || !/^\/[A-Za-z0-9._/-]{0,80}$/.test(candidate.healthPath)) {
+          throw new Error('AI health path must be a safe absolute HTTP path');
+        }
         candidate.files = sanitizeAiFiles(Array.isArray(candidate.files) ? candidate.files : []);
       });
       parsed = generated.parsed;
@@ -231,10 +239,18 @@ Respond ONLY with valid JSON in this exact format, with no markdown formatting o
       parsed.name,
       parsed.runtime as Runtime,
       githubRepoUrl,
-      parsed.dockerCompose,
+      undefined,
       parsed.files,
       finalRepoName,
       finalRepoDesc,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      parsed.port,
+      parsed.healthPath,
     );
 
     return {

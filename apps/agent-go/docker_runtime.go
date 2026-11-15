@@ -8,10 +8,7 @@ import (
 	"strconv"
 )
 
-var (
-	composePortLabel = regexp.MustCompile(`loadbalancer\.server\.port=(\d{1,5})`)
-	dockerfileExpose = regexp.MustCompile(`(?mi)^\s*EXPOSE\s+(\d{1,5})`)
-)
+var dockerfileExpose = regexp.MustCompile(`(?mi)^\s*EXPOSE\s+(\d{1,5})`)
 
 func validPort(p int) bool { return p > 0 && p <= 65535 }
 
@@ -20,14 +17,12 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// detectAppPort determines which port the app listens on, in priority order:
-// explicit app.Port, the Traefik port label in the AI-generated compose, an
-// EXPOSE line in the Dockerfile, then 3000.
+// detectAppPort derives the port from the bounded application contract, then
+// optionally an EXPOSE declaration in source. It intentionally does not parse
+// tenant Docker Compose: routing belongs to the platform-generated runtime.
 func detectAppPort(app Application, appDir string) int {
-	if m := composePortLabel.FindStringSubmatch(app.DockerCompose); m != nil {
-		if p, err := strconv.Atoi(m[1]); err == nil && validPort(p) {
-			return p
-		}
+	if validPort(app.Port) {
+		return app.Port
 	}
 	if b, err := os.ReadFile(filepath.Join(appDir, "Dockerfile")); err == nil {
 		if m := dockerfileExpose.FindSubmatch(b); m != nil {
@@ -35,9 +30,6 @@ func detectAppPort(app Application, appDir string) int {
 				return p
 			}
 		}
-	}
-	if validPort(app.Port) {
-		return app.Port
 	}
 	return 3000
 }
