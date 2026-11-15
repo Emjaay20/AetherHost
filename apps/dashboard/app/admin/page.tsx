@@ -4,7 +4,7 @@ import { getEntitlements } from '../actions'
 import AdminShell from './AdminShell'
 import OverviewBoard from './Overview'
 import { adminGet } from './admin-api'
-import type { Overview, TenantPage } from './types'
+import type { Overview, SpacefastStatus, TenantPage } from './types'
 
 import { isCurrentUserAdmin } from '../../lib/admin'
 
@@ -24,9 +24,10 @@ export default async function AdminPage({
   const q = sp.q?.trim().slice(0, 80) ?? ''
   const skip = Math.max(0, Number(sp.skip) || 0)
   const entitlements = await getEntitlements()
-  const [overview, directory] = await Promise.all([
+  const [overview, directory, spacefast] = await Promise.all([
     adminGet<Overview>('/overview'),
     adminGet<TenantPage>(`/tenants?skip=${skip}&take=20${q ? `&q=${encodeURIComponent(q)}` : ''}`),
+    adminGet<SpacefastStatus>('/integrations/spacefast'),
   ])
 
   if (!overview.ok && overview.error === 'signed_out') redirect('/sign-in')
@@ -55,7 +56,12 @@ export default async function AdminPage({
       crumb="operator"
     >
       <AutoRefresh interval={8000} />
-      <OverviewBoard overview={overview.data} directory={directory.data} q={q} />
+      <OverviewBoard
+        overview={overview.data}
+        directory={directory.data}
+        q={q}
+        spacefast={spacefast.ok ? spacefast.data : undefined}
+      />
     </AdminShell>
   )
 }
