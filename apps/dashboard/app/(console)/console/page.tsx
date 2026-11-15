@@ -1,4 +1,4 @@
-import { getApplications, getEntitlements, getEvents, runProvisioner, deleteApplication } from '../../actions'
+import { getApplications, getEntitlements, getEvents, runProvisioner, deleteApplication, getExternalFrontends } from '../../actions'
 import CreateAppForm from '../../../components/CreateAppForm'
 import EventsPanel from '../../../components/EventsPanel'
 import OpsInsightPanel from '../../../components/OpsInsightPanel'
@@ -6,6 +6,7 @@ import AiProvisioningPrompt from '../../../components/AiProvisioningPrompt'
 import AutoRefresh from '../../../components/AutoRefresh'
 import DeploymentList from '../../../components/DeploymentList'
 import AppShell from '../../../components/AppShell'
+import SpacefastFrontendPanel from '../../../components/SpacefastFrontendPanel'
 import { Server, Activity, Box, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 import { cookies } from 'next/headers';
@@ -43,11 +44,12 @@ export default async function Dashboard() {
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
   const impersonateTenantName = cookieStore.get('aether_impersonate_tenant_name')?.value;
 
-  const [apps, entitlements, events, isAdmin] = await Promise.all([
+  const [apps, entitlements, events, isAdmin, externalFrontends] = await Promise.all([
     getApplications(),
     getEntitlements(),
     getEvents(),
     isCurrentUserAdmin(),
+    getExternalFrontends(),
   ])
   
   const usage = Math.max(apps.length, entitlements?.usage?.applications || 0)
@@ -216,6 +218,9 @@ export default async function Dashboard() {
                 </div>
               ) : <DeploymentList apps={apps} deleteAction={deleteApplication} />}
             </div>
+
+            {/* Optional external static frontend target */}
+            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} />
 
             {/* Domain Events Log */}
             <EventsPanel events={events} />

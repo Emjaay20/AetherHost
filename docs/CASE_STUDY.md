@@ -77,10 +77,12 @@ against the provider without returning it to a browser or a tenant.
 The adapter uses Spacefast's documented `GET /v1/me`, private Space creation,
 asynchronous publish, and operation-polling APIs. It uses idempotency keys for
 mutations and keeps a Spacefast failure separate from the tenant's AetherHost
-backend, databases, deployment workspace, and DNS. The client and the
-credential-status boundary have automated tests. A tenant-facing publish flow
-will be added only after it has explicit build-artifact selection, consent,
-and audit records; that boundary is intentional evidence of safe platform
-integration rather than an unfinished shortcut. See
+backend, databases, deployment workspace, and DNS. The tenant console now has
+an explicit-consent flow for publishing an eligible saved static export to a
+private Space. It accepts a bounded ZIP of static files only, records consent
+and lifecycle events, never exports an `.env` file or the AetherHost runtime,
+and reuses a saved provider Space if an upload must be retried. This is an
+operator-managed integration, not a claim that tenant OAuth is already built.
+The client and boundary have automated tests. See
 [the adapter design](integrations/spacefast-external-frontend.md) and the
 [private publish validation](validation/2026-11-15-spacefast-private-publish.md).
