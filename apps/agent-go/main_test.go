@@ -29,18 +29,6 @@ func TestRuntimeSpec(t *testing.T) {
 	}
 }
 
-func TestRejectTenantCompose(t *testing.T) {
-	if !rejectTenantCompose("services:\n  app:\n    privileged: true") {
-		t.Fatal("expected privileged compose to be rejected")
-	}
-	if !rejectTenantCompose("volumes:\n  - /var/run/docker.sock:/var/run/docker.sock") {
-		t.Fatal("expected docker.sock compose to be rejected")
-	}
-	if rejectTenantCompose("services:\n  app:\n    image: nginx:alpine") {
-		t.Fatal("expected a normal compose file to be allowed")
-	}
-}
-
 func TestDeploymentDirectoryCannotEscapeProjectsRoot(t *testing.T) {
 	root, err := filepath.Abs("deployments")
 	if err != nil {

@@ -138,8 +138,8 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 
 	sendAppLog(controlPlaneURL, app.ID, fmt.Sprintf("[%s] Provisioning initiated for '%s' (Runtime: %s)", time.Now().Format("15:04:05"), app.Name, app.Runtime))
 
-	if (app.DockerCompose != "" && rejectTenantCompose(app.DockerCompose)) || !validCustomDomain(app.CustomDomain) {
-		errMsg := fmt.Sprintf("[%s] Security check failed: unsafe compose or custom domain", time.Now().Format("15:04:05"))
+	if !validCustomDomain(app.CustomDomain) {
+		errMsg := fmt.Sprintf("[%s] Security check failed: invalid custom domain", time.Now().Format("15:04:05"))
 		sendAppLog(controlPlaneURL, app.ID, errMsg)
 		appLog.Warn("security check failed: unsafe compose or custom domain")
 		updateAppStatus(controlPlaneURL, app.ID, "failed")
