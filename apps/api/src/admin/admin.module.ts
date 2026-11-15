@@ -7,9 +7,10 @@ import { AdminTenantService } from './admin-tenant.service';
 import { AdminBillingService } from './admin-billing.service';
 import { BillingModule } from '../billing/billing.module';
 import { EntitlementsModule } from '../entitlements/entitlements.module';
+import { SpacefastModule } from '../integrations/spacefast/spacefast.module';
 
 @Module({
-  imports: [BillingModule, EntitlementsModule],
+  imports: [BillingModule, EntitlementsModule, SpacefastModule],
   controllers: [AdminController],
   providers: [
     AdminHealthService,

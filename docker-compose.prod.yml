@@ -218,6 +218,12 @@ services:
       - BACHS_WEBHOOK_URL=${BACHS_WEBHOOK_URL:-https://api.${BASE_DOMAIN}/v1/billing/webhooks/bachs}
       - FRONTEND_URL=${FRONTEND_URL:-https://${BASE_DOMAIN}}
       - BILLING_ALLOW_SIMULATE=${BILLING_ALLOW_SIMULATE:-false}
+      # Disabled by default. The scoped publisher key stays only in the
+      # production environment file, never in Git or a tenant record.
+      - SPACEFAST_ENABLED=${SPACEFAST_ENABLED:-false}
+      - SPACEFAST_API_KEY=${SPACEFAST_API_KEY:-}
+      - SPACEFAST_TEAM_ID=${SPACEFAST_TEAM_ID:-}
+      - SPACEFAST_API_BASE_URL=${SPACEFAST_API_BASE_URL:-https://api.spacefast.com}
       - DEMO_MODE=${DEMO_MODE:-false}
       - BASE_DOMAIN=${BASE_DOMAIN}
       - APP_BASE_URL=https://console.${BASE_DOMAIN}

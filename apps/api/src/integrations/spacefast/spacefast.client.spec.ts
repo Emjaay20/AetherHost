@@ -27,6 +27,19 @@ describe('SpacefastClient', () => {
     expect(JSON.parse(init.body)).toEqual({ teamId: 'team_123', slug: 'docs', title: 'Docs', access: 'private' });
   });
 
+  it('reads the authenticated identity without exposing the credential', async () => {
+    const fetchFn = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { id: 'usr_123', teams: [{ id: 'team_123', slug: 'aetherhost' }] },
+    }), { status: 200 }));
+    const client = new SpacefastClient(key, fetchFn, 'https://api.spacefast.test');
+
+    await expect(client.getIdentity()).resolves.toEqual({
+      id: 'usr_123', teams: [{ id: 'team_123', slug: 'aetherhost' }],
+    });
+    expect(fetchFn.mock.calls[0][0]).toBe('https://api.spacefast.test/v1/me');
+    expect(fetchFn.mock.calls[0][1].headers.get('authorization')).toBe(`Bearer ${key}`);
+  });
+
   it('returns safe provider diagnostics without exposing its credential', async () => {
     const fetchFn = jest.fn().mockResolvedValue(new Response(JSON.stringify({
       title: 'Forbidden', detail: 'scope is insufficient', code: 'insufficient_scope', requestId: 'req-body',
