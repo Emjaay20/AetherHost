@@ -52,9 +52,25 @@ syntax. See <https://spacefast.com/docs/api/>.
 5. API traffic continues to route to the AetherHost origin. Spacefast failure
    cannot alter the origin workload, its data, or its DNS.
 
+## Operator verification
+
+The control plane exposes two operator-only endpoints:
+
+- `GET /v1/admin/integrations/spacefast` reports whether the feature and
+  server-side credential are configured (never the credential itself).
+- `POST /v1/admin/integrations/spacefast/verify` calls `GET /v1/me` and checks
+  that the configured team is visible to the credential. It returns only a
+  boolean, a provider request ID where available, and a stable provider error
+  code.
+
+Set `SPACEFAST_ENABLED=true`, `SPACEFAST_API_KEY`, and
+`SPACEFAST_TEAM_ID` only in the root-owned production environment file. The
+recommended key is the **Space publisher** preset with an explicit expiry.
+
 ## Status
 
-The codebase contains a tested, disabled-by-default API adapter. It does not
-yet expose a tenant UI or make live provider calls. A live integration requires
-an operator-owned scoped credential or a tenant OAuth connection and an explicit
-non-production publish test before it can be enabled.
+The codebase contains a tested, disabled-by-default API adapter and an
+operator-only credential verification path. It does not yet expose a tenant UI
+or let a tenant publish. A live integration still requires an operator-owned
+scoped credential or a tenant OAuth connection, an explicit artifact contract,
+tenant consent, audit records, and a non-production publish test.

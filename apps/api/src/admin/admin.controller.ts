@@ -15,13 +15,17 @@ import { ActorTenantId } from '../auth/tenant.decorator';
 import { ApplyPlanDto } from './dto/apply-plan.dto';
 import { RefundDto } from './dto/refund.dto';
 import { SuspendDto } from './dto/suspend.dto';
+import { SpacefastService } from '../integrations/spacefast/spacefast.service';
 
 @Controller('v1/admin')
 @UseGuards(ClerkAuthGuard)
 export class AdminController {
   private readonly logger = new Logger(AdminController.name);
 
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly spacefastService: SpacefastService,
+  ) {}
 
   private checkAdmin(actorId: string) {
     const admins = (process.env.ADMIN_TENANT_IDS || '')
@@ -46,6 +50,21 @@ export class AdminController {
   async getAnalytics(@ActorTenantId() actorId: string) {
     this.checkAdmin(actorId);
     return this.adminService.getAnalytics();
+  }
+
+  // This endpoint is deliberately operator-only. It confirms that the
+  // server-side credential works but never returns the key, provider payload,
+  // or tenant-specific deployment data.
+  @Get('integrations/spacefast')
+  async getSpacefastStatus(@ActorTenantId() actorId: string) {
+    this.checkAdmin(actorId);
+    return this.spacefastService.getStatus();
+  }
+
+  @Post('integrations/spacefast/verify')
+  async verifySpacefast(@ActorTenantId() actorId: string) {
+    this.checkAdmin(actorId);
+    return this.spacefastService.verifyConnection();
   }
 
   @Get('tenants')

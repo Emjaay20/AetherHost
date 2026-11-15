@@ -6,6 +6,11 @@ export type SpacefastSpace = {
   liveUrl?: string | null;
 };
 
+export type SpacefastIdentity = {
+  id?: string;
+  teams?: Array<{ id: string; slug?: string; name?: string }>;
+};
+
 export type SpacefastOperation = {
   id: string;
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled' | string;
@@ -81,6 +86,11 @@ export class SpacefastClient {
     });
     const payload = await this.parse<{ data: { space: SpacefastSpace } }>(response);
     return payload.data.space;
+  }
+
+  async getIdentity(): Promise<SpacefastIdentity> {
+    const response = await this.request('/v1/me', { method: 'GET' });
+    return (await this.parse<{ data: SpacefastIdentity }>(response)).data;
   }
 
   // The artifact is supplied by an explicit build pipeline. AetherHost never

@@ -19,6 +19,7 @@ import { AuthModule } from './auth/auth.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SalesforceModule } from './integrations/salesforce/salesforce.module';
+import { SpacefastModule } from './integrations/spacefast/spacefast.module';
 import { CustomerSuccessModule } from './customer-success/customer-success.module';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
@@ -85,6 +86,7 @@ const redisConfig = getRedisConfig();
     ApiKeysModule,
     NotificationsModule,
     SalesforceModule,
+    SpacefastModule,
     CustomerSuccessModule,
   ],
   controllers: [AppController, TelemetryController],

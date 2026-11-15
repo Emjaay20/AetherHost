@@ -57,3 +57,21 @@ The report must state host specification, profile memory budget, WordPress and
 image versions, command line, p50/p95/p99, error rate, and the result of the
 MariaDB failure/restore drill. It should compare anonymous traffic with the
 explicit bypass scenario rather than claiming a cache benefit without evidence.
+
+## External frontend integration evidence
+
+Spacefast is integrated as a deliberately narrow, disabled-by-default external
+frontend adapter—not as a replacement for AetherHost workloads. The production
+API accepts an operator-scoped publishing credential only through its
+root-owned environment, and the operator dashboard can verify that credential
+against the provider without returning it to a browser or a tenant.
+
+The adapter uses Spacefast's documented `GET /v1/me`, private Space creation,
+asynchronous publish, and operation-polling APIs. It uses idempotency keys for
+mutations and keeps a Spacefast failure separate from the tenant's AetherHost
+backend, databases, deployment workspace, and DNS. The client and the
+credential-status boundary have automated tests. A tenant-facing publish flow
+will be added only after it has explicit build-artifact selection, consent,
+and audit records; that boundary is intentional evidence of safe platform
+integration rather than an unfinished shortcut. See
+[the adapter design](integrations/spacefast-external-frontend.md).
