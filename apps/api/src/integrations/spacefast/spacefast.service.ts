@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { SpacefastClient } from './spacefast.client';
 
 export type SpacefastConnectionStatus = {
