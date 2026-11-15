@@ -21,6 +21,7 @@ model Tenant {
   auditLogs          AuditLog[]
   apiKeys            ApiKey[]
   pushDevices        PushDevice[]
+  externalFrontends  ExternalFrontendDeployment[]
 }
 
 model Application {
@@ -48,6 +49,7 @@ model Application {
   createdAt             DateTime @default(now())
   tenant                Tenant   @relation(fields: [tenantId], references: [id])
   logs                  DeploymentLog[]
+  externalFrontends     ExternalFrontendDeployment[]
 
   @@index([tenantId])
   @@index([status])
@@ -155,4 +157,29 @@ model PushDevice {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+model ExternalFrontendDeployment {
+  id             String   @id @default(uuid())
+  tenantId       String
+  applicationId  String
+  provider       String
+  artifactPath   String
+  status         String   @default("pending")
+  consentedAt    DateTime
+  spaceId        String?
+  spaceSlug      String?
+  liveUrl        String?
+  immutableUrl   String?
+  versionId      String?
+  operationId    String?
+  idempotencyKey String   @unique
+  lastErrorCode  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, provider])
+  @@index([tenantId, updatedAt])
 }

@@ -15,9 +15,8 @@ export type SpacefastConnectionStatus = {
 /**
  * Operator-owned Spacefast connection.
  *
- * This intentionally has no tenant-facing publish method yet. The platform can
- * verify the scoped credential before we add the separate artifact hand-off and
- * tenant consent records required for a real external-frontend deployment.
+ * Provider credentials stay operator-owned. Tenant consent and artifact
+ * selection are recorded separately by SpacefastTenantService.
  */
 @Injectable()
 export class SpacefastService {
@@ -71,6 +70,15 @@ export class SpacefastService {
         message: 'Spacefast credential could not be verified. Check its scope, expiry, or configured team.',
       };
     }
+  }
+
+  publisher(): { client: SpacefastClient; teamId: string } {
+    const status = this.getStatus();
+    const teamId = this.config.get<string>('SPACEFAST_TEAM_ID')?.trim();
+    if (!status.configured || !teamId) {
+      throw new Error('Spacefast publishing is not configured');
+    }
+    return { client: this.client(), teamId };
   }
 
   private client(): SpacefastClient {

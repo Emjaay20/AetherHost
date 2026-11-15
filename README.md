@@ -75,6 +75,28 @@ That command produces a signed APK through Expo Application Services. Update the
 
 ---
 
+## External static frontend publishing (Spacefast)
+
+AetherHost can optionally publish an application's saved static export to a
+private Spacefast Space while keeping the workload, API, databases, secrets,
+and managed-domain controls in AetherHost. From the console, a tenant must
+approve each publish. The control plane uploads only an eligible static export
+(`index.html` plus bounded safe static assets), never a repository checkout,
+deployment folder, `.env`, Docker configuration, or database data.
+
+The initial integration is intentionally **operator-managed**: the scoped,
+expiring publisher credential stays in the root-owned production environment
+and is never exposed to a browser. Publish operations use idempotency keys,
+record consent and outcome in the audit log, create private Spaces, and reuse a
+created Space if an upload retry is needed. Customer-owned Spacefast OAuth is a
+separate future feature—not something this README claims is already live.
+
+Read the [integration design](docs/integrations/spacefast-external-frontend.md),
+[ADR 019](docs/architecture/adr/019-operator-managed-external-frontend-publishing.md),
+and the [controlled provider validation](docs/validation/2026-11-15-spacefast-private-publish.md).
+
+---
+
 ## 🏛️ System Architecture
 
 The current production design, trust boundaries, recovery path, and compatibility rules are documented in [Reliability & Security Architecture](docs/architecture/RELIABILITY_PLATFORM.md).

@@ -85,6 +85,65 @@ export async function getApplications() {
   }
 }
 
+export type ExternalFrontend = {
+  applicationId: string
+  artifactPath: string
+  status: 'pending' | 'publishing' | 'published' | 'failed' | string
+  spaceSlug: string | null
+  liveUrl: string | null
+  immutableUrl: string | null
+  versionId: string | null
+  operationId: string | null
+  lastErrorCode: string | null
+  updatedAt: string
+  consentedAt: string
+}
+
+export async function getExternalFrontends(): Promise<ExternalFrontend[]> {
+  const headers = await getAuthHeaders()
+  if (!headers) return []
+  try {
+    const res = await fetch(`${API_URL}/v1/external-frontends`, { headers, cache: 'no-store' })
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  } catch {
+    return []
+  }
+}
+
+export async function publishSpacefastFrontend(applicationId: string) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' })
+  if (!headers) return { error: 'Unauthorized' }
+  try {
+    const res = await fetch(`${API_URL}/v1/external-frontends/${encodeURIComponent(applicationId)}/spacefast/publish`, {
+      method: 'POST', headers, body: JSON.stringify({ consent: true }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.message || 'Spacefast publish request failed' }
+    revalidatePath('/console')
+    return { success: true, data }
+  } catch {
+    return { error: 'Network error communicating with AetherHost' }
+  }
+}
+
+export async function refreshSpacefastFrontend(applicationId: string) {
+  const headers = await getAuthHeaders()
+  if (!headers) return { error: 'Unauthorized' }
+  try {
+    const res = await fetch(`${API_URL}/v1/external-frontends/${encodeURIComponent(applicationId)}/spacefast/refresh`, {
+      method: 'POST', headers,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.message || 'Could not refresh Spacefast status' }
+    revalidatePath('/console')
+    return { success: true, data }
+  } catch {
+    return { error: 'Network error communicating with AetherHost' }
+  }
+}
+
 export async function createApplication(formData: FormData) {
   const headers = await getAuthHeaders({ 'Content-Type': 'application/json' });
   if (!headers) return { error: 'Unauthorized' };
