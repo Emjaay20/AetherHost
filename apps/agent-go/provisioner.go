@@ -384,12 +384,13 @@ func renderRuntimeCompose(app Application, safeName, controlPlaneRoot, projectsR
 	}
 
 	if app.Runtime == "github" && app.GithubRepo != "" {
+		dataMount, dataVolume := persistentAppDataCompose(app)
 		return fmt.Sprintf(`
 services:
   app:
     build: .
     env_file: .env
-    labels:
+%s    labels:
       - "traefik.enable=true"
       - "traefik.docker.network=aetherhost-net"
       - "traefik.http.routers.%s-app.rule=Host(%s)"%s
@@ -399,7 +400,7 @@ services:
 networks:
   aetherhost-net:
     external: true
-`, safeName, hostRule, tlsLabels, safeName)
+%s`, dataMount, safeName, hostRule, tlsLabels, safeName, dataVolume)
 	}
 
 	if app.Runtime == "docker" {
