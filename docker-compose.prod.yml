@@ -10,6 +10,8 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    environment:
+      - DOCKER_API_VERSION=1.44
     command:
       # API & Dashboard (internal only)
       - "--api.dashboard=false"
@@ -339,6 +341,7 @@ services:
       - CONTROL_PLANE_URL=http://api:3000
       - AGENT_SECRET_KEY=${AGENT_SECRET_KEY}
       - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - DOCKER_API_VERSION=1.44
       # Platform source is read-only; tenant repositories are the only
       # writable host mount. This prevents a tenant deployment from replacing
       # AetherHost itself.
