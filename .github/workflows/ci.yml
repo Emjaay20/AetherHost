@@ -296,6 +296,7 @@ jobs:
             --set image.pullPolicy=Never \
             --set autoscaling.enabled=false \
             --set replicaCount=1 \
+            --set serviceMonitor.enabled=false \
             --wait --timeout=180s
 
       - name: Verify Rollout Status
