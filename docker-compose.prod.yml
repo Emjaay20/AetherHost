@@ -149,13 +149,8 @@ services:
     image: tecnativa/docker-socket-proxy:0.3
     container_name: aetherhost-docker-proxy
     restart: unless-stopped
-    read_only: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp
     environment:
       CONTAINERS: 1
       NETWORKS: 1
@@ -182,13 +177,8 @@ services:
     image: tecnativa/docker-socket-proxy:0.3
     container_name: aetherhost-docker-proxy-readonly
     restart: unless-stopped
-    read_only: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp
     environment:
       CONTAINERS: 1
       NETWORKS: 1
@@ -219,13 +209,8 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: aetherhost-api
     restart: unless-stopped
-    read_only: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -306,14 +291,8 @@ services:
         - NEXT_PUBLIC_USE_TRAEFIK=true
     container_name: aetherhost-dashboard
     restart: unless-stopped
-    read_only: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp
-      - /app/apps/dashboard/.next/cache
     depends_on:
       - api
     environment:
