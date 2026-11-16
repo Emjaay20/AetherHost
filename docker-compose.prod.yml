@@ -277,7 +277,6 @@ services:
   # 6. Frontend: Next.js Dashboard Console
   # =========================================================================
   dashboard:
-    image: ghcr.io/emjaay20/aetherhost-dashboard:latest
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
