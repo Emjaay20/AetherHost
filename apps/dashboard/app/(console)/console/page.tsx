@@ -1,4 +1,4 @@
-import { getApplications, getEntitlements, getEvents, runProvisioner, deleteApplication, getExternalFrontends } from '../../actions'
+import { getApplications, getEntitlements, getEvents, runProvisioner, deleteApplication, getExternalFrontends, getSpacefastConnection } from '../../actions'
 import CreateAppForm from '../../../components/CreateAppForm'
 import EventsPanel from '../../../components/EventsPanel'
 import OpsInsightPanel from '../../../components/OpsInsightPanel'
@@ -44,12 +44,13 @@ export default async function Dashboard() {
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
   const impersonateTenantName = cookieStore.get('aether_impersonate_tenant_name')?.value;
 
-  const [apps, entitlements, events, isAdmin, externalFrontends] = await Promise.all([
+  const [apps, entitlements, events, isAdmin, externalFrontends, spacefastConnection] = await Promise.all([
     getApplications(),
     getEntitlements(),
     getEvents(),
     isCurrentUserAdmin(),
     getExternalFrontends(),
+    getSpacefastConnection(),
   ])
   
   const usage = Math.max(apps.length, entitlements?.usage?.applications || 0)
@@ -220,7 +221,7 @@ export default async function Dashboard() {
             </div>
 
             {/* Optional external static frontend target */}
-            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} />
+            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} />
 
             {/* Domain Events Log */}
             <EventsPanel events={events} />

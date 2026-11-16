@@ -82,7 +82,11 @@ an explicit-consent flow for publishing an eligible saved static export to a
 private Space. It accepts a bounded ZIP of static files only, records consent
 and lifecycle events, never exports an `.env` file or the AetherHost runtime,
 and reuses a saved provider Space if an upload must be retried. This is an
-operator-managed integration, not a claim that tenant OAuth is already built.
-The client and boundary have automated tests. See
+operator-managed integration by default. A customer-owned authorization-code
+OAuth foundation is also implemented with PKCE, encrypted token storage,
+refresh handling, one-time state, team selection, disconnect, and audit
+records; it stays disabled until a provider OAuth client is registered and its
+root-owned configuration is supplied. The client and boundary have automated
+tests. See
 [the adapter design](integrations/spacefast-external-frontend.md) and the
 [private publish validation](validation/2026-11-15-spacefast-private-publish.md).
