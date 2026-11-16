@@ -189,12 +189,15 @@ export default function DocsClient() {
         >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-        <Link href="/" className="truncate text-sm font-semibold tracking-tight hover:text-white">
+        <Link href="/" className="shrink-0 text-sm font-semibold tracking-tight hover:text-white">
           AetherHost
         </Link>
         <span className="text-zinc-600">/</span>
-        <span className="truncate text-sm font-medium text-zinc-400">Platform Documentation</span>
-        <span className="ml-2 hidden rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 sm:inline-block">
+        <span className="truncate text-sm font-medium text-zinc-400">
+          <span className="sm:hidden">Docs</span>
+          <span className="hidden sm:inline">Platform Documentation</span>
+        </span>
+        <span className="ml-2 hidden rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 md:inline-block">
           v2.0 Architecture
         </span>
 
@@ -218,10 +221,12 @@ export default function DocsClient() {
 
       <div className="mx-auto flex w-full max-w-7xl">
         {/* Mobile Backdrop */}
-        <button
-          type="button"
-          aria-label="Close docs menu"
-          className={`fixed inset-0 z-30 bg-black/70 backdrop-blur-sm lg:hidden ${open ? 'block' : 'hidden'}`}
+        <div
+          role="presentation"
+          aria-hidden={!open}
+          className={`fixed inset-0 z-40 bg-black/75 backdrop-blur-sm transition-opacity duration-200 lg:hidden ${
+            open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
           onClick={() => setOpen(false)}
         />
 
@@ -229,8 +234,27 @@ export default function DocsClient() {
         <aside
           id="docs-sidebar"
           data-open={open ? 'true' : 'false'}
-          className="fixed bottom-0 left-0 top-14 z-30 w-[min(20rem,88vw)] overflow-y-auto border-r border-zinc-800 bg-[#09090b] px-4 py-5 lg:sticky lg:top-14 lg:block lg:h-[calc(100vh-3.5rem)] lg:w-64 lg:shrink-0"
+          className={`docs-sidebar fixed inset-y-0 left-0 z-50 w-[min(20rem,85vw)] overscroll-contain overflow-y-auto border-r border-zinc-800 bg-[#09090b] px-4 py-5 shadow-2xl transition-transform duration-200 ease-in-out lg:sticky lg:top-14 lg:z-0 lg:block lg:h-[calc(100vh-3.5rem)] lg:w-64 lg:shrink-0 lg:transform-none lg:shadow-none ${
+            open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          }`}
         >
+          {/* Mobile Drawer Header */}
+          <div className="mb-4 flex items-center justify-between border-b border-zinc-800 pb-3 lg:hidden">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-white">Documentation</span>
+              <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                v2.0
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              aria-label="Close navigation"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
           {/* Quick Search */}
           <div className="relative mb-5">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" />
