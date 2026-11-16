@@ -5,7 +5,7 @@ services:
   # 1. Edge Ingress: Traefik with Automated Let's Encrypt SSL/TLS
   # =========================================================================
   traefik:
-    image: traefik:v3.1.4
+    image: traefik:latest
     container_name: aetherhost-traefik
     restart: unless-stopped
     security_opt:

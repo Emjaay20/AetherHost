@@ -35,6 +35,19 @@ echo "📥 [CI/CD] Pulling latest code from origin/main..."
 git pull --ff-only origin main
 require_clean_checkout
 
+# 2.5 Ensure Docker daemon accepts API v1.24+ for reverse proxy discovery compatibility
+if [[ ! -f /etc/systemd/system/docker.service.d/min_api_version.conf ]]; then
+  echo "🔧 [CI/CD] Configuring Docker daemon minimum API version compatibility (1.24)..."
+  mkdir -p /etc/systemd/system/docker.service.d
+  cat <<'EOF' > /etc/systemd/system/docker.service.d/min_api_version.conf
+[Service]
+Environment="DOCKER_MIN_API_VERSION=1.24"
+EOF
+  systemctl daemon-reload
+  systemctl restart docker
+  sleep 3
+fi
+
 # 3. Pull prebuilt verified container images from GHCR
 echo "📦 [CI/CD] Pulling container images..."
 docker compose -p aetherhost -f docker-compose.prod.yml pull || {
