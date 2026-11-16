@@ -58,7 +58,7 @@ docker compose -p aetherhost -f docker-compose.prod.yml pull || {
 # 4. Recreate changed containers (brief restart window per service).
 #    The API container runs `prisma migrate deploy` on start to apply committed migrations.
 echo "🔄 [CI/CD] Recreating updated containers..."
-docker compose -p aetherhost -f docker-compose.prod.yml up -d --remove-orphans --force-recreate traefik docker-socket-proxy-readonly
+docker compose -p aetherhost -f docker-compose.prod.yml up -d --remove-orphans --force-recreate dashboard api traefik docker-socket-proxy-readonly
 
 # 5. Install operational units without mutating tracked source files.
 "${control_plane_root}/deploy/install-operations-timers.sh"

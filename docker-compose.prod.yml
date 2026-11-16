@@ -199,6 +199,7 @@ services:
   # 5. Control Plane: NestJS Backend API
   # =========================================================================
   api:
+    image: ghcr.io/emjaay20/aetherhost-api:latest
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -276,6 +277,7 @@ services:
   # 6. Frontend: Next.js Dashboard Console
   # =========================================================================
   dashboard:
+    image: ghcr.io/emjaay20/aetherhost-dashboard:latest
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
@@ -324,6 +326,7 @@ services:
   # 7. Node Agent: Orchestration & Docker Runtime Agent
   # =========================================================================
   agent:
+    image: ghcr.io/emjaay20/aetherhost-agent:latest
     build:
       context: .
       dockerfile: apps/agent-go/Dockerfile
