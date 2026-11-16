@@ -45,13 +45,41 @@ docker compose -p aetherhost -f docker-compose.prod.yml pull || {
 # 4. Recreate changed containers (brief restart window per service).
 #    The API container runs `prisma migrate deploy` on start to apply committed migrations.
 echo "🔄 [CI/CD] Recreating updated containers..."
-docker compose -p aetherhost -f docker-compose.prod.yml up -d --remove-orphans
-docker compose -p aetherhost -f docker-compose.prod.yml restart traefik || true
+docker compose -p aetherhost -f docker-compose.prod.yml up -d --remove-orphans --force-recreate traefik docker-socket-proxy-readonly
 
 # 5. Install operational units without mutating tracked source files.
 "${control_plane_root}/deploy/install-operations-timers.sh"
 
-# 6. Cleanup old dangling images to preserve NVMe disk space
+# 6. Verify container runtime and edge proxy health
+echo "📋 [CI/CD] Container runtime status:"
+docker compose -p aetherhost -f docker-compose.prod.yml ps
+
+echo "🔍 [CI/CD] Verifying edge routing..."
+for i in {1..12}; do
+  if curl -sf http://127.0.0.1:3000/v1/health >/dev/null 2>&1; then
+    echo "✅ API healthy on port 3000"
+    break
+  fi
+  echo "Waiting for API readiness... ($i/12)"
+  sleep 2
+done
+
+for i in {1..12}; do
+  if curl -sf -k -H "Host: aetherhost.app" https://127.0.0.1/docs >/dev/null 2>&1; then
+    echo "✅ Traefik edge routing verified for aetherhost.app/docs"
+    break
+  fi
+  echo "Waiting for Traefik route discovery... ($i/12)"
+  sleep 2
+done
+
+echo "Traefik recent logs:"
+docker logs --tail 30 aetherhost-traefik || true
+
+echo "Docker Socket Proxy Readonly recent logs:"
+docker logs --tail 30 aetherhost-docker-proxy-readonly || true
+
+# 7. Cleanup old dangling images to preserve NVMe disk space
 echo "🧹 [CI/CD] Pruning unused image cache..."
 docker image prune -f
 

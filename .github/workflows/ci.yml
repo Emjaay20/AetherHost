@@ -341,4 +341,5 @@ jobs:
             cd /srv/aetherhost/control
             # Discard any local modifications to tracked deploy scripts that occurred during on-host operations
             sudo git checkout -- deploy/ 2>/dev/null || true
+            sudo git pull --ff-only origin main
             sudo /srv/aetherhost/control/deploy/deploy-production.sh

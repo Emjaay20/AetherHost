@@ -8,15 +8,8 @@ services:
     image: traefik:v3.1.4
     container_name: aetherhost-traefik
     restart: unless-stopped
-    read_only: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
-    tmpfs:
-      - /tmp
     command:
       # API & Dashboard (internal only)
       - "--api.dashboard=false"
@@ -334,13 +327,8 @@ services:
       dockerfile: apps/agent-go/Dockerfile
     container_name: aetherhost-agent
     restart: unless-stopped
-    read_only: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    tmpfs:
-      - /tmp
     depends_on:
       - api
       - docker-socket-proxy
