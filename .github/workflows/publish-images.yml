@@ -71,7 +71,7 @@ jobs:
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
 
       - name: Generate and attach SBOM
-        uses: anchore/sbom-action@f325610c6f0434493f0b0df2b79e82c16194b666
+        uses: anchore/sbom-action@fffec3d851af758d56fee099cf3fbf8aa8779843 # v0.24.3
         with:
           image: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build-and-push.outputs.digest }}
           format: spdx-json
