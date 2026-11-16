@@ -5,7 +5,7 @@ application metadata. It is intentionally value-free.
 
 | Data class | Location | Classification | Current protection | Required next control |
 | --- | --- | --- | --- | --- |
-| Tenant deployment environment variables | `Application.envVars` | Secret / tenant confidential | Never included in ordinary application listings; read and change events are audited without values; deployment-log redaction | Encrypt existing and new values using a managed key, then complete a migration and key-rotation runbook. |
+| Tenant deployment environment variables | `Application.envVars` | Secret / tenant confidential | Authenticated AES-256-GCM envelope encryption at rest (`SecretVaultService`); unique 12-byte IV per write; omitted from ordinary listings; read/change audit logging; deployment-log redaction | Automated key-rotation runbook and KMS integration. |
 | GitHub OAuth tokens | Clerk-backed authentication / runtime integration | Secret / tenant confidential | Server-side only; never returned in standard application records | Record token access and rotate/revoke on integration disconnect. |
 | Billing provider IDs and invoice amounts | `Invoice`, `WebhookEvent`, billing configuration | Confidential financial metadata | Authenticated API paths, database-only storage, audit records for billing mutations | Define retention period and restricted operator reporting. |
 | API key hashes and prefixes | `ApiKey` | Authentication material | Only SHA-256 hash plus a display prefix are stored | Add explicit expiry and revocation audit records. |

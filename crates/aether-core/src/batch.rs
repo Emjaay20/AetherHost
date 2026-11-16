@@ -11,8 +11,8 @@ use tokio::{
     time::interval,
 };
 
-/// High-throughput asynchronous batch ingestor designed for Kafka event streaming
-/// and ClickHouse columnar batch writing.
+/// High-throughput asynchronous batch ingestor providing bounded in-memory buffering,
+/// capacity threshold and interval-based flushing, strict backpressure, and graceful draining.
 ///
 /// Features:
 /// - Micro-batching by capacity threshold or flush interval.

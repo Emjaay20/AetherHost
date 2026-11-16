@@ -30,7 +30,11 @@ set +a
 install -d -m 0700 "$restic_cache_dir"
 export XDG_CACHE_HOME="$restic_cache_dir"
 
-readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers 1 --checkers 1 --tpslimit 2 --tpslimit-burst 2 --retries 8}"
+readonly rclone_tpslimit="${RCLONE_TPSLIMIT:-4}"
+readonly rclone_tpslimit_burst="${RCLONE_TPSLIMIT_BURST:-4}"
+readonly rclone_transfers="${RCLONE_TRANSFERS:-4}"
+readonly rclone_checkers="${RCLONE_CHECKERS:-4}"
+readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers ${rclone_transfers} --checkers ${rclone_checkers} --tpslimit ${rclone_tpslimit} --tpslimit-burst ${rclone_tpslimit_burst} --retries 8}"
 readonly rclone_timeout="${RCLONE_TIMEOUT:-5m}"
 
 restic_run() {
@@ -38,7 +42,7 @@ restic_run() {
 }
 
 restic_run check
-restic_run restore latest --target "$target_dir"
+restic_run restore latest --target "$target_dir" --include "*control-plane-postgres.sql*"
 
 dump_file="$(find "$target_dir" -name control-plane-postgres.sql -type f -print -quit)"
 if [[ -z "$dump_file" ]] || [[ ! -s "$dump_file" ]]; then

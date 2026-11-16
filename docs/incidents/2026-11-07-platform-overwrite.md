@@ -2,7 +2,7 @@
 
 **Date:** 7 November 2026
 
-**Status:** Resolved and preventive controls deployed
+**Status:** Resolved and verified with active off-host snapshots and automated restore drill (15 November 2026)
 
 ## Summary
 
@@ -26,6 +26,10 @@ signal.
 | 7 Nov, 06:07 | Files in `/opt/aetherhost` were replaced by FlowMeet-owned files. Host logs establish the timestamp but do not retain the shell command that performed the write. |
 | 8–11 Nov | Backup and restore timers failed immediately because their scripts had been removed with the original control-plane path. |
 | 11 Nov | Investigation confirmed the overwrite, recovered a clean control-plane checkout, separated control-plane and tenant paths, restored backup timers, and repaired FlowMeet from GitHub. |
+| 11–15 Nov | Scheduled daily backups timed out after 4 hours due to tar/gzip compression overhead breaking Restic deduplication across large volumes; unhandled stale locks accumulated in the remote repository. Restore check on 15 Nov failed due to exclusive lock contention. |
+| 15 Nov, 20:17 | Removed 9 stale locks via `restic unlock`. Optimized `deploy/backup/backup.sh` to eliminate gzip compression, backing up uncompressed directory trees directly to restore Restic CDC deduplication and prevent Google Drive API rate limiting. |
+| 15 Nov, 20:26 | Full off-host backup (`aetherhost-backup.service`) completed successfully in 5m 55s (snapshot `9eb0e024`). |
+| 15 Nov, 20:28 | Non-destructive recovery drill (`aetherhost-restore-check.service`) verified repository integrity and confirmed valid PostgreSQL dump restoration. |
 
 ## Impact
 

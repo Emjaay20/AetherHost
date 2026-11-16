@@ -46,10 +46,13 @@ cleanup
 export HOME="${HOME:-/root}"
 export XDG_CACHE_HOME="$restic_cache_dir"
 
-# Google Drive is a valid backup target. Rate limiting is applied to the rclone
-# process which Restic launches, preventing the request bursts that previously
-# exhausted the Drive API quota. Operators can tune these safely in backup.env.
-readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers 1 --checkers 1 --tpslimit 2 --tpslimit-burst 2 --retries 8}"
+# Google Drive is a valid backup target. Concurrency and rate limiting are tuned
+# to prevent Google Drive API 429 quota errors while allowing efficient throughput.
+readonly rclone_tpslimit="${RCLONE_TPSLIMIT:-4}"
+readonly rclone_tpslimit_burst="${RCLONE_TPSLIMIT_BURST:-4}"
+readonly rclone_transfers="${RCLONE_TRANSFERS:-4}"
+readonly rclone_checkers="${RCLONE_CHECKERS:-4}"
+readonly rclone_args="${RCLONE_RESTIC_ARGS:-serve restic --stdio --b2-hard-delete --transfers ${rclone_transfers} --checkers ${rclone_checkers} --tpslimit ${rclone_tpslimit} --tpslimit-burst ${rclone_tpslimit_burst} --retries 8}"
 readonly rclone_timeout="${RCLONE_TIMEOUT:-5m}"
 
 restic_run() {
@@ -63,7 +66,7 @@ retry_restic() {
     if (( attempt >= max_attempts )); then
       return 1
     fi
-    local delay=$(( attempt * 60 ))
+    local delay=$(( attempt * 30 ))
     echo "Restic command failed; retrying in ${delay}s (attempt $((attempt + 1))/${max_attempts})..." >&2
     sleep "$delay"
     ((attempt++))
@@ -81,33 +84,35 @@ if docker ps --format '{{.Names}}' | grep -qx 'aetherhost-postgres'; then
     > "$work_dir/control-plane-postgres.sql"
 fi
 
-# Tenant and platform data volumes only. BuildKit state, images and caches are
-# deliberately excluded because they are reproducible and can become huge.
+# Tenant and platform data volumes only. Backed up directly as uncompressed directory trees
+# so Restic content-defined chunking (CDC) deduplicates blocks across backups instead of
+# uploading redundant, changing gzip archives.
 while IFS= read -r volume; do
   [[ -z "$volume" ]] && continue
-  docker run --rm \
-    -v "${volume}:/source:ro" \
-    -v "${work_dir}/volumes:/backup" \
-    alpine:3.20 sh -c "tar -C /source -czf /backup/${volume}.tgz ."
+  mkdir -p "$work_dir/volumes/${volume}"
+  if [[ -d "/var/lib/docker/volumes/${volume}/_data" ]]; then
+    rsync -a --delete "/var/lib/docker/volumes/${volume}/_data/" "$work_dir/volumes/${volume}/"
+  fi
 done < <(docker volume ls --format '{{.Name}}' | grep -E '^aetherhost([-_]|$)' || true)
 
-# Configuration and tenant source are included, but Git metadata and local
-# dependency directories are omitted because source is reproducible from Git.
-tar \
-  --exclude='.git' \
-  --exclude='node_modules' \
-  --exclude='.next' \
-  --exclude='deployments/*/target' \
-  -czf "$work_dir/control-plane-config-and-source.tgz" \
-  -C "$platform_dir" .env docker-compose.prod.yml deploy
+# Configuration and tenant source are included uncompressed; Git metadata and local
+# build/dependency caches are omitted.
+mkdir -p "$work_dir/control-plane"
+cp "$platform_dir/.env" "$platform_dir/docker-compose.prod.yml" "$work_dir/control-plane/" 2>/dev/null || true
+if [[ -d "$platform_dir/deploy" ]]; then
+  rsync -a --delete --exclude='.git' "$platform_dir/deploy" "$work_dir/control-plane/"
+fi
 
-tar \
-  --exclude='.git' \
-  --exclude='node_modules' \
-  --exclude='.next' \
-  --exclude='*/target' \
-  -czf "$work_dir/project-source.tgz" \
-  -C "$projects_dir" .
+mkdir -p "$work_dir/projects"
+if [[ -d "$projects_dir" ]]; then
+  rsync -a --delete \
+    --exclude='.git' \
+    --exclude='node_modules' \
+    --exclude='.next' \
+    --exclude='*/target' \
+    --exclude='target' \
+    "$projects_dir/" "$work_dir/projects/"
+fi
 
 if ! restic_run cat config >/dev/null 2>&1; then
   echo "Initializing new restic repository at ${RESTIC_REPOSITORY}..."
@@ -115,9 +120,12 @@ if ! restic_run cat config >/dev/null 2>&1; then
 fi
 
 retry_restic backup --tag aetherhost --tag production "$work_dir"
-retry_restic forget --prune \
-  --keep-daily "${RESTIC_KEEP_DAILY:-14}" \
-  --keep-weekly "${RESTIC_KEEP_WEEKLY:-8}" \
-  --keep-monthly "${RESTIC_KEEP_MONTHLY:-12}"
+
+if [[ "${RESTIC_ENABLE_PRUNE:-false}" == "true" ]]; then
+  retry_restic forget --prune \
+    --keep-daily "${RESTIC_KEEP_DAILY:-14}" \
+    --keep-weekly "${RESTIC_KEEP_WEEKLY:-8}" \
+    --keep-monthly "${RESTIC_KEEP_MONTHLY:-12}"
+fi
 
 echo "AetherHost backup completed: $(date -u +%Y-%m-%dT%H:%M:%SZ)"

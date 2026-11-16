@@ -3,7 +3,7 @@
 //! High-performance fine-grained authorization engine (RBAC/ABAC) for AetherHost platform.
 //!
 //! Provides sub-microsecond in-memory policy evaluation, role inheritance,
-//! tenant boundary enforcement, LRU evaluation caching, and structured audit logs.
+//! tenant boundary enforcement, bounded TTL evaluation caching, and structured audit logs.
 
 pub mod actix;
 pub mod audit;
@@ -13,7 +13,10 @@ pub mod middleware;
 pub mod model;
 pub mod policy;
 
-pub use actix::{authorize_actix, ActixAuthzError, ActixAuthzErrorResponse};
+pub use actix::{
+    authorize_actix, ActixAuthzError, ActixAuthzErrorResponse, AuthenticatedSubject,
+    AuthzMiddleware,
+};
 pub use audit::{AuditRecord, AuditSink, InMemoryAuditSink, TracingAuditSink};
 pub use cache::EvaluationCache;
 pub use engine::{AuthzEngine, AuthzEngineBuilder};

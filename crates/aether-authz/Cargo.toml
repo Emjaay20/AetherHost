@@ -12,7 +12,15 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 actix-web = { workspace = true }
+futures-util = "0.3"
 
 [dev-dependencies]
 axum = { workspace = true }
 tower = { version = "0.4", features = ["util"] }
+criterion = { workspace = true }
+aether-telemetry = { workspace = true }
+
+[[bench]]
+name = "authz_bench"
+harness = false
+

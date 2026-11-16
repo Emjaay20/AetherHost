@@ -5,7 +5,7 @@ COPY apps/dashboard/package.json apps/dashboard/
 COPY libs/domain/package.json ./libs/domain/
 COPY libs/common/package.json ./libs/common/
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-RUN corepack enable pnpm && pnpm install --no-frozen-lockfile
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
 FROM deps AS builder
 WORKDIR /app

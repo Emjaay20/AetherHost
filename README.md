@@ -12,6 +12,8 @@
 [![Rust](https://img.shields.io/badge/Rust-1.80+-orange?style=for-the-badge&logo=rust)](https://www.rust-lang.org/)
 [![Traefik](https://img.shields.io/badge/Traefik-v3-24a1c1?style=for-the-badge&logo=traefik)](https://traefik.io/)
 [![Docker](https://img.shields.io/badge/Docker-Engine-2496ed?style=for-the-badge&logo=docker)](https://www.docker.com/)
+[![Security](https://img.shields.io/badge/DevSecOps-Staff_Showcase-blue?style=for-the-badge&logo=shield)](SHOWCASE.md)
+[![Cosign](https://img.shields.io/badge/Supply_Chain-Cosign_Signed-success?style=for-the-badge&logo=sigstore)](docs/security/ci-security-baseline.md)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7-dc382d?style=for-the-badge&logo=redis)](https://redis.io/)
 
@@ -183,7 +185,7 @@ flowchart LR
 
 ### 4. Native Rust Platform & Systems Subsystem (`crates/`)
 Built with modern, memory-safe Rust and Staff-level platform engineering standards:
-* **`aether-authz`**: High-performance in-memory authorization engine (RBAC/ABAC) featuring role inheritance hierarchies, multi-tenant isolation guarantees, sub-microsecond LRU evaluation caching, and structured audit trails.
+* **`aether-authz`**: High-performance in-memory authorization engine (RBAC/ABAC) featuring role inheritance hierarchies, multi-tenant isolation guarantees, sub-microsecond TTL evaluation caching with bounded capacity, and structured audit trails.
 * **`aether-telemetry`**: Production observability layer standardizing W3C `traceparent` distributed tracing (Honeycomb/Jaeger) and atomic Prometheus RED metrics (Rate, Errors, Duration) with p50/p95/p99 latency histograms and Axum middleware.
 * **`aether-core`**: Shared platform kernel featuring typed error hierarchies (`PlatformError`), concurrency-safe circuit breakers (`CircuitBreaker`) preventing cascading upstream outages, and fail-fast startup configuration validation.
 * **`aether-cli`**: The official developer CLI and agent interface. Features `aether doctor` for 1-click environment diagnostics, `aether mcp` running an AI Model Context Protocol server over stdio for coding agents (Claude, Cursor, Antigravity), instant `aether status`, `aether list`, `aether logs`, and terminal-based AI generation (`aether ai <id> "<prompt>"`).
@@ -336,13 +338,42 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ---
 
-## 🔒 Security Hardening
+## 🛡️ Enterprise DevSecOps & Security Architecture
 
-* **Database Non-Exposure:** PostgreSQL (5432) and Redis (6379) are bound strictly to `127.0.0.1` and internal networks. No public internet access.
-* **UFW Firewall:** Server firewall allows only SSH (22), HTTP (80), and HTTPS (443).
-* **Brute-Force Protection:** Fail2Ban monitors and bans repetitive SSH authentication attacks.
-* **Internal Agent Authentication:** Internal API communication requires cryptographically validated `x-agent-key` headers.
-* **Memory Safety:** Rust components eliminate memory corruption, buffer overflows, and data races at the proxy and log layers.
+AetherHost operates on an audited, defense-in-depth security model designed to isolate untrusted multi-tenant applications from host infrastructure, protect customer credentials at rest, and maintain resilient disaster recovery:
+
+```mermaid
+flowchart TD
+    Internet["Untrusted Internet / API Clients"] -->|TLS 1.3 / WAF Rate Limiting| Traefik["Traefik Edge Proxy\n(read_only: true, cap_drop: ALL)"]
+    Traefik -->|Internal Bridge| API["NestJS Control Plane\n(Clerk Auth, AuditLogger, LogRedaction)"]
+    API -->|AES-256-GCM Envelope Encryption| PG[("PostgreSQL\n(Encrypted envVars at rest)")]
+    API -->|HMAC Authenticated IPC| Agent["Go Runtime Supervisor\n(filepath.Clean traversal enforcer)"]
+    Agent -->|tecnativa/docker-socket-proxy\nEXEC=0, BUILD=0, POST=0| DockerEngine["Host Docker Daemon"]
+    DockerEngine -->|Deploy Sandbox| Tenant["Tenant Workloads\n(read_only: true, cap_drop: ALL, tmpfs: /tmp)"]
+```
+
+### Core Security Controls & Evidence
+* **Tenant Secret Envelope Encryption:** Customer environment variables and secrets are encrypted at rest with **AES-256-GCM** using unique 12-byte random IVs and 16-byte authentication tags ([SecretVaultService](apps/api/src/common/crypto/secret-vault.service.ts)).
+* **Zero-Trust Docker Socket Proxy:** Direct `/var/run/docker.sock` access is completely eliminated. Workload orchestrators communicate exclusively through a hardened proxy with container execution (`EXEC`) and arbitrary build (`BUILD`) primitives disabled.
+* **Immutable Container Sandboxes:** Production services run with `read_only: true`, `cap_drop: [ALL]`, and non-root execution profiles. Temporary file access is confined to memory-backed `tmpfs`.
+* **Automated Daily Disaster Recovery Drill:** Restic backups utilize Content-Defined Chunking (CDC) for multi-tier deduplication. Daily non-destructive drills ([restore-check.sh](deploy/backup/restore-check.sh)) verify snapshot cryptography and extract database schemas in **14 seconds** without affecting production.
+* **Supply Chain Attestation:** Images pushed to GHCR are signed using keyless **Cosign** (Sigstore OIDC) and accompanied by **Syft** SPDX Software Bills of Materials.
+* **Declarative Infrastructure as Code:** Cloudflare DNS, WAF rate-limiting rules, and GitHub branch protection are managed via [Terraform](terraform/) and audited by Checkov.
+* **Multi-Node Kubernetes Roadmap:** Documented Architectural Decision Record ([deploy/KUBERNETES.md](deploy/KUBERNETES.md)) and Flux v2 GitOps manifests ([deploy/gitops](deploy/gitops)) with restricted Pod Security Standards.
+
+### Security Documentation & Showcase
+* 📘 [Senior / Staff DevSecOps Portfolio Showcase](SHOWCASE.md)
+* 🔐 [Security Policy & Vulnerability Disclosure](SECURITY.md)
+* 🎯 [STRIDE Threat Model & Residual Risk Matrix](docs/security/threat-model.md)
+* 📋 [SOC 2 Type II Controls Mapping (AICPA Trust Services)](docs/security/controls.md)
+* 💾 [Disaster Recovery Runbook & Drill Audit](docs/security/disaster-recovery-drill.md)
+* 🚨 [Platform Incident Postmortem & Deduplication Recovery](docs/incidents/2026-11-07-platform-overwrite.md)
+* 🎓 [Staff Security Engineer Interview Preparation Guide](docs/portfolio/staff-security-case-study.md)
+
+### Run the Live Security Audit Script
+```bash
+bash scripts/demo-security-controls.sh
+```
 
 ---
 

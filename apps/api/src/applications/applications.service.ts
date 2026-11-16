@@ -23,6 +23,7 @@ import { validateCustomDomain } from './domain-validator';
 import { resolve4 } from 'node:dns/promises';
 import { Prisma } from '@prisma/client';
 import { redactSensitiveLogContent } from './log-redaction';
+import { SecretVaultService } from '../common/crypto/secret-vault.service';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -33,6 +34,7 @@ export class ApplicationsService {
     private readonly entitlementsService: EntitlementsService,
     private readonly eventsService: DomainEventsService,
     private readonly prisma: PrismaService,
+    private readonly secretVault: SecretVaultService = new SecretVaultService(),
   ) {}
 
   async create(
@@ -198,7 +200,7 @@ export class ApplicationsService {
               ? 'aetherhost-ai-pending: Initial AetherHost source'
               : null,
           dockerImage: dockerImage?.trim() || null,
-          envVars: envVars ? JSON.parse(JSON.stringify(envVars)) : null,
+          envVars: envVars ? (this.secretVault.encrypt(envVars) as any) : null,
           workerCommand: workerCommand?.trim() || null,
           withPostgres,
           withMariaDb,
@@ -276,7 +278,10 @@ export class ApplicationsService {
 
     if (tenantId === SYSTEM_TENANT_ID) {
       // The agent needs secret values to provision containers.
-      return apps;
+      return apps.map((app) => ({
+        ...app,
+        envVars: this.secretVault.decrypt((app as any).envVars),
+      }));
     }
 
     // Never send secret values in listings to tenants. Values are only
@@ -520,7 +525,7 @@ if __name__ == '__main__':
     const validatedImage = validateDockerImage(dockerImage);
 
     // If app has a workload contract, validate that the new image preserves it
-    const envVars = (app.envVars as Record<string, string>) || {};
+    const envVars = this.secretVault.decrypt(app.envVars);
     assertWorkloadSpec({
       runtime: app.runtime,
       dockerImage: validatedImage,
@@ -641,11 +646,12 @@ if __name__ == '__main__':
 
   async getEnvVars(id: string, tenantId: string, actorTenantId = tenantId) {
     const app = await this.assertOwned(id, tenantId);
+    const decrypted = this.secretVault.decrypt(app.envVars);
     await this.recordSecretAudit(app, 'APPLICATION_ENV_READ', actorTenantId, {
-      keyCount: Object.keys((app.envVars as Record<string, string>) || {}).length,
+      keyCount: Object.keys(decrypted).length,
     });
     return {
-      envVars: (app.envVars as Record<string, string>) || {},
+      envVars: decrypted,
     };
   }
 
@@ -694,10 +700,11 @@ if __name__ == '__main__':
       envVars,
     });
 
-    const updated = await this.prisma.application.update({
+    const encrypted = this.secretVault.encrypt(envVars);
+    await this.prisma.application.update({
       where: { id },
       data: {
-        envVars: JSON.parse(JSON.stringify(envVars)),
+        envVars: encrypted as any,
       },
     });
 
@@ -711,7 +718,7 @@ if __name__ == '__main__':
       return this.redeploy(id, tenantId, envVars);
     }
 
-    return { success: true, envVars: updated.envVars };
+    return { success: true, envVars };
   }
 
   private async recordSecretAudit(
@@ -752,7 +759,7 @@ if __name__ == '__main__':
         envVars:
           envVars !== undefined
             ? envVars
-            : ((app.envVars as Record<string, string>) || {}),
+            : this.secretVault.decrypt(app.envVars),
         workerCommand: app.workerCommand || undefined,
         withPostgres: app.withPostgres,
         withMariaDb: app.withMariaDb,
@@ -782,7 +789,7 @@ if __name__ == '__main__':
         ? { aiFiles: JSON.parse(JSON.stringify(aiFilesToSave)) }
         : {}),
       ...(envVars !== undefined
-        ? { envVars: JSON.parse(JSON.stringify(envVars)) }
+        ? { envVars: this.secretVault.encrypt(envVars) as any }
         : {}),
     };
 

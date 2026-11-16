@@ -6,6 +6,8 @@ description = "High-throughput real-time log ingestion and WebSocket streamer fo
 
 [dependencies]
 aether-core = { workspace = true }
+aether-authz = { workspace = true }
+aether-telemetry = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 tokio = { workspace = true }
 tower-http = { workspace = true, features = ["cors", "trace"] }
@@ -14,3 +16,7 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 futures-util = "0.3"
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }
+
