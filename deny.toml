@@ -22,7 +22,6 @@ allow = [
     "Zlib",
     "MPL-2.0",
 ]
-unlicensed = "allow"
 
 [licenses.private]
 ignore = true
