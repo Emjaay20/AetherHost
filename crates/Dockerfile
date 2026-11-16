@@ -1,7 +1,7 @@
 # Multi-stage production build for AetherHost Rust Platform Binaries
 # Builds: aether-router, aether-logd, aether-cli
 
-FROM rust:1.82-bookworm AS builder
+FROM rust:1-bookworm AS builder
 WORKDIR /usr/src/aetherhost
 
 # Pre-copy manifests for dependency layer caching

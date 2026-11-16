@@ -2,6 +2,7 @@
 name = "aether-router"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "High-performance edge reverse proxy and bandwidth meter for AetherHost"
 
 [dependencies]

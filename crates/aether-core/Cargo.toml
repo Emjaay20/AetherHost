@@ -2,6 +2,7 @@
 name = "aether-core"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Shared core types, HTTP client utilities, and auth helpers for AetherHost Rust services"
 
 [dependencies]

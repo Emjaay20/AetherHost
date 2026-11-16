@@ -2,6 +2,7 @@
 name = "aether-logd"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "High-throughput real-time log ingestion and WebSocket streamer for AetherHost"
 
 [dependencies]

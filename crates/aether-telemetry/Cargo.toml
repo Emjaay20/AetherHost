@@ -2,6 +2,7 @@
 name = "aether-telemetry"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Universal OpenTelemetry tracing (Honeycomb/Jaeger) and Prometheus RED metrics for AetherHost"
 
 [dependencies]

@@ -2,6 +2,7 @@
 name = "aether-authz"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "High-performance fine-grained authorization engine (RBAC/ABAC) for AetherHost platform"
 
 [dependencies]
