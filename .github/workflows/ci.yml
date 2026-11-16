@@ -6,128 +6,202 @@ on:
   pull_request:
     branches: [main, master]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
 # Jobs receive no write permissions unless one is explicitly required. This
 # workflow only reads source and uses repository secrets for the deploy step.
 permissions:
   contents: read
 
 jobs:
-  typescript:
-    name: API, Shared Libs & Dashboard
+  changes:
+    name: Change Detection & Path Filter
     runs-on: ubuntu-latest
+    outputs:
+      typescript: ${{ steps.filter.outputs.typescript }}
+      go: ${{ steps.filter.outputs.go }}
+      rust: ${{ steps.filter.outputs.rust }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+      kubernetes: ${{ steps.filter.outputs.kubernetes }}
     steps:
       - name: Checkout repository
-        # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Evaluate Changed Paths
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            typescript:
+              - 'apps/api/**'
+              - 'apps/dashboard/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+            go:
+              - 'apps/agent-go/**'
+            rust:
+              - 'crates/**'
+              - 'deny.toml'
+              - 'Cargo.toml'
+            terraform:
+              - 'terraform/**'
+            kubernetes:
+              - 'deploy/helm/**'
+              - 'deploy/gitops/**'
+              - 'crates/**'
+
+  typescript:
+    name: API, Shared Libs & Dashboard
+    needs: [changes]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip check when unchanged
+        if: github.event_name != 'push' && needs.changes.outputs.typescript != 'true'
+        run: echo "No TypeScript changes detected; gating check passed."
+
+      - name: Checkout repository
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Enable Corepack & pnpm
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         run: |
           corepack enable
           corepack prepare pnpm@10.21.0 --activate
 
-      - name: Setup Node.js 22
-        # v4.4.0
+      - name: Setup Node.js 22 with pnpm cache
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies (frozen lockfile)
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build shared libraries (strict TypeScript)
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         run: |
           pnpm --filter @aetherhost/common build
           pnpm --filter @aetherhost/domain build
 
       - name: Generate Prisma client & typecheck API
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         run: |
           pnpm --filter @aetherhost/api exec prisma generate
           pnpm --filter @aetherhost/api exec tsc -p tsconfig.build.json --noEmit
 
       - name: Run API unit & e2e tests
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         run: |
           pnpm --filter @aetherhost/api test
           pnpm --filter @aetherhost/api test:e2e
 
       - name: Typecheck & test Dashboard
+        if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         run: |
           pnpm --filter dashboard exec tsc --noEmit
           pnpm --filter dashboard test
 
   go-agent:
     name: Go Runtime Agent
+    needs: [changes]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/agent-go
     steps:
+      - name: Skip check when unchanged
+        if: github.event_name != 'push' && needs.changes.outputs.go != 'true'
+        run: echo "No Go agent changes detected; gating check passed."
+
       - name: Checkout repository
-        # v4.4.0
+        if: github.event_name == 'push' || needs.changes.outputs.go == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Go
-        # v5.6.0
+        if: github.event_name == 'push' || needs.changes.outputs.go == 'true'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version: '1.24'
           cache-dependency-path: apps/agent-go/go.sum
 
       - name: Run Go vet & unit tests
+        if: github.event_name == 'push' || needs.changes.outputs.go == 'true'
+        working-directory: apps/agent-go
         run: |
           go vet ./...
           go test -v ./...
 
   rust-crates:
     name: Rust Crates (aether-core, aether-cli, aether-logd, aether-router)
+    needs: [changes]
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: crates
     steps:
+      - name: Skip check when unchanged
+        if: github.event_name != 'push' && needs.changes.outputs.rust != 'true'
+        run: echo "No Rust changes detected; gating check passed."
+
       - name: Checkout repository
-        # v4.4.0
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Setup Rust toolchain
-        # stable branch, pinned at 2026-11-11
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
           components: clippy, rustfmt
 
       - name: Cache Cargo dependencies & build artifacts
-        uses: Swatinem/rust-cache@v2
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
+        uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3
         with:
           workspaces: crates -> target
 
+      - name: Install cargo-nextest
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
+        uses: taiki-e/install-action@nextest
+
+      - name: Check Rust dependencies & licenses (cargo-deny)
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: crates/Cargo.toml
+
       - name: Enforce strict platform clippy lints
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
+        working-directory: crates
         run: |
           cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Run Cargo workspace tests & doc tests
+      - name: Run Cargo workspace tests with cargo-nextest
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
+        working-directory: crates
         run: |
-          cargo test --workspace --verbose
+          cargo nextest run --workspace
+
+      - name: Run Cargo doc tests
+        if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
+        working-directory: crates
+        run: |
+          cargo test --doc --workspace
 
   security:
     name: Security and Dependency Checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        # v4.4.0
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
 
       - name: Detect accidentally committed secrets
-        # v2.3.9
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
-        # The scanner remains visible while the previously committed Svix
-        # secret is rotated and historical exposure is remediated. Make it a
-        # gate only after that baseline is clean.
-        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Scan source dependencies and configuration
-        # v0.36.0
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: fs
@@ -135,14 +209,123 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           trivyignores: .trivyignore
-          # Start in reporting mode so existing dependency debt does not block
-          # a safe deployment. Promote this to a blocking gate after findings
-          # are triaged and documented.
-          exit-code: '0'
+          exit-code: '1'
+
+  terraform-checkov:
+    name: Terraform Security Analysis (Checkov)
+    needs: [changes]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip check when unchanged
+        if: github.event_name != 'push' && needs.changes.outputs.terraform != 'true'
+        run: echo "No Terraform changes detected; gating check passed."
+
+      - name: Checkout repository
+        if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Run Checkov on Terraform Code
+        if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
+        uses: bridgecrewio/checkov-action@master
+        with:
+          framework: terraform
+          directory: terraform
+          output_format: cli
+          soft_fail: true
+
+  kubernetes-ci:
+    name: Kubernetes KinD & Helm Deployment Validation
+    needs: [changes]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip check when unchanged
+        if: github.event_name != 'push' && needs.changes.outputs.kubernetes != 'true'
+        run: echo "No Kubernetes / platform changes detected; gating check passed."
+
+      - name: Checkout repository
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Helm
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814
+        with:
+          version: 'v3.16.4'
+
+      - name: Lint Platform Helm Chart
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          helm lint deploy/helm/aether-platform
+
+      - name: Install Kubeconform
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          curl -sL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar -xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: Validate Helm Chart and GitOps Manifests with Kubeconform
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          helm template test-release deploy/helm/aether-platform --namespace aether-system | kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.31.0
+          kubeconform -summary -ignore-missing-schemas deploy/gitops/
+
+      - name: Create KinD Cluster
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: aether-kind
+          version: v0.25.0
+          node_image: kindest/node:v1.31.2
+
+      - name: Build Platform Docker Image
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          docker build -t ghcr.io/emjaay20/aether-platform:latest -f crates/Dockerfile .
+
+      - name: Load Image into KinD
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          kind load docker-image ghcr.io/emjaay20/aether-platform:latest --name aether-kind
+
+      - name: Install Platform Helm Chart
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          kubectl create namespace aether-system
+          helm install aether-platform deploy/helm/aether-platform \
+            --namespace aether-system \
+            --set image.pullPolicy=Never \
+            --set autoscaling.enabled=false \
+            --set replicaCount=1 \
+            --set serviceMonitor.enabled=false \
+            --wait --timeout=180s
+
+      - name: Verify Rollout Status
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          kubectl rollout status deployment/aether-platform-platform -n aether-system --timeout=120s
+          kubectl get pods -n aether-system -o wide
+          kubectl get svc -n aether-system
+
+      - name: Smoke-Test Health & Telemetry Endpoints
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          kubectl port-forward svc/aether-platform-platform 8080:8080 4001:4001 -n aether-system &
+          PF_PID=$!
+          sleep 4
+
+          # Test router health & metrics
+          curl -sf http://127.0.0.1:8080/_aether/health
+          curl -sf http://127.0.0.1:8080/_aether/metrics | grep "http_requests"
+
+          # Test logd health & metrics
+          curl -sf http://127.0.0.1:4001/health | grep "healthy"
+          curl -sf http://127.0.0.1:4001/metrics | grep "http_requests"
+
+          kill $PF_PID || true
 
   deploy:
     name: Continuous Deployment (Contabo VPS)
-    needs: [typescript, go-agent, rust-crates, security]
+    needs: [typescript, go-agent, rust-crates, security, terraform-checkov, kubernetes-ci]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

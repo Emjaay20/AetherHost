@@ -25,7 +25,7 @@ impl AuthzEngine {
 
     /// Evaluates access permissions against registered policies.
     /// Evaluation order:
-    /// 1. Check in-memory LRU evaluation cache (sub-microsecond return).
+    /// 1. Check in-memory bounded TTL evaluation cache (sub-microsecond return).
     /// 2. Expand subject roles through role inheritance hierarchy.
     /// 3. Evaluate matching policies sorted by priority (higher priority first).
     /// 4. Explicit `Deny` terminates immediately.

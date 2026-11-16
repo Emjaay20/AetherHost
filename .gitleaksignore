@@ -1,0 +1,11 @@
+# Gitleaks baseline ignore file
+# These entries represent historical commits prior to credential rotation
+# and test mocks that have been audited and resolved.
+ad4627f55865ff4307cb923c4ad2e62dc4018330:.github/workflows/ci.yml:generic-api-key:13
+ad4627f55865ff4307cb923c4ad2e62dc4018330:.env.example:generic-api-key:9
+ad4627f55865ff4307cb923c4ad2e62dc4018330:apps/agent-go/workload_test.go:generic-api-key:89
+a8d82e38240bedb112688281319f708439f5fe3b:.env.example:generic-api-key:9
+a8d82e38240bedb112688281319f708439f5fe3b:.github/workflows/ci.yml:generic-api-key:13
+a8d82e38240bedb112688281319f708439f5fe3b:apps/agent-go/workload_test.go:generic-api-key:89
+1dfcc3a7761622fc3303e80b8da9225670f16b1e:apps/api/README.md:generic-api-key:5
+242bb1f2020ef8c835111f36a8cffaa086d72650:apps/api/README.md:generic-api-key:5

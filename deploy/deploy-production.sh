@@ -35,9 +35,12 @@ echo "📥 [CI/CD] Pulling latest code from origin/main..."
 git pull --ff-only origin main
 require_clean_checkout
 
-# 3. Build updated images using Docker cache
-echo "🏗️ [CI/CD] Building updated container images..."
-docker compose -p aetherhost -f docker-compose.prod.yml build
+# 3. Pull prebuilt verified container images from GHCR
+echo "📦 [CI/CD] Pulling container images..."
+docker compose -p aetherhost -f docker-compose.prod.yml pull || {
+  echo "⚠️ Registry pull skipped or fallback needed; using local cached build..." >&2
+  docker compose -p aetherhost -f docker-compose.prod.yml build
+}
 
 # 4. Recreate changed containers (brief restart window per service).
 #    The API container runs `prisma migrate deploy` on start to apply committed migrations.

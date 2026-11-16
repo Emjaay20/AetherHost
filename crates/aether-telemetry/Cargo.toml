@@ -2,6 +2,7 @@
 name = "aether-telemetry"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Universal OpenTelemetry tracing (Honeycomb/Jaeger) and Prometheus RED metrics for AetherHost"
 
 [dependencies]
@@ -13,8 +14,15 @@ tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tokio = { workspace = true }
 axum = { workspace = true }
 actix-web = { workspace = true }
+futures-util = "0.3"
 tower = { version = "0.4", features = ["util"] }
 tower-http = { workspace = true, features = ["trace"] }
 
 [dev-dependencies]
 reqwest = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "telemetry_bench"
+harness = false
+

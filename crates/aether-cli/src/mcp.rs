@@ -21,13 +21,8 @@ struct JsonRpcResponse {
     error: Option<Value>,
 }
 
-pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let reader = stdin.lock();
-
-    // Default policy engine instance for agent policy verification
-    let engine = AuthzEngine::builder()
+pub fn build_mcp_authz_engine() -> AuthzEngine {
+    AuthzEngine::builder()
         .with_policy(
             Policy::builder("default_developer", Effect::Allow)
                 .name("Developer CRUD on own apps")
@@ -45,7 +40,16 @@ pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
                 .any_action()
                 .build(),
         )
-        .build();
+        .build()
+}
+
+pub async fn run_mcp_server() -> Result<(), Box<dyn std::error::Error>> {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let reader = stdin.lock();
+
+    // Default policy engine instance for agent policy verification
+    let engine = build_mcp_authz_engine();
 
     for line in reader.lines() {
         let line = line?;
@@ -261,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_mcp_initialize() {
-        let engine = AuthzEngine::builder().build();
+        let engine = build_mcp_authz_engine();
         let req = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),
@@ -276,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_mcp_tools_list() {
-        let engine = AuthzEngine::builder().build();
+        let engine = build_mcp_authz_engine();
         let req = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(2)),
@@ -287,5 +291,173 @@ mod tests {
         assert!(res.error.is_none());
         let tools = res.result.unwrap()["tools"].as_array().unwrap().len();
         assert_eq!(tools, 3);
+    }
+
+    #[test]
+    fn test_mcp_get_platform_info() {
+        let engine = build_mcp_authz_engine();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(3)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "get_platform_info",
+                "arguments": {}
+            })),
+        };
+        let res = handle_mcp_method(&req, &engine);
+        assert!(res.error.is_none());
+        let content_text = res.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val: Value = serde_json::from_str(&content_text).unwrap();
+        assert_eq!(val["platform"], "AetherHost");
+        assert_eq!(val["default_port"], 3000);
+    }
+
+    #[test]
+    fn test_mcp_validate_manifest_valid_and_invalid() {
+        let engine = build_mcp_authz_engine();
+
+        // Valid
+        let req_valid = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(4)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "validate_manifest",
+                "arguments": {
+                    "name": "my-cool-api",
+                    "runtime": "rust",
+                    "port": 8080
+                }
+            })),
+        };
+        let res = handle_mcp_method(&req_valid, &engine);
+        let content = res.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(val["valid"], true);
+
+        // Invalid: bad characters and invalid runtime
+        let req_invalid = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(5)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "validate_manifest",
+                "arguments": {
+                    "name": "INVALID_UPPERCASE$",
+                    "runtime": "ruby"
+                }
+            })),
+        };
+        let res_inv = handle_mcp_method(&req_invalid, &engine);
+        let content_inv = res_inv.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val_inv: Value = serde_json::from_str(&content_inv).unwrap();
+        assert_eq!(val_inv["valid"], false);
+        assert!(val_inv["errors"].as_array().unwrap().len() >= 2);
+    }
+
+    #[test]
+    fn test_mcp_evaluate_policy_allow_and_deny_paths() {
+        let engine = build_mcp_authz_engine();
+
+        // 1. Allowed: Same tenant developer
+        let req_allow = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(6)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "evaluate_policy",
+                "arguments": {
+                    "subject_id": "usr_dev_1",
+                    "tenant_id": "tenant-alpha",
+                    "role": "developer",
+                    "resource_kind": "application",
+                    "resource_id": "app_orders",
+                    "resource_tenant": "tenant-alpha",
+                    "action": "read"
+                }
+            })),
+        };
+        let res_allow = handle_mcp_method(&req_allow, &engine);
+        let text_allow = res_allow.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val_allow: Value = serde_json::from_str(&text_allow).unwrap();
+        assert_eq!(val_allow["allowed"], true);
+
+        // 2. Denied: Cross-tenant access attempt by developer
+        let req_cross_tenant = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(7)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "evaluate_policy",
+                "arguments": {
+                    "subject_id": "usr_attacker",
+                    "tenant_id": "tenant-alpha",
+                    "role": "developer",
+                    "resource_kind": "application",
+                    "resource_id": "app_confidential",
+                    "resource_tenant": "tenant-beta",
+                    "action": "read"
+                }
+            })),
+        };
+        let res_deny = handle_mcp_method(&req_cross_tenant, &engine);
+        let text_deny = res_deny.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val_deny: Value = serde_json::from_str(&text_deny).unwrap();
+        assert_eq!(val_deny["allowed"], false);
+        assert!(val_deny["reason"].as_str().unwrap().contains("Default closed"));
+
+        // 3. Denied: Unmatched role (viewer on modify action)
+        let req_unmatched = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(8)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "evaluate_policy",
+                "arguments": {
+                    "subject_id": "usr_viewer",
+                    "tenant_id": "tenant-alpha",
+                    "role": "viewer",
+                    "resource_kind": "application",
+                    "resource_id": "app_orders",
+                    "resource_tenant": "tenant-alpha",
+                    "action": "delete"
+                }
+            })),
+        };
+        let res_unmatched = handle_mcp_method(&req_unmatched, &engine);
+        let text_unmatched = res_unmatched.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val_unmatched: Value = serde_json::from_str(&text_unmatched).unwrap();
+        assert_eq!(val_unmatched["allowed"], false);
+    }
+
+    #[test]
+    fn test_mcp_unknown_method_and_unknown_tool() {
+        let engine = build_mcp_authz_engine();
+
+        // Unknown method
+        let req_method = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(9)),
+            method: "unknown/method".to_string(),
+            params: None,
+        };
+        let res_method = handle_mcp_method(&req_method, &engine);
+        assert_eq!(res_method.error.unwrap()["code"], -32601);
+
+        // Unknown tool
+        let req_tool = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(10)),
+            method: "tools/call".to_string(),
+            params: Some(json!({
+                "name": "non_existent_tool",
+                "arguments": {}
+            })),
+        };
+        let res_tool = handle_mcp_method(&req_tool, &engine);
+        let text_tool = res_tool.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let val_tool: Value = serde_json::from_str(&text_tool).unwrap();
+        assert!(val_tool["error"].as_str().unwrap().contains("Unknown tool"));
     }
 }
