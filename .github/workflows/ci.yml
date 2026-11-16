@@ -338,4 +338,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
           script: |
+            cd /srv/aetherhost/control
+            # Discard any local modifications to tracked deploy scripts that occurred during on-host operations
+            sudo git checkout -- deploy/ 2>/dev/null || true
             sudo /srv/aetherhost/control/deploy/deploy-production.sh

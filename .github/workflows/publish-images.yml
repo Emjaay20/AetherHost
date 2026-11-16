@@ -44,11 +44,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase repository owner for OCI reference
+        id: repo_owner
+        run: echo "owner=${OWNER,,}" >> "$GITHUB_OUTPUT"
+        env:
+          OWNER: ${{ github.repository_owner }}
+
       - name: Extract container metadata
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804
         with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          images: ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ matrix.name }}
           tags: |
             type=sha,prefix=,format=short
             type=raw,value=latest,enable={{is_default_branch}}
@@ -67,11 +73,11 @@ jobs:
         run: |
           cosign sign --yes "${IMAGE_NAME}@${DIGEST}"
         env:
-          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          IMAGE_NAME: ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ matrix.name }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
 
       - name: Generate and attach SBOM
         uses: anchore/sbom-action@fffec3d851af758d56fee099cf3fbf8aa8779843 # v0.24.3
         with:
-          image: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}@${{ steps.build-and-push.outputs.digest }}
+          image: ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ matrix.name }}@${{ steps.build-and-push.outputs.digest }}
           format: spdx-json
