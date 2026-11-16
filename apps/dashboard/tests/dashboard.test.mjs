@@ -86,3 +86,18 @@ test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin ro
   assert.match(proxyContent, /isAdminRoute/);
   assert.match(proxyContent, /ADMIN_TENANT_IDS/);
 });
+
+test('docs page enforces responsive mobile drawer with backdrop and offscreen translate', () => {
+  const docsClient = fs.readFileSync(
+    path.join(dashboardRoot, 'app', 'docs', 'DocsClient.tsx'),
+    'utf8',
+  );
+  // Verify drawer is translated offscreen when closed and slides in when open
+  assert.match(docsClient, /-translate-x-full lg:translate-x-0/);
+  assert.match(docsClient, /translate-x-0/);
+  assert.match(docsClient, /docs-sidebar/);
+  // Verify mobile backdrop exists with blur and escape listener
+  assert.match(docsClient, /fixed inset-0 z-40 bg-black\/75 backdrop-blur-sm/);
+  assert.match(docsClient, /event\.key === 'Escape'/);
+  assert.match(docsClient, /document\.body\.style\.overflow = 'hidden'/);
+});
