@@ -42,12 +42,12 @@ export class SpacefastApiError extends Error {
 // CLI and never receives a tenant's Spacefast token.
 export class SpacefastClient {
   constructor(
-    private readonly apiKey: string,
+    private readonly credential: string,
     private readonly fetchFn: SpacefastFetch = fetch,
     private readonly baseUrl = 'https://api.spacefast.com',
   ) {
-    if (!apiKey.startsWith('sfa_')) {
-      throw new Error('Spacefast API key is missing or has an unsupported prefix');
+    if (!credential.trim()) {
+      throw new Error('Spacefast credential is required');
     }
     if (!baseUrl.startsWith('https://')) {
       throw new Error('Spacefast API base URL must use HTTPS');
@@ -62,7 +62,15 @@ export class SpacefastClient {
     if (!apiKey) {
       throw new Error('SPACEFAST_ENABLED requires SPACEFAST_API_KEY');
     }
+    if (!apiKey.startsWith('sfa_')) {
+      throw new Error('SPACEFAST_API_KEY must be a Spacefast API key');
+    }
     return new SpacefastClient(apiKey, fetch, env.SPACEFAST_API_BASE_URL?.trim() || undefined);
+  }
+
+  /** OAuth access tokens use the same bearer transport but are not API keys. */
+  static fromAccessToken(accessToken: string, baseUrl?: string): SpacefastClient {
+    return new SpacefastClient(accessToken, fetch, baseUrl?.trim() || undefined);
   }
 
   async createPrivateSpace(input: {
@@ -122,7 +130,7 @@ export class SpacefastClient {
 
   private async request(path: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
-    headers.set('authorization', `Bearer ${this.apiKey}`);
+    headers.set('authorization', `Bearer ${this.credential}`);
     headers.set('accept', 'application/json');
     const response = await this.fetchFn(`${this.baseUrl}${path}`, { ...init, headers });
     if (!response.ok) {

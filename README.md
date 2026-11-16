@@ -88,11 +88,15 @@ The initial integration is intentionally **operator-managed**: the scoped,
 expiring publisher credential stays in the root-owned production environment
 and is never exposed to a browser. Publish operations use idempotency keys,
 record consent and outcome in the audit log, create private Spaces, and reuse a
-created Space if an upload retry is needed. Customer-owned Spacefast OAuth is a
-separate future feature—not something this README claims is already live.
+created Space if an upload retry is needed. A customer-owned OAuth connection
+flow is also implemented with PKCE, encrypted token storage, refresh handling,
+team selection, disconnect, and audit records. It remains disabled until an
+operator registers a Spacefast OAuth client and supplies the root-owned
+configuration; it is not silently enabled by deployment.
 
 Read the [integration design](docs/integrations/spacefast-external-frontend.md),
 [ADR 019](docs/architecture/adr/019-operator-managed-external-frontend-publishing.md),
+[ADR 020](docs/architecture/adr/020-spacefast-customer-oauth.md),
 and the [controlled provider validation](docs/validation/2026-11-15-spacefast-private-publish.md).
 
 ---

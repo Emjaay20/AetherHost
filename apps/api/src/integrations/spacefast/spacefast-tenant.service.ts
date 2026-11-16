@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableE
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SpacefastApiError } from './spacefast.client';
+import { SpacefastOAuthService } from './spacefast-oauth.service';
 import { SpacefastService } from './spacefast.service';
 
 const PROVIDER = 'spacefast';
@@ -21,6 +22,7 @@ export class SpacefastTenantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly spacefast: SpacefastService,
+    private readonly oauth: SpacefastOAuthService,
   ) {}
 
   async list(tenantId: string) {
@@ -76,7 +78,7 @@ export class SpacefastTenantService {
     });
 
     try {
-      const { client, teamId } = this.spacefast.publisher();
+      const { client, teamId } = (await this.oauth.publisherForTenant(tenantId)) ?? this.spacefast.publisher();
       let spaceId = deployment.spaceId;
       let spaceSlug = deployment.spaceSlug;
       let liveUrl = deployment.liveUrl;
@@ -138,7 +140,8 @@ export class SpacefastTenantService {
     if (!deployment.operationId || deployment.status !== 'publishing') return publicDeployment(deployment);
 
     try {
-      const operation = await this.spacefast.publisher().client.getOperation(deployment.operationId);
+      const publisher = (await this.oauth.publisherForTenant(tenantId)) ?? this.spacefast.publisher();
+      const operation = await publisher.client.getOperation(deployment.operationId);
       const terminal = ['succeeded', 'failed', 'canceled'].includes(operation.status);
       const updated = await this.prisma.externalFrontendDeployment.update({
         where: { id: deployment.id },

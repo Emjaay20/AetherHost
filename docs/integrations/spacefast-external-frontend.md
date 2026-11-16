@@ -31,9 +31,11 @@ syntax. See <https://spacefast.com/docs/api/>.
 2. No tenant API key is stored in AetherHost's database or returned to a browser.
 3. The initial tenant flow uses a single operator-owned, expiring publisher
    credential. It is deliberately marked as **operator-managed**: tenants do
-   not receive, store, or see a Spacefast credential. A future customer-owned
-   connection must use OAuth with the smallest usable scope, bind the resulting
-   connection to one tenant, and write an audit record.
+   not receive, store, or see a Spacefast credential. When the operator
+   configures a registered Spacefast OAuth client, a tenant can instead connect
+   its own account. The OAuth flow uses authorization code + PKCE, a one-time
+   hashed state, encrypted token storage, refresh-token rotation, scoped team
+   selection, disconnect, and audit records.
 4. Publishing requires an explicit static export and idempotency key. The
    adapter accepts only a stored `index.html` at the project root, `public/`, or
    `dist/`, plus safe static assets (HTML, CSS, browser JavaScript, images,
@@ -95,7 +97,27 @@ It stores provider identifiers and safe status/error codes, not a bearer token
 or artifact content. Consent and publish lifecycle events are written to the
 existing audit log.
 
-## Status and next boundary
+## Customer-owned OAuth setup
+
+Customer-owned connections are disabled until all of the following root-owned
+environment values are configured:
+
+- `SPACEFAST_OAUTH_CLIENT_ID`
+- `SPACEFAST_OAUTH_CLIENT_SECRET`
+- `SPACEFAST_OAUTH_REDIRECT_URI` — register this exact HTTPS callback at
+  Spacefast: `/v1/integrations/spacefast/oauth/callback` on the API origin.
+- `SPACEFAST_OAUTH_SUCCESS_REDIRECT` — the HTTPS AetherHost console URL to
+  return to after a successful callback.
+
+The requested scopes are `teams:read`, `spaces:read`, `spaces:write`,
+`publish:write`, and `offline_access`. The browser receives only the
+authorization redirect; access and refresh tokens are AES-256-GCM encrypted
+using AetherHost's tenant-secret vault and are never returned by any API route.
+If a user belongs to more than one Spacefast team, they must choose a team after
+connecting. A selected customer connection is used for that tenant's future
+publishes; otherwise the existing operator-managed publisher is used.
+
+## Status and boundary
 
 The codebase now has a tested, disabled-by-default, tenant-facing **private
 static publishing** flow backed by one operator-managed Spacefast publisher
@@ -103,7 +125,8 @@ credential. It is useful for an AetherHost-hosted API plus a separately
 published static UI, while retaining the original workload, database, secrets,
 and domain in AetherHost.
 
-It is not customer-owned OAuth. Enabling that next step needs an OAuth client
-registered with Spacefast, a callback URL, encrypted refresh-token storage,
-token revocation, and a connection-management UI. It should not be represented
-as implemented until those provider-side credentials and safeguards exist.
+The customer-owned OAuth implementation is present but intentionally dormant
+without provider-side client registration and the four environment values above.
+Creating those provider credentials is an external authorization action and is
+not implied by deploying this code. Domain changes, public Spaces, and version
+rollbacks remain separate user-approved actions.

@@ -99,6 +99,78 @@ export type ExternalFrontend = {
   consentedAt: string
 }
 
+export type SpacefastConnection = {
+  configured: boolean
+  connected: boolean
+  needsTeam: boolean
+  teamId?: string | null
+  message: string
+}
+
+export async function getSpacefastConnection(): Promise<SpacefastConnection> {
+  const headers = await getAuthHeaders()
+  if (!headers) return { configured: false, connected: false, needsTeam: false, message: 'Sign in to manage a Spacefast connection.' }
+  try {
+    const res = await fetch(`${API_URL}/v1/integrations/spacefast/connection`, { headers, cache: 'no-store' })
+    if (!res.ok) return { configured: false, connected: false, needsTeam: false, message: 'Spacefast connection status is unavailable.' }
+    return res.json()
+  } catch {
+    return { configured: false, connected: false, needsTeam: false, message: 'Spacefast connection status is unavailable.' }
+  }
+}
+
+export async function startSpacefastConnection() {
+  const headers = await getAuthHeaders()
+  if (!headers) return { error: 'Unauthorized' }
+  try {
+    const res = await fetch(`${API_URL}/v1/integrations/spacefast/oauth/start`, { method: 'POST', headers })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || typeof data.authorizationUrl !== 'string') return { error: data.message || 'Could not start Spacefast connection' }
+    return { authorizationUrl: data.authorizationUrl }
+  } catch {
+    return { error: 'Network error communicating with AetherHost' }
+  }
+}
+
+export async function getSpacefastTeams() {
+  const headers = await getAuthHeaders()
+  if (!headers) return { error: 'Unauthorized' as const }
+  try {
+    const res = await fetch(`${API_URL}/v1/integrations/spacefast/teams`, { headers, cache: 'no-store' })
+    const data = await res.json().catch(() => [])
+    return res.ok && Array.isArray(data) ? { teams: data as Array<{ id: string; name?: string; slug?: string }> } : { error: 'Could not load Spacefast teams' as const }
+  } catch {
+    return { error: 'Network error communicating with AetherHost' as const }
+  }
+}
+
+export async function selectSpacefastTeam(teamId: string) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' })
+  if (!headers) return { error: 'Unauthorized' }
+  try {
+    const res = await fetch(`${API_URL}/v1/integrations/spacefast/team`, { method: 'POST', headers, body: JSON.stringify({ teamId }) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.message || 'Could not select Spacefast team' }
+    revalidatePath('/console')
+    return { success: true }
+  } catch {
+    return { error: 'Network error communicating with AetherHost' }
+  }
+}
+
+export async function disconnectSpacefast() {
+  const headers = await getAuthHeaders()
+  if (!headers) return { error: 'Unauthorized' }
+  try {
+    const res = await fetch(`${API_URL}/v1/integrations/spacefast/connection`, { method: 'DELETE', headers })
+    if (!res.ok) return { error: 'Could not disconnect Spacefast' }
+    revalidatePath('/console')
+    return { success: true }
+  } catch {
+    return { error: 'Network error communicating with AetherHost' }
+  }
+}
+
 export async function getExternalFrontends(): Promise<ExternalFrontend[]> {
   const headers = await getAuthHeaders()
   if (!headers) return []

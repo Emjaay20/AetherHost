@@ -3,11 +3,14 @@ import { ConfigModule } from '@nestjs/config';
 import { SpacefastService } from './spacefast.service';
 import { SpacefastTenantService } from './spacefast-tenant.service';
 import { SpacefastTenantController } from './spacefast-tenant.controller';
+import { SpacefastOAuthController } from './spacefast-oauth.controller';
+import { SpacefastOAuthService } from './spacefast-oauth.service';
+import { SecretVaultService } from '../../common/crypto/secret-vault.service';
 
 @Module({
   imports: [ConfigModule],
-  controllers: [SpacefastTenantController],
-  providers: [SpacefastService, SpacefastTenantService],
-  exports: [SpacefastService, SpacefastTenantService],
+  controllers: [SpacefastTenantController, SpacefastOAuthController],
+  providers: [SpacefastService, SpacefastOAuthService, SpacefastTenantService, SecretVaultService],
+  exports: [SpacefastService, SpacefastOAuthService, SpacefastTenantService],
 })
 export class SpacefastModule {}

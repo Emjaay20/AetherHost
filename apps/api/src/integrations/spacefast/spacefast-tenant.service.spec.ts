@@ -4,6 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 // test exercises the tenant boundary with its collaborator mocked instead of
 // loading configuration or a real provider credential.
 jest.mock('./spacefast.service', () => ({ SpacefastService: class SpacefastService {} }));
+jest.mock('./spacefast-oauth.service', () => ({ SpacefastOAuthService: class SpacefastOAuthService {} }));
 
 import { createZip, selectStaticArtifact, SpacefastTenantService } from './spacefast-tenant.service';
 
@@ -32,7 +33,7 @@ describe('SpacefastTenantService', () => {
       publishArchive: jest.fn().mockResolvedValue({ version: { id: 'ver_1', immutableUrl: 'https://version.space.fast' }, next: { action: 'done' } }),
     };
     const spacefast = { publisher: jest.fn().mockReturnValue({ client, teamId: 'team_1' }) };
-    return { service: new SpacefastTenantService(prisma as any, spacefast as any), prisma, client, spacefast };
+    return { service: new SpacefastTenantService(prisma as any, spacefast as any, { publisherForTenant: jest.fn().mockResolvedValue(null) } as any), prisma, client, spacefast };
   }
 
   it('requires explicit consent before it contacts Spacefast', async () => {

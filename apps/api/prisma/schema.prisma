@@ -22,6 +22,8 @@ model Tenant {
   apiKeys            ApiKey[]
   pushDevices        PushDevice[]
   externalFrontends  ExternalFrontendDeployment[]
+  externalProviderConnections ExternalProviderConnection[]
+  externalProviderOAuthStates ExternalProviderOAuthState[]
 }
 
 model Application {
@@ -182,4 +184,35 @@ model ExternalFrontendDeployment {
 
   @@unique([applicationId, provider])
   @@index([tenantId, updatedAt])
+}
+
+model ExternalProviderConnection {
+  id               String   @id @default(uuid())
+  tenantId         String
+  provider         String
+  teamId           String?
+  status           String   @default("connected")
+  tokenPayload     Json
+  expiresAt        DateTime?
+  grantedScopes    String[] @default([])
+  connectedAt      DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId, updatedAt])
+}
+
+model ExternalProviderOAuthState {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  provider            String
+  stateHash           String   @unique
+  codeVerifierPayload Json
+  expiresAt           DateTime
+  createdAt           DateTime @default(now())
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, provider])
+  @@index([expiresAt])
 }
