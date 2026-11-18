@@ -91,6 +91,20 @@ test('Spacefast publishing stays compact until a specific app is expanded', () =
   assert.match(panel, /A customer-owned connection can be added when available/);
 });
 
+test('AetherPress demo can create a safe WordPress and Spacefast companion', () => {
+  const launchpad = fs.readFileSync(
+    path.join(dashboardRoot, 'components', 'AetherPressLaunchpad.tsx'),
+    'utf8',
+  );
+  const actions = fs.readFileSync(path.join(dashboardRoot, 'app', 'actions.ts'), 'utf8');
+
+  assert.match(launchpad, /AetherPress Launchpad/);
+  assert.match(launchpad, /public WordPress REST API/);
+  assert.match(launchpad, /never asks for an admin account, token, database, or plugin access/);
+  assert.match(actions, /createAetherPressLaunchpad/);
+  assert.match(actions, /applications\/templates\/aetherpress-launchpad/);
+});
+
 test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin route protection on /admin(.*)', () => {
   const proxyContent = fs.readFileSync(
     path.join(dashboardRoot, 'proxy.ts'),

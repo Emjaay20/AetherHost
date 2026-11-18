@@ -99,7 +99,10 @@ configuration; it is not silently enabled by deployment.
 Read the [integration design](docs/integrations/spacefast-external-frontend.md),
 [ADR 019](docs/architecture/adr/019-operator-managed-external-frontend-publishing.md),
 [ADR 020](docs/architecture/adr/020-spacefast-customer-oauth.md),
-and the [controlled provider validation](docs/validation/2026-11-15-spacefast-private-publish.md).
+the [controlled provider validation](docs/validation/2026-11-15-spacefast-private-publish.md),
+and the [AetherPress Launchpad demo](docs/demos/aetherpress-launchpad.md): a
+small WordPress public-content companion that can be run on AetherHost and
+published privately to Spacefast.
 
 ---
 
