@@ -67,6 +67,36 @@ syntax. See <https://spacefast.com/docs/api/>.
 5. API traffic continues to route to the AetherHost origin. Spacefast failure
    cannot alter the origin workload, its data, or its DNS.
 
+## Practical WordPress workflow
+
+This is a hybrid pattern, not a migration of WordPress to a static host.
+AetherHost continues to run a WordPress application's nginx, PHP-FPM, MariaDB,
+Redis, uploads, admin interface, and any dynamic plugins. Those are not sent to
+Spacefast.
+
+Use the external frontend option when a project also has an intentionally static
+artifact, for example a campaign landing page, documentation site, design
+preview, or a headless WordPress frontend that has been exported to static HTML
+and browser assets. Save that export with the AetherHost application, then:
+
+1. Open **External frontend → Spacefast publishing** in the AetherHost console.
+2. Expand only the application you want to publish. The compact list shows
+   whether it is unpublished, publishing, published privately, or needs
+   attention.
+3. Confirm the explicit per-version consent checkbox and select **Publish
+   privately**. AetherHost sends only the bounded static export, never the
+   WordPress runtime, database, uploads, repository, or `.env` file.
+4. Continue using WordPress normally in AetherHost. Once the provider operation
+   finishes, the server-side reconciler records the verified private version.
+   Republishing a changed static export creates a new version in the same saved
+   Space rather than silently changing the origin deployment.
+
+For a senior-engineering demonstration, show both sides: the WordPress workload
+profile and its health in AetherHost, then the explicit, private publication of
+a separate static presentation artifact. This demonstrates a clear ownership
+boundary and a reversible integration; it does not claim that a static artifact
+can substitute for WordPress's dynamic runtime.
+
 ## Operator verification
 
 The control plane exposes two operator-only endpoints:
