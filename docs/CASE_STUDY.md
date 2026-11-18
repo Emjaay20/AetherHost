@@ -106,3 +106,7 @@ pair and isolates an individual provider error, so closing a browser cannot
 strand a publish or block other tenants' updates. The recording plan and its
 evidence boundaries are documented in
 [the three-minute Spacefast and WordPress demo](demos/spacefast-wordpress-demo.md).
+For a repeatable implementation rather than a conceptual walkthrough, use
+[AetherPress Launchpad](demos/aetherpress-launchpad.md). It reads only public
+WordPress posts in the browser, runs as a small AetherHost workload, and can
+be published as an explicitly approved private Spacefast frontend.

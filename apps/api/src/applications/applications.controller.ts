@@ -10,7 +10,9 @@ import {
   Header,
   ForbiddenException,
 } from '@nestjs/common';
+import { Runtime } from '@aetherhost/domain';
 import { ApplicationsService } from './applications.service';
+import { createAetherPressLaunchpadFiles } from './aetherpress-launchpad.template';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import {
   AddApplicationLogDto,
@@ -64,6 +66,41 @@ export class ApplicationsController {
       body.port,
       body.healthPath,
       body.workloadMemoryMb,
+    );
+  }
+
+  @Post('templates/aetherpress-launchpad')
+  createAetherPressLaunchpad(
+    @TenantId() tenantId: string,
+    @Body() body: { wordpressSiteUrl?: string },
+  ) {
+    if (tenantId === SYSTEM_TENANT_ID) {
+      const configuredTenantId = process.env.DEFAULT_SYSTEM_TENANT_ID?.trim();
+      if (!configuredTenantId) {
+        throw new ForbiddenException('System agent cannot create applications without DEFAULT_SYSTEM_TENANT_ID configured');
+      }
+      tenantId = configuredTenantId;
+    }
+
+    const name = `aetherpress-launchpad-${Date.now().toString(36)}`;
+    return this.applicationsService.create(
+      tenantId,
+      name,
+      Runtime.NODEJS,
+      undefined,
+      undefined,
+      createAetherPressLaunchpadFiles(body?.wordpressSiteUrl),
+      name,
+      'AetherPress Launchpad: WordPress editorial companion for the AetherHost × Spacefast demo',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      false,
+      false,
+      3000,
+      '/',
     );
   }
 

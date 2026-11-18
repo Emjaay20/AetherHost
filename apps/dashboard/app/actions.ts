@@ -266,6 +266,27 @@ export async function createApplication(formData: FormData) {
   }
 }
 
+export async function createAetherPressLaunchpad(formData: FormData) {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' })
+  if (!headers) return { error: 'Unauthorized' }
+
+  const wordpressSiteUrl = String(formData.get('wordpressSiteUrl') ?? '').trim()
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/templates/aetherpress-launchpad`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(wordpressSiteUrl ? { wordpressSiteUrl } : {}),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.message || 'Could not create the AetherPress Launchpad' }
+    revalidatePath('/console')
+    revalidatePath('/')
+    return { success: true, app: data }
+  } catch {
+    return { error: 'Network error communicating with API' }
+  }
+}
+
 export async function getEvents() {
   const headers = await getAuthHeaders();
   if (!headers) return [];

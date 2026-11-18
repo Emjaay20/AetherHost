@@ -7,6 +7,7 @@ import AutoRefresh from '../../../components/AutoRefresh'
 import DeploymentList from '../../../components/DeploymentList'
 import AppShell from '../../../components/AppShell'
 import SpacefastFrontendPanel from '../../../components/SpacefastFrontendPanel'
+import AetherPressLaunchpad from '../../../components/AetherPressLaunchpad'
 import { Server, Activity, Box, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 import { cookies } from 'next/headers';
@@ -219,6 +220,8 @@ export default async function Dashboard() {
                 </div>
               ) : <DeploymentList apps={apps} deleteAction={deleteApplication} />}
             </div>
+
+            <AetherPressLaunchpad limitReached={limitReached} />
 
             {/* Optional external static frontend target */}
             <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} />
