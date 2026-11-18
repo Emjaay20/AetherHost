@@ -1,10 +1,26 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { ChevronRight, Globe2 } from 'lucide-react'
 import type { ExternalFrontend, SpacefastConnection } from '../app/actions'
 import { disconnectSpacefast, getSpacefastTeams, publishSpacefastFrontend, refreshSpacefastFrontend, selectSpacefastTeam, startSpacefastConnection } from '../app/actions'
 
 type App = { id: string; name: string; status: string }
+
+function deploymentLabel(deployment: ExternalFrontend | undefined) {
+  if (!deployment) return 'Not published'
+  if (deployment.status === 'published') return 'Published privately'
+  if (deployment.status === 'publishing') return 'Publishing'
+  if (deployment.status === 'failed') return 'Needs attention'
+  return deployment.status
+}
+
+function deploymentStatusClass(deployment: ExternalFrontend | undefined) {
+  if (deployment?.status === 'published') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+  if (deployment?.status === 'publishing') return 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+  if (deployment?.status === 'failed') return 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400'
+  return 'border-border bg-muted text-muted-foreground'
+}
 
 export default function SpacefastFrontendPanel({ apps, deployments, connection }: { apps: App[]; deployments: ExternalFrontend[]; connection: SpacefastConnection }) {
   const [consents, setConsents] = useState<Record<string, boolean>>({})
@@ -12,6 +28,16 @@ export default function SpacefastFrontendPanel({ apps, deployments, connection }
   const [pending, startTransition] = useTransition()
   const [teams, setTeams] = useState<Array<{ id: string; name?: string; slug?: string }>>([])
   const byApp = new Map(deployments.map((deployment) => [deployment.applicationId, deployment]))
+  const publishedCount = deployments.filter((deployment) => deployment.status === 'published').length
+  const publishingCount = deployments.filter((deployment) => deployment.status === 'publishing').length
+  const failedCount = deployments.filter((deployment) => deployment.status === 'failed').length
+  const needsAttention = publishingCount > 0 || failedCount > 0
+  const [isPanelOpen, setIsPanelOpen] = useState(needsAttention)
+  const [openApps, setOpenApps] = useState<Record<string, boolean>>(() => Object.fromEntries(
+    deployments
+      .filter((deployment) => deployment.status === 'publishing' || deployment.status === 'failed')
+      .map((deployment) => [deployment.applicationId, true]),
+  ))
 
   function publish(applicationId: string) {
     startTransition(async () => {
@@ -60,58 +86,96 @@ export default function SpacefastFrontendPanel({ apps, deployments, connection }
   if (apps.length === 0) return null
 
   return (
-    <section className="rounded-lg border border-border bg-card">
-      <div className="border-b border-border p-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">External frontend</p>
-        <h2 className="mt-1 text-base font-semibold">Publish a static artifact to Spacefast</h2>
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-          AetherHost keeps your runtime, data, secrets, and domain controls. Spacefast receives only the selected static export stored with this application.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted-foreground">{connection.message}</span>
-          {connection.configured && !connection.connected && !connection.needsTeam && <button onClick={connect} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Connect your Spacefast account</button>}
-          {connection.needsTeam && teams.length === 0 && <button onClick={loadTeams} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Choose a Spacefast team</button>}
-          {connection.needsTeam && teams.length > 0 && <select aria-label="Spacefast team" defaultValue="" disabled={pending} onChange={(event) => event.target.value && chooseTeam(event.target.value)} className="rounded-md border border-border bg-background px-2.5 py-1"><option value="" disabled>Select team</option>{teams.map((team) => <option value={team.id} key={team.id}>{team.name || team.slug || team.id}</option>)}</select>}
-          {connection.connected && <><span className="rounded border border-emerald-500/30 px-2 py-1 text-emerald-500">Customer-owned connection active</span><button onClick={disconnect} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Disconnect</button></>}
-          {message.connection && <span role="status" className="text-muted-foreground">{message.connection}</span>}
+    <details className="group overflow-hidden rounded-lg border border-border bg-card" open={isPanelOpen} onToggle={(event) => setIsPanelOpen(event.currentTarget.open)}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 p-4 hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+            <Globe2 className="size-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">External frontend</p>
+            <h2 className="truncate text-sm font-semibold">Spacefast publishing</h2>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            {publishedCount > 0 ? `${publishedCount} private ${publishedCount === 1 ? 'site' : 'sites'}` : 'Static exports'}
+          </span>
+          {publishingCount > 0 && <span className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400">{publishingCount} publishing</span>}
+          {failedCount > 0 && <span className="rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-400">{failedCount} needs attention</span>}
+          <ChevronRight className="size-4 text-muted-foreground transition-transform group-open:rotate-90" aria-hidden="true" />
+        </div>
+      </summary>
+
+      <div className="border-t border-border">
+        <div className="border-b border-border p-4">
+          <h3 className="text-base font-semibold">Publish a static artifact to Spacefast</h3>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+            Use this for a static site, landing page, documentation, or headless WordPress frontend. AetherHost keeps the runtime, data, secrets, and domain controls; Spacefast receives only the static export you approve.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            {connection.connected ? (
+              <span className="text-muted-foreground">Your connected Spacefast team will receive future approved publishes.</span>
+            ) : (
+              <span className="text-muted-foreground">Approved publishes use AetherHost&apos;s managed private publisher. A customer-owned connection can be added when available.</span>
+            )}
+            {connection.configured && !connection.connected && !connection.needsTeam && <button onClick={connect} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Connect your Spacefast account</button>}
+            {connection.needsTeam && teams.length === 0 && <button onClick={loadTeams} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Choose a Spacefast team</button>}
+            {connection.needsTeam && teams.length > 0 && <select aria-label="Spacefast team" defaultValue="" disabled={pending} onChange={(event) => event.target.value && chooseTeam(event.target.value)} className="rounded-md border border-border bg-background px-2.5 py-1"><option value="" disabled>Select team</option>{teams.map((team) => <option value={team.id} key={team.id}>{team.name || team.slug || team.id}</option>)}</select>}
+            {connection.connected && <><span className="rounded border border-emerald-500/30 px-2 py-1 text-emerald-600 dark:text-emerald-400">Customer-owned connection active</span><button onClick={disconnect} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Disconnect</button></>}
+            {message.connection && <span role="status" className="text-muted-foreground">{message.connection}</span>}
+          </div>
+        </div>
+
+        <div className="divide-y divide-border">
+          {apps.map((app) => {
+            const deployment = byApp.get(app.id)
+            const consented = Boolean(consents[app.id])
+            const appNeedsAttention = deployment?.status === 'publishing' || deployment?.status === 'failed'
+            return (
+              <details key={app.id} className="group/app" open={openApps[app.id] ?? appNeedsAttention} onToggle={(event) => setOpenApps((current) => ({ ...current, [app.id]: event.currentTarget.open }))}>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 hover:bg-muted/40 [&::-webkit-details-marker]:hidden">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{app.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {deployment ? `${deployment.artifactPath}${deployment.versionId ? ` · ${deployment.versionId}` : ''}` : 'No external frontend published'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className={`rounded border px-2 py-1 text-xs font-medium ${deploymentStatusClass(deployment)}`}>{deploymentLabel(deployment)}</span>
+                    <ChevronRight className="size-4 text-muted-foreground transition-transform group-open/app:rotate-90" aria-hidden="true" />
+                  </div>
+                </summary>
+                <div className="border-t border-border bg-muted/20 p-4">
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Only the saved static export is sent. Application code, runtime containers, environment variables, databases, and domain settings remain in AetherHost.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    {deployment?.status === 'publishing' ? (
+                      <button onClick={() => refresh(app.id)} disabled={pending} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-background disabled:opacity-50">
+                        Refresh status
+                      </button>
+                    ) : (
+                      <>
+                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <input type="checkbox" checked={consented} onChange={(event) => setConsents((current) => ({ ...current, [app.id]: event.target.checked }))} className="mt-0.5" />
+                          <span>I approve sending this app&apos;s selected static export to a private Spacefast Space{deployment ? ' as a new version' : ''}.</span>
+                        </label>
+                        <button onClick={() => publish(app.id)} disabled={pending || !consented} className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40">
+                          {deployment ? 'Publish new version' : 'Publish privately'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {deployment?.immutableUrl && <p className="mt-3 text-xs"><a className="text-primary underline underline-offset-4" href={deployment.immutableUrl} target="_blank" rel="noreferrer">Open immutable version</a></p>}
+                  {deployment?.lastErrorCode && <p className="mt-3 text-xs text-red-500 dark:text-red-400">Last provider status: {deployment.lastErrorCode}</p>}
+                  {message[app.id] && <p className="mt-3 text-xs text-muted-foreground" role="status">{message[app.id]}</p>}
+                </div>
+              </details>
+            )
+          })}
         </div>
       </div>
-      <div className="divide-y divide-border">
-        {apps.map((app) => {
-          const deployment = byApp.get(app.id)
-          const consented = Boolean(consents[app.id])
-          return (
-            <div key={app.id} className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">{app.name}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {deployment
-                      ? `${deployment.status} · ${deployment.artifactPath}${deployment.versionId ? ` · ${deployment.versionId}` : ''}`
-                      : 'No external frontend published'}
-                  </p>
-                </div>
-                {deployment?.status === 'publishing' ? (
-                  <button onClick={() => refresh(app.id)} disabled={pending} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50">
-                    Refresh status
-                  </button>
-                ) : (
-                  <button onClick={() => publish(app.id)} disabled={pending || !consented} className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40">
-                    {deployment ? 'Publish new version' : 'Publish privately'}
-                  </button>
-                )}
-              </div>
-              <label className="mt-3 flex items-start gap-2 text-xs text-muted-foreground">
-                <input type="checkbox" checked={consented} onChange={(event) => setConsents((current) => ({ ...current, [app.id]: event.target.checked }))} className="mt-0.5" />
-                <span>I approve sending this app&apos;s selected static export to a private Spacefast Space{deployment ? ' as a new version' : ''}.</span>
-              </label>
-              {deployment?.immutableUrl && <p className="mt-3 text-xs"><a className="text-primary underline underline-offset-4" href={deployment.immutableUrl} target="_blank" rel="noreferrer">Open immutable version</a></p>}
-              {deployment?.lastErrorCode && <p className="mt-3 text-xs text-red-400">Last provider status: {deployment.lastErrorCode}</p>}
-              {message[app.id] && <p className="mt-3 text-xs text-muted-foreground" role="status">{message[app.id]}</p>}
-            </div>
-          )
-        })}
-      </div>
-    </section>
+    </details>
   )
 }

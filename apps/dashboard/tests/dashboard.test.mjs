@@ -76,6 +76,21 @@ test('console layout keeps navigation fixed and makes dense deployments searchab
   assert.match(deploymentList, /option value="failed"/);
 });
 
+test('Spacefast publishing stays compact until a specific app is expanded', () => {
+  const panel = fs.readFileSync(
+    path.join(dashboardRoot, 'components', 'SpacefastFrontendPanel.tsx'),
+    'utf8',
+  );
+
+  assert.match(panel, /<details className="group overflow-hidden rounded-lg border border-border bg-card"/);
+  assert.match(panel, /Spacefast publishing/);
+  assert.match(panel, /<details key=\{app\.id\} className="group\/app"/);
+  assert.match(panel, /open=\{isPanelOpen\}/);
+  assert.match(panel, /appNeedsAttention/);
+  assert.match(panel, /Only the saved static export is sent/);
+  assert.match(panel, /A customer-owned connection can be added when available/);
+});
+
 test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin route protection on /admin(.*)', () => {
   const proxyContent = fs.readFileSync(
     path.join(dashboardRoot, 'proxy.ts'),
