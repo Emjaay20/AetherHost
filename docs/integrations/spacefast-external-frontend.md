@@ -61,7 +61,9 @@ syntax. See <https://spacefast.com/docs/api/>.
 4. The console displays only verified provider state: private URL, version ID,
    operation state, and immutable URL once the operation succeeds. If the
    provider call fails after Space creation, the saved Space ID is reused on a
-   retry instead of creating an orphaned Space.
+   retry instead of creating an orphaned Space. AetherHost also reconciles
+   pending provider operations once per minute, so final status does not depend
+   on a tenant leaving the console open.
 5. API traffic continues to route to the AetherHost origin. Spacefast failure
    cannot alter the origin workload, its data, or its DNS.
 
