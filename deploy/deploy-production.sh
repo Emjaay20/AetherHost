@@ -23,6 +23,32 @@ require_clean_checkout() {
   fi
 }
 
+require_api_image_revision() {
+  local expected_revision actual_revision attempt
+  expected_revision="$(git rev-parse HEAD)"
+
+  # Image publication runs independently from this host deployment. A mutable
+  # `latest` tag can otherwise still point at the previous commit when this
+  # script pulls it, resulting in a healthy-but-stale API release.
+  for attempt in {1..30}; do
+    echo "📦 [CI/CD] Pulling API image for ${expected_revision:0:12} (attempt ${attempt}/30)..."
+    docker compose -p aetherhost -f docker-compose.prod.yml pull api
+    actual_revision="$(docker image inspect ghcr.io/emjaay20/aetherhost-api:latest \
+      --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' 2>/dev/null || true)"
+
+    if [[ "$actual_revision" == "$expected_revision" ]]; then
+      echo "✅ [CI/CD] Verified API image revision ${actual_revision:0:12}"
+      return 0
+    fi
+
+    echo "⏳ [CI/CD] Registry image is ${actual_revision:0:12}, awaiting ${expected_revision:0:12}."
+    sleep 10
+  done
+
+  echo "❌ [CI/CD] Refusing to deploy a stale API image after waiting for ${expected_revision:0:12}." >&2
+  return 1
+}
+
 echo "🚀 [CI/CD] Starting automated production deployment..."
 
 # 1. Fail closed if the host source has drifted from version control. This
@@ -48,9 +74,10 @@ EOF
   sleep 3
 fi
 
-# 3. Pull prebuilt verified container images from GHCR and build dashboard with host secrets
-echo "📦 [CI/CD] Pulling container images..."
-docker compose -p aetherhost -f docker-compose.prod.yml pull || true
+# 3. Pull the prebuilt API image and verify it matches the checked-out commit.
+# The dashboard is intentionally built on the host because its public runtime
+# configuration is injected there.
+require_api_image_revision
 
 echo "🔨 [CI/CD] Building dashboard container with host secrets..."
 docker compose -p aetherhost -f docker-compose.prod.yml build dashboard
