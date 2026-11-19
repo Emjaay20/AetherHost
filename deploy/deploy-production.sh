@@ -33,6 +33,7 @@ mv "$release_file" /etc/aetherhost/release.env
 # Compose reads production secrets from the host .env. New key configuration is mandatory.
 docker compose -p aetherhost -f docker-compose.prod.yml up -d --no-build --remove-orphans api dashboard agent traefik docker-socket-proxy-readonly
 bash deploy/install-operations-timers.sh
+bash deploy/install-security-timers.sh
 healthy=false
 for attempt in {1..30}; do
   if docker exec aetherhost-api wget -q --spider http://127.0.0.1:3000/v1/ready && \
