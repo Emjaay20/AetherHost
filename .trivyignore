@@ -35,3 +35,9 @@ CVE-2026-84375
 CVE-2026-90711
 CVE-2026-93749
 GHSA-wq5f-xc86-pv6w
+
+# New findings with no upstream fixed release as of 2026-11-19; each has a
+# time-limited exception and an explicit compensating control in the register.
+CVE-2026-41567
+CVE-2026-42306
+CVE-2026-85393
