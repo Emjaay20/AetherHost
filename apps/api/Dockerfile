@@ -38,6 +38,10 @@ ENV NODE_ENV=production
 # `pnpm deploy` creates a standalone API package with only runtime
 # dependencies, including the workspace libraries resolved by the API.
 COPY --from=builder --chown=node:node /production ./apps/api
+# The generated Prisma client lives beside the installed package, not in the
+# API source tree. Generate it after creating the standalone production tree
+# so the runtime never depends on the builder's pnpm virtual store.
+RUN cd apps/api && ./node_modules/.bin/prisma generate
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node
