@@ -24,20 +24,20 @@ RUN pnpm --filter @aetherhost/domain build
 RUN pnpm --filter @aetherhost/api exec prisma generate
 RUN pnpm --filter @aetherhost/api build
 
+# pnpm's workspace package node_modules entries are symlinks into the root
+# virtual store.  Copying only apps/api/node_modules into the runner leaves
+# those links dangling.  Produce a self-contained, production-only tree
+# instead, so the runtime gets the Nest packages it needs without inheriting
+# the workspace's development tooling.
+RUN pnpm --filter @aetherhost/api deploy --legacy --prod /production
+
 # Production stage
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder --chown=node:node /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=node:node /app/apps/api/dist-security ./apps/api/dist-security
-COPY --from=builder --chown=node:node /app/apps/api/package.json ./apps/api/package.json
-COPY --from=builder --chown=node:node /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=builder --chown=node:node /app/libs/domain ./libs/domain
-COPY --from=builder --chown=node:node /app/libs/common ./libs/common
-# The API package has its own resolved runtime dependencies. Do not copy the
-# workspace root dependency tree: it includes tooling that is never executed
-# in production and unnecessarily expands the attack surface.
+# `pnpm deploy` creates a standalone API package with only runtime
+# dependencies, including the workspace libraries resolved by the API.
+COPY --from=builder --chown=node:node /production ./apps/api
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node
