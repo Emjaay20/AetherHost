@@ -8,7 +8,18 @@ install -d -o root -g root -m 0755 /run/lock/aetherhost
 exec 9>/run/lock/aetherhost/production-deploy.lock
 flock -n 9 || { echo 'Deployment already running' >&2; exit 1; }
 cd /srv/aetherhost/control
-[[ -z "$(git status --porcelain --untracked-files=all)" ]] || { echo 'Checkout drift; refusing release' >&2; exit 1; }
+# First-release bootstrap: this source tree may still contain the verified
+# deploy entry point copied in before main carries it. Only that exact, root
+# owned helper is permitted to clear this one-file transition; every other
+# local change remains a hard failure.
+bootstrap_helper=/usr/local/lib/aetherhost/deploy-production-bootstrap.sh
+changes="$(git status --porcelain --untracked-files=all)"
+if [[ -n "$changes" && "$changes" == " M deploy/deploy-production.sh" && -x "$bootstrap_helper" ]] && \
+  cmp -s deploy/deploy-production.sh "$bootstrap_helper"; then
+  git restore --source=HEAD -- deploy/deploy-production.sh
+  exec "$bootstrap_helper" "$revision"
+fi
+[[ -z "$changes" ]] || { echo 'Checkout drift; refusing release' >&2; exit 1; }
 git fetch origin main
 [[ "$(git rev-parse origin/main)" == "$revision" ]] || { echo 'Release is no longer current main' >&2; exit 1; }
 git merge --ff-only "$revision"
