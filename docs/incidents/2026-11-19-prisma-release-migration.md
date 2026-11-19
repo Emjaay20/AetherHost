@@ -4,8 +4,8 @@
 
 The production deployment gate stopped a release before it was marked live. The
 API container could not become healthy for two independent packaging and
-migration reasons. Existing traffic continued to be served by the previous
-healthy release while the gate held the new release.
+migration reasons. The release was not recorded as live, and the API was
+recovered with the intended schema change after the failure was understood.
 
 ## What happened
 
@@ -37,6 +37,9 @@ serving a partially initialized API.
 
 - Production deployments remain gated on API health; a release is not recorded
   as live until the replacement services are healthy.
+- The release workflow now runs the API migration command and loads Prisma's
+  generated client before replacing the running API. Immutable image references
+  are persisted only after readiness succeeds.
 - The API image is self-contained: production dependencies and the generated
   Prisma client are produced together instead of relying on pnpm workspace
   symlinks or build-stage artifacts.
