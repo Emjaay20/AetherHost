@@ -35,7 +35,10 @@ COPY --from=builder --chown=node:node /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=node:node /app/libs/domain ./libs/domain
 COPY --from=builder --chown=node:node /app/libs/common ./libs/common
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+# The API package has its own resolved runtime dependencies. Do not copy the
+# workspace root dependency tree: it includes tooling that is never executed
+# in production and unnecessarily expands the attack surface.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node
 EXPOSE 3000

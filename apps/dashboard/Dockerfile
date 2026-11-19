@@ -32,6 +32,9 @@ COPY --from=builder --chown=node:node /app/apps/dashboard/public ./public
 COPY --from=builder --chown=node:node /app/apps/dashboard/public ./apps/dashboard/public
 COPY --from=builder --chown=node:node /app/apps/dashboard/.next/standalone ./
 COPY --from=builder --chown=node:node /app/apps/dashboard/.next/static ./apps/dashboard/.next/static
+# Next standalone output does not need npm or npx at runtime. Removing the
+# bundled package manager keeps build tooling out of the serving image.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node
 EXPOSE 3000
