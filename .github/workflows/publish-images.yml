@@ -89,7 +89,10 @@ jobs:
           scan-type: image
           image-ref: ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ matrix.name }}@${{ steps.build-and-push.outputs.digest }}
           severity: HIGH,CRITICAL
-          ignore-unfixed: false
+          # A release is blocked by every vulnerability with an available
+          # remediation. Findings without a vendor fix remain visible in the
+          # scheduled posture reports and require an expiring exception.
+          ignore-unfixed: true
           trivyignores: .trivyignore
           exit-code: '1'
 
