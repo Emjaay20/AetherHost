@@ -15,13 +15,15 @@ resource "github_branch_protection" "main" {
       "API, Shared Libs & Dashboard",
       "Go Runtime Agent",
       "Rust Crates (aether-core, aether-cli, aether-logd, aether-router)",
-      "Security and Dependency Checks"
+      "Security and Dependency Checks",
+      "Terraform Security Analysis (Checkov)",
+      "Kubernetes KinD & Helm Deployment Validation"
     ]
   }
 
   required_pull_request_reviews {
     dismiss_stale_reviews           = true
-    require_code_owner_reviews      = false
+    require_code_owner_reviews      = true
     required_approving_review_count = 1
   }
 

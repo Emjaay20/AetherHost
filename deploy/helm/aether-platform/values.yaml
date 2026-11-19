@@ -3,7 +3,9 @@ replicaCount: 2
 image:
   repository: ghcr.io/emjaay20/aether-platform
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: ""
+  digest: ""
+  requireDigest: true
 
 imagePullSecrets: []
 nameOverride: ""
@@ -24,6 +26,8 @@ podSecurityContext:
   runAsUser: 10001
   runAsGroup: 10001
   fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
   allowPrivilegeEscalation: false
@@ -80,3 +84,13 @@ env:
   PORT: "4001"
   DEFAULT_BACKEND: "http://api.aetherhost.svc.cluster.local:3000"
   RUST_LOG: "info,aether_router=debug,aether_logd=debug"
+
+identitySecretName: aether-cluster-secrets
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-system
+  monitoringNamespace: monitoring
+  backendNamespace: aether-system
+  backendPodLabels:
+    app.kubernetes.io/name: aetherhost-api
+  backendPort: 3000

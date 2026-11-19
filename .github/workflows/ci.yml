@@ -94,6 +94,7 @@ jobs:
         run: |
           pnpm --filter @aetherhost/api exec prisma generate
           pnpm --filter @aetherhost/api exec tsc -p tsconfig.build.json --noEmit
+          pnpm --filter @aetherhost/api exec tsc -p tsconfig.security.json --noEmit
 
       - name: Run API unit & e2e tests
         if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
@@ -161,11 +162,11 @@ jobs:
 
       - name: Install cargo-nextest
         if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@d75f3433052800716ea4e9618494c31d16de4188
 
       - name: Check Rust dependencies & licenses (cargo-deny)
         if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@70f81531115945ba6eb6b941ec9d39d063438eb9
         with:
           manifest-path: crates/Cargo.toml
 
@@ -196,6 +197,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate security policy and exception lifecycle
+        run: python3 scripts/security/check-policy.py
+
+      - name: Test security policy and release rejection paths
+        run: python3 -m unittest discover -s scripts/security -p 'test_*.py'
+
       - name: Detect accidentally committed secrets
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7
         env:
@@ -207,7 +214,7 @@ jobs:
           scan-type: fs
           scan-ref: .
           severity: HIGH,CRITICAL
-          ignore-unfixed: true
+          ignore-unfixed: false
           trivyignores: .trivyignore
           exit-code: '1'
 
@@ -224,14 +231,28 @@ jobs:
         if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
+      - name: Set up Terraform
+        if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: 1.9.8
+
+      - name: Validate independent Terraform roots
+        if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
+        run: |
+          terraform -chdir=terraform init -backend=false
+          terraform -chdir=terraform validate
+          terraform -chdir=terraform/aws-security-lab init -backend=false
+          terraform -chdir=terraform/aws-security-lab validate
+
       - name: Run Checkov on Terraform Code
         if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
-        uses: bridgecrewio/checkov-action@master
+        uses: bridgecrewio/checkov-action@b17b606d6ec72bb8ba5721ad5b7e340b80a9fc39
         with:
           framework: terraform
           directory: terraform
           output_format: cli
-          soft_fail: true
+          soft_fail: false
 
   kubernetes-ci:
     name: Kubernetes KinD & Helm Deployment Validation
@@ -255,7 +276,7 @@ jobs:
       - name: Lint Platform Helm Chart
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
         run: |
-          helm lint deploy/helm/aether-platform
+          helm lint deploy/helm/aether-platform --set image.requireDigest=false
 
       - name: Install Kubeconform
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
@@ -266,12 +287,12 @@ jobs:
       - name: Validate Helm Chart and GitOps Manifests with Kubeconform
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
         run: |
-          helm template test-release deploy/helm/aether-platform --namespace aether-system | kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.31.0
+          helm template test-release deploy/helm/aether-platform --namespace aether-system --set image.requireDigest=false | kubeconform -strict -summary -ignore-missing-schemas -kubernetes-version 1.31.0
           kubeconform -summary -ignore-missing-schemas deploy/gitops/
 
       - name: Create KinD Cluster
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
-        uses: helm/kind-action@v1.12.0
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3
         with:
           cluster_name: aether-kind
           version: v0.25.0
@@ -290,9 +311,23 @@ jobs:
       - name: Install Platform Helm Chart
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
         run: |
-          kubectl create namespace aether-system
+          kubectl apply -f deploy/gitops/namespace.yaml
+          ci_identity_token="$(openssl rand -hex 32)"
+          printf 'CI_IDENTITY_TOKEN=%s\n' "$ci_identity_token" >> "$GITHUB_ENV"
+          identities_json="$(printf '{\"credentials\":[{\"token\":\"%s\",\"subject_id\":\"ci\",\"tenant_id\":\"ci\",\"role\":\"developer\",\"expires_at\":4102444800}],\"resources\":{}}' "$ci_identity_token")"
+          kubectl create secret generic aether-cluster-secrets -n aether-system \
+            --from-literal=agent-secret-key="$ci_identity_token" \
+            --from-literal=identities.json="$identities_json"
+          # Server-side admission must reject an insecure root/privileged pod.
+          if kubectl apply --dry-run=server -n aether-system -f scripts/security/fixtures/privileged-pod.yaml 2>admission-error.txt; then
+            echo "Restricted admission accepted a privileged workload" >&2
+            exit 1
+          fi
+          grep -q 'violates PodSecurity' admission-error.txt || { cat admission-error.txt; exit 1; }
           helm install aether-platform deploy/helm/aether-platform \
             --namespace aether-system \
+            --set image.requireDigest=false \
+            --set image.tag=latest \
             --set image.pullPolicy=Never \
             --set autoscaling.enabled=false \
             --set replicaCount=1 \
@@ -315,31 +350,39 @@ jobs:
 
           # Test router health & metrics
           curl -sf http://127.0.0.1:8080/_aether/health
-          curl -sf http://127.0.0.1:8080/_aether/metrics | grep "http_requests"
+          auth_scheme='Bearer'
+          auth_header="Authorization: ${auth_scheme} ${CI_IDENTITY_TOKEN}"
+          curl -sf --header "$auth_header" http://127.0.0.1:8080/_aether/metrics | grep "http_requests"
 
           # Test logd health & metrics
           curl -sf http://127.0.0.1:4001/health | grep "healthy"
-          curl -sf http://127.0.0.1:4001/metrics | grep "http_requests"
+          curl -sf --header "$auth_header" http://127.0.0.1:4001/metrics | grep "http_requests"
 
           kill $PF_PID || true
 
-  deploy:
-    name: Continuous Deployment (Contabo VPS)
+  publish:
+    name: Publish approved release
     needs: [typescript, go-agent, rust-crates, security, terraform-checkov, kubernetes-ci]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/publish-images.yml
+
+  deploy:
+    name: Deploy verified release
+    needs: [publish]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to Production Host via SSH
-        # v1.2.0
+      - name: Deploy approved revision through restricted entry point
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: ${{ secrets.SSH_HOST_FINGERPRINT }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          script: |
-            cd /srv/aetherhost/control
-            # Discard any local modifications to tracked deploy scripts that occurred during on-host operations
-            sudo git checkout -- deploy/ 2>/dev/null || true
-            sudo git pull --ff-only origin main
-            sudo /srv/aetherhost/control/deploy/deploy-production.sh
+          script: sudo /srv/aetherhost/control/deploy/deploy-production.sh '${{ github.sha }}'

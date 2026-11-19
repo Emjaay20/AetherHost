@@ -19,4 +19,15 @@ describe('redactSensitiveLogContent', () => {
       'Health probe returned HTTP 502',
     );
   });
+  it('redacts URL credentials, multiline keys, and quoted assignments', () => {
+    const redacted = redactSensitiveLogContent(`postgres://alice:p%40ss@db:5432/app
+API_TOKEN="secret with spaces"
+-----BEGIN PRIVATE KEY-----
+multiline-private-material
+-----END PRIVATE KEY-----`);
+    expect(redacted).not.toContain('p%40ss');
+    expect(redacted).not.toContain('secret with spaces');
+    expect(redacted).not.toContain('multiline-private-material');
+  });
+
 });

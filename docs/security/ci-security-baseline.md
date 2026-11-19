@@ -1,59 +1,37 @@
-# CI security baseline
+# CI and release security baseline
 
-## Controls enabled
+The CI workflow defaults to read-only permissions. Third-party Actions use full
+commit references; a dependency-free policy check rejects mutable references and
+expired/unregistered vulnerability suppressions. Gitleaks, Trivy and Checkov are
+blocking configuration. Suppressed findings are tracked risks, not clean results.
 
-- Every third-party GitHub Action in `.github/workflows/ci.yml` is pinned to a
-  full commit SHA.
-- The workflow defaults to `contents: read`; no job receives write access by
-  default.
-- Gitleaks scans the repository for accidentally committed credentials.
-- Trivy scans source dependencies and configuration for high and critical
-  findings.
-- Dependabot proposes weekly updates for JavaScript, Go, Rust, and GitHub
-  Actions dependencies.
+Image publication is a reusable workflow called only after all main CI gates
+succeed on a main-branch push. Its job alone receives registry-write and OIDC
+permissions. Built images are scanned before signing. The deployment job waits
+for publication and uses the production environment and pinned SSH host fingerprint.
+The root-owned entry point accepts only a full Git revision, refuses checkout
+drift/stale main revisions, verifies image signer/issuer/revision, deploys digests,
+and fails if readiness does not succeed. It does not grant the CI user arbitrary
+Git, shell or Docker sudo access.
 
-## Current transition state
+## Required external settings
 
-Gitleaks and Trivy are intentionally **reporting-only** at present. This is a
-time-bounded exception, not a passed control: a historical Svix credential was
-identified in the repository and must be rotated in Svix before secret scanning
-can become a blocking release gate. Existing Trivy findings also need an owner,
-decision, and remediation target before they can safely block all releases.
+- Apply and verify Terraform branch protections, including Terraform and Kubernetes
+  checks. Configure real reviewer ownership appropriate to the team.
+- Configure the protected production environment and deployment restrictions.
+- Set SSH secrets including `SSH_HOST_FINGERPRINT`; keep root login and broad sudo
+  policy under a reviewed host access configuration.
+- Provide registry authentication for private image pulls and install reviewed Cosign.
+- Set repository variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
+  `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_BASE_DOMAIN` before publishing dashboard
+  images. Only public build configuration belongs in these variables.
+- Configure dedicated vault keys on the host before the new API starts.
 
-The date and evidence for each of these actions must be recorded in
-`docs/security/posture-log.md` before changing either workflow setting:
+First rollout requires an administrator to install the new root-owned deployment
+entry point; the previous CI user cannot safely update that entry point itself.
+Removing broader existing sudo grants remains necessary. Never infer effective
+least privilege from the additive sudoers file alone.
 
-1. Rotate and revoke the historical Svix credential in the Svix dashboard.
-2. Confirm all deployed services use the replacement through their secret
-   configuration; do not commit the value.
-3. Run Gitleaks against the default branch and remediate or formally remove the
-   historical finding from the scanned history according to the incident plan.
-4. Run Trivy, triage each high/critical result, and document its disposition.
-5. Remove Gitleaks `continue-on-error` and set Trivy `exit-code: '1'`.
-
-## Manual repository settings still required
-
-GitHub branch protection is an account-level repository setting, not a file in
-this repository. An administrator must protect `main` with:
-
-- pull requests required before merging;
-- the TypeScript, Go, Rust, and security checks required to pass;
-- direct pushes and force pushes disabled; and
-- review dismissal when new commits are pushed.
-
-Image publication, signed-image verification, and deployment identity changes
-are intentionally separate changes: the current production deployment builds
-locally on the VPS. They require a tested move to CI-built GHCR images and a
-dedicated signing identity before the server can be restricted to signed pulls.
-
-## Current VPS deployment identity
-
-The CI SSH account is `engineer`, not root. A root-owned sudoers rule permits
-exactly `/srv/aetherhost/control/deploy/deploy-production.sh`, allowing the
-root-owned control-plane checkout to update and compose services to rebuild.
-
-**Open risk:** the current VPS configuration also grants `engineer` broader
-passwordless sudo rights. The single-command rule cannot reduce that existing
-permission. SSH root access is unchanged by this control. Removing the broader
-rule is a separate access-policy change and must be explicitly approved and
-tested before this can be described as least privilege.
+Operator Compose commands must load `/etc/aetherhost/release.env` alongside the
+protected production `.env` (for example, use both `--env-file` options). Image
+references have no mutable fallback. Do not bypass verification by setting a tag.

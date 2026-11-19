@@ -200,7 +200,7 @@ export class ApplicationsService {
               ? 'aetherhost-ai-pending: Initial AetherHost source'
               : null,
           dockerImage: dockerImage?.trim() || null,
-          envVars: envVars ? (this.secretVault.encrypt(envVars) as any) : null,
+          envVars: envVars ? (this.secretVault.encrypt(envVars, `application:${tenantId}:${id}`) as any) : null,
           workerCommand: workerCommand?.trim() || null,
           withPostgres,
           withMariaDb,
@@ -280,7 +280,7 @@ export class ApplicationsService {
       // The agent needs secret values to provision containers.
       return apps.map((app) => ({
         ...app,
-        envVars: this.secretVault.decrypt((app as any).envVars),
+        envVars: this.secretVault.decrypt((app as any).envVars, `application:${app.tenantId}:${app.id}`),
       }));
     }
 
@@ -525,7 +525,7 @@ if __name__ == '__main__':
     const validatedImage = validateDockerImage(dockerImage);
 
     // If app has a workload contract, validate that the new image preserves it
-    const envVars = this.secretVault.decrypt(app.envVars);
+    const envVars = this.secretVault.decrypt(app.envVars, `application:${app.tenantId}:${app.id}`);
     assertWorkloadSpec({
       runtime: app.runtime,
       dockerImage: validatedImage,
@@ -646,7 +646,7 @@ if __name__ == '__main__':
 
   async getEnvVars(id: string, tenantId: string, actorTenantId = tenantId) {
     const app = await this.assertOwned(id, tenantId);
-    const decrypted = this.secretVault.decrypt(app.envVars);
+    const decrypted = this.secretVault.decrypt(app.envVars, `application:${app.tenantId}:${app.id}`);
     await this.recordSecretAudit(app, 'APPLICATION_ENV_READ', actorTenantId, {
       keyCount: Object.keys(decrypted).length,
     });
@@ -700,7 +700,7 @@ if __name__ == '__main__':
       envVars,
     });
 
-    const encrypted = this.secretVault.encrypt(envVars);
+    const encrypted = this.secretVault.encrypt(envVars, `application:${app.tenantId}:${app.id}`);
     await this.prisma.application.update({
       where: { id },
       data: {
@@ -759,7 +759,7 @@ if __name__ == '__main__':
         envVars:
           envVars !== undefined
             ? envVars
-            : this.secretVault.decrypt(app.envVars),
+            : this.secretVault.decrypt(app.envVars, `application:${app.tenantId}:${app.id}`),
         workerCommand: app.workerCommand || undefined,
         withPostgres: app.withPostgres,
         withMariaDb: app.withMariaDb,
@@ -789,7 +789,7 @@ if __name__ == '__main__':
         ? { aiFiles: JSON.parse(JSON.stringify(aiFilesToSave)) }
         : {}),
       ...(envVars !== undefined
-        ? { envVars: this.secretVault.encrypt(envVars) as any }
+        ? { envVars: this.secretVault.encrypt(envVars, `application:${app.tenantId}:${app.id}`) as any }
         : {}),
     };
 

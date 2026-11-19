@@ -2,13 +2,15 @@
 //!
 //! High-performance fine-grained authorization engine (RBAC/ABAC) for AetherHost platform.
 //!
-//! Provides sub-microsecond in-memory policy evaluation, role inheritance,
+//! Provides in-memory policy evaluation, role inheritance,
 //! tenant boundary enforcement, bounded TTL evaluation caching, and structured audit logs.
 
 pub mod actix;
 pub mod audit;
 pub mod cache;
 pub mod engine;
+pub mod identity;
+pub use identity::IdentityRegistry;
 pub mod middleware;
 pub mod model;
 pub mod policy;

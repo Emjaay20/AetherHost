@@ -14,6 +14,11 @@ spec:
   endpoints:
     - port: http-edge
       path: {{ .Values.serviceMonitor.path }}
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.identitySecretName }}
+          key: agent-secret-key
       interval: {{ .Values.serviceMonitor.interval }}
       scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
 {{- end }}

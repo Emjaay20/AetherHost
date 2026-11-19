@@ -91,7 +91,10 @@ mod tests {
 
     #[test]
     fn test_extract_app_subdomain() {
-        assert_eq!(extract_app_subdomain("my-app.aetherhost.dev:8080"), "my-app");
+        assert_eq!(
+            extract_app_subdomain("my-app.aetherhost.dev:8080"),
+            "my-app"
+        );
         assert_eq!(extract_app_subdomain("api.localtest.me"), "api");
         assert_eq!(extract_app_subdomain(""), "default");
     }
@@ -116,11 +119,15 @@ mod tests {
         let cb = CircuitBreaker::new("database", 2, Duration::from_millis(50));
         assert_eq!(cb.state(), CircuitState::Closed);
 
-        let r1 = cb.call(|| async { Err::<(), _>("connection refused") }).await;
+        let r1 = cb
+            .call(|| async { Err::<(), _>("connection refused") })
+            .await;
         assert!(r1.is_err());
         assert_eq!(cb.state(), CircuitState::Closed);
 
-        let r2 = cb.call(|| async { Err::<(), _>("connection refused") }).await;
+        let r2 = cb
+            .call(|| async { Err::<(), _>("connection refused") })
+            .await;
         assert!(r2.is_err());
         assert_eq!(cb.state(), CircuitState::Open);
 

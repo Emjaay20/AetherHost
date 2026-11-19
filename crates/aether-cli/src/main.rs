@@ -31,7 +31,11 @@ enum Commands {
     Login {
         #[arg(short, long, help = "Authentication token or API key")]
         token: Option<String>,
-        #[arg(short, long, help = "Control plane URL (default: https://api.aetherhost.app)")]
+        #[arg(
+            short,
+            long,
+            help = "Control plane URL (default: https://api.aetherhost.app)"
+        )]
         url: Option<String>,
     },
 
@@ -71,7 +75,9 @@ enum Commands {
     #[command(about = "Diagnose local development environment (Docker, Rust, API, Git)")]
     Doctor,
 
-    #[command(about = "Run Model Context Protocol (MCP) server for developer AI agents (Claude, Cursor)")]
+    #[command(
+        about = "Run Model Context Protocol (MCP) server for developer AI agents (Claude, Cursor)"
+    )]
     Mcp,
 }
 
@@ -115,14 +121,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let client = AetherClient::new(config.clone());
             match client.check_health().await {
                 Ok(true) => {
-                    println!("{} Control Plane is online and healthy!", "✓ ONLINE:".green().bold());
+                    println!(
+                        "{} Control Plane is online and healthy!",
+                        "✓ ONLINE:".green().bold()
+                    );
                     println!("  URL: {}", config.api_url.bold());
                 }
                 Ok(false) => {
-                    println!("{} Control Plane returned an unhealthy status.", "⚠ WARNING:".yellow().bold());
+                    println!(
+                        "{} Control Plane returned an unhealthy status.",
+                        "⚠ WARNING:".yellow().bold()
+                    );
                 }
                 Err(e) => {
-                    println!("{} Cannot reach Control Plane: {}", "✗ ERROR:".red().bold(), e);
+                    println!(
+                        "{} Cannot reach Control Plane: {}",
+                        "✗ ERROR:".red().bold(),
+                        e
+                    );
                 }
             }
         }
@@ -138,7 +154,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(apps) => {
                     pb.finish_and_clear();
                     if apps.is_empty() {
-                        println!("{}", "No applications found. Create one with `aether create <name>`!".yellow());
+                        println!(
+                            "{}",
+                            "No applications found. Create one with `aether create <name>`!"
+                                .yellow()
+                        );
                         return Ok(());
                     }
 
@@ -174,7 +194,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(e) => {
                     pb.finish_and_clear();
-                    eprintln!("{} Failed to list applications: {}", "✗ ERROR:".red().bold(), e);
+                    eprintln!(
+                        "{} Failed to list applications: {}",
+                        "✗ ERROR:".red().bold(),
+                        e
+                    );
                 }
             }
         }
@@ -196,12 +220,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match client.create_application(&name, &runtime).await {
                 Ok(app) => {
                     pb.finish_and_clear();
-                    println!("{} Application created successfully!", "✓ SUCCESS:".green().bold());
+                    println!(
+                        "{} Application created successfully!",
+                        "✓ SUCCESS:".green().bold()
+                    );
                     println!("  ID:      {}", app.id.cyan());
                     println!("  Name:    {}", app.name.bold());
                     println!("  Runtime: {}", app.runtime.yellow());
                     println!("  Status:  {}", app.status.green());
-                    println!("\nView live build logs with: {}", format!("aether logs {}", app.id).bold());
+                    println!(
+                        "\nView live build logs with: {}",
+                        format!("aether logs {}", app.id).bold()
+                    );
                 }
                 Err(e) => {
                     pb.finish_and_clear();
@@ -211,7 +241,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Logs { app_id } => {
-            println!("{} Fetching logs for application {}...", "📜 Logs:".cyan().bold(), app_id.bold());
+            println!(
+                "{} Fetching logs for application {}...",
+                "📜 Logs:".cyan().bold(),
+                app_id.bold()
+            );
             let client = AetherClient::new(config.clone());
             match client.get_logs(&app_id).await {
                 Ok(logs) => {
@@ -251,7 +285,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match client.iterate_with_ai(&app_id, &prompt).await {
                 Ok(res) => {
                     pb.finish_and_clear();
-                    println!("{} Changes generated and committed!", "✓ SUCCESS:".green().bold());
+                    println!(
+                        "{} Changes generated and committed!",
+                        "✓ SUCCESS:".green().bold()
+                    );
                     if let Some(summary) = res.summary {
                         println!("  Summary: {}", summary.cyan());
                     }
@@ -261,7 +298,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(repo) = res.github_repo {
                         println!("  Repo:    {}", repo.underline());
                     }
-                    println!("\nView build logs with: {}", format!("aether logs {}", app_id).bold());
+                    println!(
+                        "\nView build logs with: {}",
+                        format!("aether logs {}", app_id).bold()
+                    );
                 }
                 Err(e) => {
                     pb.finish_and_clear();

@@ -1,9 +1,5 @@
 use crate::error::PlatformError;
-use std::{
-    future::Future,
-    sync::Arc,
-    time::Duration,
-};
+use std::{future::Future, sync::Arc, time::Duration};
 use tokio::{
     sync::mpsc::{self, Receiver, Sender},
     sync::oneshot,
@@ -58,10 +54,9 @@ impl<T: Send + 'static> BatchIngestor<T> {
     /// Asynchronously pushes an item into the buffer.
     /// Awaits if the bounded channel is full (applying backpressure).
     pub async fn push(&self, item: T) -> Result<(), PlatformError> {
-        self.sender
-            .send(item)
-            .await
-            .map_err(|_| PlatformError::Internal("Batch ingestor worker channel closed".to_string()))
+        self.sender.send(item).await.map_err(|_| {
+            PlatformError::Internal("Batch ingestor worker channel closed".to_string())
+        })
     }
 
     /// Attempts to push an item without awaiting. Returns RateLimitExceeded if channel is full.

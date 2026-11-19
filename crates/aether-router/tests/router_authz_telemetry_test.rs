@@ -23,10 +23,7 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
                 .to_string();
 
             (
-                [(
-                    header::HeaderName::from_static("x-echo-traceparent"),
-                    trace,
-                )],
+                [(header::HeaderName::from_static("x-echo-traceparent"), trace)],
                 "backend-ok\n",
             )
         }),
@@ -39,7 +36,8 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
     let backend_url = format!("http://{}", backend_addr);
 
     // 2. Initialize router state with fresh audit sink
-    let state = MeterState::new(backend_url, None);
+    let mut state = MeterState::new(backend_url, Some("metrics-test-token".into()));
+    state.identities = aether_authz::IdentityRegistry::from_json(r#"{"credentials": [{"token": "01234567890123456789012345678901", "subject_id": "service-account-1", "tenant_id": "tenant-alpha", "role": "developer", "expires_at": 4102444800}], "resources": {"myapp": "tenant-alpha", "otherapp": "tenant-beta"}}"#).unwrap();
     let app = build_app(state.clone());
 
     // 3. Test ALLOWED request: same tenant
@@ -47,6 +45,7 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
         .method("GET")
         .uri("/api/status")
         .header("host", "myapp.aetherhost.internal")
+        .header("authorization", "Bearer 01234567890123456789012345678901")
         .header("x-user-id", "usr_dev_1")
         .header("x-tenant-id", "tenant-alpha")
         .header("x-role", "developer")
@@ -75,7 +74,8 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
     let cross_tenant_req = Request::builder()
         .method("GET")
         .uri("/api/status")
-        .header("host", "myapp.aetherhost.internal")
+        .header("host", "otherapp.aetherhost.internal")
+        .header("authorization", "Bearer 01234567890123456789012345678901")
         .header("x-user-id", "usr_attacker")
         .header("x-tenant-id", "tenant-alpha")
         .header("x-role", "developer")
@@ -104,12 +104,12 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
         .iter()
         .find(|r| r.tenant_id == "tenant-alpha" && r.decision.is_allowed())
         .expect("Allowed audit record must be recorded");
-    assert_eq!(allow_audit.subject_id, "usr_dev_1");
+    assert_eq!(allow_audit.subject_id, "service-account-1");
     assert!(allow_audit.decision.is_allowed());
 
     let deny_audit = audit_records
         .iter()
-        .find(|r| r.subject_id == "usr_attacker")
+        .find(|r| !r.decision.is_allowed())
         .expect("Denied audit record must be recorded");
     assert!(!deny_audit.decision.is_allowed());
 
@@ -117,6 +117,7 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
     let metrics_req = Request::builder()
         .method("GET")
         .uri("/metrics")
+        .header("authorization", "Bearer metrics-test-token")
         .body(Body::empty())
         .unwrap();
 
@@ -144,4 +145,23 @@ async fn test_router_allowed_cross_tenant_denial_audit_and_metrics() {
         metrics_str.contains("http_request_duration_seconds"),
         "Must record request duration histogram"
     );
+}
+
+#[tokio::test]
+async fn forged_headers_without_credentials_cannot_reach_upstream() {
+    let app = build_app(MeterState::new("http://127.0.0.1:1".into(), None));
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/private")
+                .header("host", "myapp.aetherhost.internal")
+                .header("x-role", "admin")
+                .header("x-tenant-id", "victim")
+                .header("x-app-tenant-id", "victim")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

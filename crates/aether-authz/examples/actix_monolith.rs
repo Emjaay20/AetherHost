@@ -1,8 +1,8 @@
+use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use aether_authz::{
     AuthenticatedSubject, AuthzEngine, AuthzMiddleware, Effect, InMemoryAuditSink, Policy,
 };
 use aether_telemetry::{actix_prometheus_metrics, ActixTelemetryMiddleware, MetricsRegistry};
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use std::sync::Arc;
 
 #[get("/health")]
@@ -54,10 +54,15 @@ async fn main() -> std::io::Result<()> {
             .build(),
     );
 
+    let identities = aether_authz::IdentityRegistry::from_env()
+        .map_err(|_| std::io::Error::other("Configure AETHER_IDENTITY_CONFIG_FILE"))?;
     let metrics = Arc::new(MetricsRegistry::new("aether-actix-monolith"));
 
     let bind_addr = "127.0.0.1:8088";
-    println!("⚡ Actix Monolith Example listening on http://{}", bind_addr);
+    println!(
+        "⚡ Actix Monolith Example listening on http://{}",
+        bind_addr
+    );
     println!("   Endpoints:");
     println!("     GET  /health");
     println!("     GET  /metrics");
@@ -65,6 +70,7 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
+            .app_data(web::Data::new(identities.clone()))
             .app_data(web::Data::from(metrics.clone()))
             .wrap(AuthzMiddleware::new(engine.clone()))
             .wrap(ActixTelemetryMiddleware::new(metrics.clone()))

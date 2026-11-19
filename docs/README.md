@@ -8,8 +8,8 @@ Welcome to the AetherHost technical documentation repository. This directory hou
 
 | Domain | Key Documents | Summary |
 |---|---|---|
-| **Security & DevSecOps** | [docs/security/threat-model.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/threat-model.md)<br>[docs/security/controls.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/controls.md)<br>[docs/security/disaster-recovery-drill.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/disaster-recovery-drill.md) | STRIDE Threat Model, SOC 2 controls mapping, envelope encryption (AES-256-GCM), and 14s automated restore drills. |
-| **Rust Platform Engineering** | [docs/architecture/PLATFORM_ENGINEERING.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/architecture/PLATFORM_ENGINEERING.md)<br>[docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md) | In-memory RBAC/ABAC authorization (~189ns), W3C distributed tracing, Actix-web production middleware, and Criterion benchmarks. |
+| **Security & DevSecOps** | [docs/security/threat-model.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/threat-model.md)<br>[docs/security/controls.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/controls.md)<br>[docs/security/disaster-recovery-drill.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/disaster-recovery-drill.md) | STRIDE threat model, internal control mapping, application-bound AES-GCM encryption, and isolated database recovery tooling. |
+| **Rust Platform Engineering** | [docs/architecture/PLATFORM_ENGINEERING.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/architecture/PLATFORM_ENGINEERING.md)<br>[docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md) | In-memory RBAC/ABAC authorization, server-owned service identity, W3C distributed tracing, Actix-web middleware, and Criterion benchmark tooling. |
 | **AI Agents & MCP** | [AGENTS.md](file:///Users/yusufabubakar/Documents/AetherHost/AGENTS.md) | Developer & AI Agent Guide for Claude Code, Cursor, and Antigravity via embedded `aether mcp` stdio JSON-RPC server. |
 | **Operations & CI/CD** | [docs/OPERATIONS.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/OPERATIONS.md)<br>[docs/CONTABO_DEPLOYMENT.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/CONTABO_DEPLOYMENT.md)<br>[deploy/KUBERNETES.md](file:///Users/yusufabubakar/Documents/AetherHost/deploy/KUBERNETES.md) | Fast CI loops (`nextest`, path filtering, `cargo-deny`), KinD Kubernetes validation, and production Contabo VPS hosting. |
 | **Staff Case Studies** | [docs/portfolio/staff-security-case-study.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/portfolio/staff-security-case-study.md)<br>[docs/CASE_STUDY.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/CASE_STUDY.md) | End-to-end platform overhaul, deduplicated Restic backup pipeline, and incident post-mortems. |
@@ -34,7 +34,7 @@ Found in [`docs/architecture/rfc/`](file:///Users/yusufabubakar/Documents/Aether
 
 ## 3. Security & Compliance Standard
 
-1. **Envelope Encryption ([docs/security/controls.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/controls.md))**:
+1. **Application Encryption ([docs/security/controls.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/controls.md))**:
    - AES-256-GCM authenticated cipher with 96-bit unique IVs per record and 128-bit integrity tags.
    - Master key isolation via environment variable; no raw secrets stored in PostgreSQL.
 
@@ -44,7 +44,7 @@ Found in [`docs/architecture/rfc/`](file:///Users/yusufabubakar/Documents/Aether
 
 3. **Backup & Disaster Recovery ([docs/security/disaster-recovery-drill.md](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/disaster-recovery-drill.md))**:
    - Restic deduplicated repository using Content-Defined Chunking (CDC).
-   - Automated nightly restore validation drill executes in **14.2 seconds** with zero production downtime.
+   - Isolated PostgreSQL restore and tenant-relationship checks are implemented. A real runtime result and full platform recovery measurement remain required.
 
 4. **Supply Chain Enforcement**:
    - Gitleaks automated secret detection.
@@ -57,3 +57,14 @@ Found in [`docs/architecture/rfc/`](file:///Users/yusufabubakar/Documents/Aether
 ## 4. Web Documentation
 
 The interactive documentation portal is hosted at `/docs` (implemented in [`apps/dashboard/app/docs/DocsClient.tsx`](file:///Users/yusufabubakar/Documents/AetherHost/apps/dashboard/app/docs/DocsClient.tsx)), providing real-time search, code snippets, and deployment guides.
+
+
+## Security implementation and rollout
+
+Start with [the control map](security/controls.md), [rollout checklist](security/rollout.md),
+[key rotation](security/key-rotation.md), [secure access](security/secure-access.md),
+[vulnerability lifecycle](security/vulnerability-management.md), and
+[incident exercise](security/incident-exercise.md). The `/docs` page summarizes
+these controls without claiming completed external activation or audited compliance.
+
+Latest local results: [19 November security validation](validation/2026-11-19-infrastructure-security.md).

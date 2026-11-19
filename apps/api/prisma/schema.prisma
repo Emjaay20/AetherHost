@@ -133,6 +133,7 @@ model DeploymentLog {
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
+  @@index([createdAt])
 }
 
 model ApiKey {

@@ -1,6 +1,6 @@
 use aether_authz::{
-    Action, AuthzEngine, Decision, Effect, EvaluationContext, InMemoryAuditSink, Policy, Resource,
-    Subject,
+    Action, AuthzEngine, Decision, Effect, EvaluationContext, IdentityRegistry, InMemoryAuditSink,
+    Policy, Resource,
 };
 use aether_core::{
     build_http_client, constant_time_eq, extract_app_subdomain, CircuitBreaker, PlatformError,
@@ -32,6 +32,7 @@ pub struct MeterState {
     pub telemetry: MetricsRegistry,
     pub authz: AuthzEngine,
     pub audit_sink: InMemoryAuditSink,
+    pub identities: IdentityRegistry,
 }
 
 impl MeterState {
@@ -71,6 +72,7 @@ impl MeterState {
             telemetry: MetricsRegistry::new("aether-router"),
             authz,
             audit_sink,
+            identities: IdentityRegistry::default(),
         }
     }
 
@@ -94,6 +96,7 @@ impl MeterState {
             telemetry,
             authz,
             audit_sink,
+            identities: IdentityRegistry::default(),
         }
     }
 }
@@ -113,7 +116,7 @@ pub async fn health_handler() -> impl IntoResponse {
 
 pub fn is_authorized_for_metrics(headers: &HeaderMap, expected_token: Option<&str>) -> bool {
     let Some(expected) = expected_token else {
-        return true;
+        return false;
     };
     if let Some(agent_key) = headers.get("x-agent-key").and_then(|v| v.to_str().ok()) {
         if constant_time_eq(agent_key, expected) {
@@ -156,10 +159,7 @@ pub fn format_prometheus_metrics(map: &HashMap<String, (u64, u64)>) -> String {
     out
 }
 
-pub async fn metrics_handler(
-    State(state): State<MeterState>,
-    headers: HeaderMap,
-) -> Response {
+pub async fn metrics_handler(State(state): State<MeterState>, headers: HeaderMap) -> Response {
     if !is_authorized_for_metrics(&headers, state.metrics_token.as_deref()) {
         return (StatusCode::UNAUTHORIZED, "Unauthorized metrics access\n").into_response();
     }
@@ -196,44 +196,45 @@ pub async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Res
     let app_name = extract_app_subdomain(&host);
     let method = req.method().clone();
     let uri = req.uri().clone();
-    let path_and_query = uri.path_and_query().map(|p| p.as_str()).unwrap_or("/").to_string();
+    let path_and_query = uri
+        .path_and_query()
+        .map(|p| p.as_str())
+        .unwrap_or("/")
+        .to_string();
 
-    let (parts, body) = req.into_parts();
+    let (mut parts, body) = req.into_parts();
 
     // 1. Enforce Authorization via AuthzEngine
-    let subject_id = parts
-        .headers
-        .get("x-user-id")
-        .or_else(|| parts.headers.get("x-subject-id"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("anonymous");
-
-    let subject_tenant = parts
-        .headers
-        .get("x-tenant-id")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("default");
-
-    let subject_role = parts
-        .headers
-        .get("x-actor-role")
-        .or_else(|| parts.headers.get("x-role"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("developer");
-
-    let resource_tenant = parts
-        .headers
-        .get("x-app-tenant-id")
-        .or_else(|| parts.headers.get("x-target-tenant"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("default");
-
-    let subject = Subject::new(subject_id, subject_tenant).with_role(subject_role);
-    let resource = Resource::new("application", &app_name, resource_tenant);
+    let (subject, resource_tenant) = match state.identities.resolve(&parts.headers, &app_name) {
+        Ok(identity) => identity,
+        Err(status) => {
+            state.telemetry.dec_in_flight();
+            state.telemetry.record_request(
+                method.as_str(),
+                &path_and_query,
+                status.as_u16(),
+                start_time.elapsed(),
+            );
+            return status.into_response();
+        }
+    };
+    let resource = Resource::new("application", &app_name, &resource_tenant);
     let action = Action::from(method.as_str());
     let eval_ctx = EvaluationContext::new(subject, resource, action);
 
     let decision = state.authz.evaluate(&eval_ctx);
+    for name in [
+        "authorization",
+        "x-user-id",
+        "x-subject-id",
+        "x-tenant-id",
+        "x-role",
+        "x-actor-role",
+        "x-app-tenant-id",
+        "x-target-tenant",
+    ] {
+        parts.headers.remove(name);
+    }
     if let Decision::Deny { reason, .. } = decision {
         state.telemetry.dec_in_flight();
         state.telemetry.record_request(
@@ -321,8 +322,8 @@ pub async fn proxy_handler(State(state): State<MeterState>, req: Request) -> Res
 
     match send_result {
         Ok(resp) => {
-            let status = StatusCode::from_u16(resp.status().as_u16())
-                .unwrap_or(StatusCode::BAD_GATEWAY);
+            let status =
+                StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
             let headers = resp.headers().clone();
             let resp_bytes = resp.bytes().await.unwrap_or_else(|_| Bytes::new());
             let egress_len = resp_bytes.len() as u64;
@@ -400,14 +401,16 @@ mod tests {
         let mut map = HashMap::new();
         map.insert("my-app".to_string(), (1024, 4096));
         let output = format_prometheus_metrics(&map);
-        assert!(output.contains("aether_bandwidth_bytes_total{app=\"my-app\",direction=\"ingress\"} 1024"));
-        assert!(output.contains("aether_bandwidth_bytes_total{app=\"my-app\",direction=\"egress\"} 4096"));
+        assert!(output
+            .contains("aether_bandwidth_bytes_total{app=\"my-app\",direction=\"ingress\"} 1024"));
+        assert!(output
+            .contains("aether_bandwidth_bytes_total{app=\"my-app\",direction=\"egress\"} 4096"));
     }
 
     #[test]
     fn test_metrics_authorization() {
         let mut headers = HeaderMap::new();
-        assert!(is_authorized_for_metrics(&headers, None));
+        assert!(!is_authorized_for_metrics(&headers, None));
         assert!(!is_authorized_for_metrics(&headers, Some("secret-123")));
 
         headers.insert("x-agent-key", HeaderValue::from_static("secret-123"));

@@ -199,7 +199,7 @@ services:
   # 5. Control Plane: NestJS Backend API
   # =========================================================================
   api:
-    image: ghcr.io/emjaay20/aetherhost-api:latest
+    image: ${AETHER_API_IMAGE:?Load verified release image references}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -214,6 +214,10 @@ services:
         condition: service_healthy
     environment:
       - NODE_ENV=production
+      - TENANT_SECRETS_KEYRING=${TENANT_SECRETS_KEYRING:-}
+      - TENANT_SECRETS_CURRENT_KEY_ID=${TENANT_SECRETS_CURRENT_KEY_ID:-primary}
+      - TENANT_SECRETS_ENCRYPTION_KEY=${TENANT_SECRETS_ENCRYPTION_KEY:-}
+      - TENANT_SECRETS_LEGACY_KEY=${TENANT_SECRETS_LEGACY_KEY:-}
       - PORT=3000
       - DATABASE_URL=postgresql://${POSTGRES_USER:-aether}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aetherhost}?schema=public
       - REDIS_HOST=redis
@@ -277,14 +281,7 @@ services:
   # 6. Frontend: Next.js Dashboard Console
   # =========================================================================
   dashboard:
-    build:
-      context: .
-      dockerfile: apps/dashboard/Dockerfile
-      args:
-        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${CLERK_PUBLISHABLE_KEY}
-        - NEXT_PUBLIC_API_URL=https://api.${BASE_DOMAIN}
-        - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
-        - NEXT_PUBLIC_USE_TRAEFIK=true
+    image: ${AETHER_DASHBOARD_IMAGE:?Load verified release image references}
     container_name: aetherhost-dashboard
     restart: unless-stopped
     security_opt:
@@ -325,7 +322,7 @@ services:
   # 7. Node Agent: Orchestration & Docker Runtime Agent
   # =========================================================================
   agent:
-    image: ghcr.io/emjaay20/aetherhost-agent:latest
+    image: ${AETHER_AGENT_IMAGE:?Load verified release image references}
     build:
       context: .
       dockerfile: apps/agent-go/Dockerfile

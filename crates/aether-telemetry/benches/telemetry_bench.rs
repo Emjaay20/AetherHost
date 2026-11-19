@@ -1,10 +1,6 @@
 use aether_telemetry::MetricsRegistry;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use std::{
-    sync::Arc,
-    thread,
-    time::Duration,
-};
+use std::{sync::Arc, thread, time::Duration};
 
 fn bench_metric_recording(c: &mut Criterion) {
     let registry = MetricsRegistry::new("bench-service");
@@ -56,12 +52,7 @@ fn bench_metric_recording_under_contention(c: &mut Criterion) {
                     let path = format!("/api/v1/apps/{}", t % 3);
                     for i in 0..per_thread_iters {
                         let status = if i % 10 == 0 { 500 } else { 200 };
-                        reg.record_request(
-                            "POST",
-                            &path,
-                            status,
-                            Duration::from_micros(200),
-                        );
+                        reg.record_request("POST", &path, status, Duration::from_micros(200));
                     }
                 });
                 handles.push(handle);

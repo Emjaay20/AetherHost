@@ -1,6 +1,7 @@
 use crate::{
     engine::AuthzEngine,
     model::{Action, Decision, EvaluationContext, Resource, Subject},
+    IdentityRegistry,
 };
 use actix_web::{
     body::{BoxBody, EitherBody},
@@ -72,7 +73,8 @@ pub fn authorize_actix(
     }
 }
 
-/// Extractor that resolves the authenticated subject from HTTP request headers.
+/// Extractor authenticated against server-owned service credentials.
+/// Register `web::Data<IdentityRegistry>`; caller role/tenant headers are ignored.
 #[derive(Debug, Clone)]
 pub struct AuthenticatedSubject {
     pub subject: Subject,
@@ -83,29 +85,31 @@ impl FromRequest for AuthenticatedSubject {
     type Future = Ready<Result<Self, Self::Error>>;
 
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let user_id = req
-            .headers()
-            .get("x-user-id")
-            .or_else(|| req.headers().get("x-subject-id"))
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("anonymous");
-
-        let tenant_id = req
-            .headers()
-            .get("x-tenant-id")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("default");
-
-        let role = req
-            .headers()
-            .get("x-role")
-            .or_else(|| req.headers().get("x-actor-role"))
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("developer");
-
-        let subject = Subject::new(user_id, tenant_id).with_role(role);
-        ready(Ok(AuthenticatedSubject { subject }))
+        ready(resolve_identity(req).map(|(subject, _)| AuthenticatedSubject { subject }))
     }
+}
+
+fn resolve_identity(req: &HttpRequest) -> Result<(Subject, String), ActixAuthzError> {
+    let registry = req
+        .app_data::<actix_web::web::Data<IdentityRegistry>>()
+        .ok_or_else(|| ActixAuthzError::Unauthorized("Identity registry is required".into()))?;
+    let mut headers = axum::http::HeaderMap::new();
+    if let Some(value) = req
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Ok(value) = value.parse() {
+            headers.insert("authorization", value);
+        }
+    }
+    registry.resolve(&headers, req.path()).map_err(|status| {
+        if status == axum::http::StatusCode::UNAUTHORIZED {
+            ActixAuthzError::Unauthorized("Valid service credentials required".into())
+        } else {
+            ActixAuthzError::Forbidden("Unknown resource ownership".into())
+        }
+    })
 }
 
 /// Actix-web middleware Transform for enforcing authorization across routes.
@@ -158,40 +162,17 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        let user_id = req
-            .headers()
-            .get("x-user-id")
-            .or_else(|| req.headers().get("x-subject-id"))
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("anonymous");
-
-        let subject_tenant = req
-            .headers()
-            .get("x-tenant-id")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("default");
-
-        let role = req
-            .headers()
-            .get("x-role")
-            .or_else(|| req.headers().get("x-actor-role"))
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("developer");
-
-        let target_tenant = req
-            .headers()
-            .get("x-app-tenant-id")
-            .or_else(|| req.headers().get("x-target-tenant"))
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or(subject_tenant);
-
-        let path = req.path().to_string();
-        let method = req.method().as_str();
-
-        let subject = Subject::new(user_id, subject_tenant).with_role(role);
-        let resource = Resource::new("endpoint", &path, target_tenant);
-        let action = Action::from(method);
-        let ctx = EvaluationContext::new(subject, resource, action);
+        let (subject, target_tenant) = match resolve_identity(req.request()) {
+            Ok(identity) => identity,
+            Err(error) => {
+                let response = req
+                    .into_response(error.error_response())
+                    .map_into_right_body();
+                return Box::pin(async { Ok(response) });
+            }
+        };
+        let resource = Resource::new("endpoint", req.path(), &target_tenant);
+        let ctx = EvaluationContext::new(subject, resource, Action::from(req.method().as_str()));
 
         let decision = self.engine.evaluate(&ctx);
 
