@@ -251,6 +251,10 @@ jobs:
         with:
           framework: terraform
           directory: terraform
+          # The AWS security lab is intentionally not connected to this VPS or
+          # any AWS account. It is syntax-validated above; account-level
+          # controls become a hard policy gate after a reviewed AWS rollout.
+          skip_path: terraform/aws-security-lab
           output_format: cli
           soft_fail: false
 

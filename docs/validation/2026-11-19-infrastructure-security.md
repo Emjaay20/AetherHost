@@ -4,6 +4,11 @@ Date: 19 November 2026. Scope: local AetherHost repository changes and tests.
 No production deployment, credential rotation, cloud apply, DB maintenance, live
 incident exercise or recovery operation was executed.
 
+The AWS security lab is intentionally unprovisioned. It is Terraform-validated
+but excluded from the mandatory Checkov gate until an AWS account, cost review
+and account-specific controls have been approved. AetherHost production runs on
+the VPS; this release creates no AWS resources.
+
 ## Implemented
 
 - Server-owned expiring service credentials and authoritative resource ownership
