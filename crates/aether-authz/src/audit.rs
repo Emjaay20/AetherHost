@@ -72,6 +72,7 @@ impl InMemoryAuditSink {
 
 impl AuditSink for InMemoryAuditSink {
     fn record(&self, record: AuditRecord) {
+        TracingAuditSink.record(record.clone());
         if let Ok(mut records) = self.records.lock() {
             if records.len() >= self.capacity {
                 records.pop_front();

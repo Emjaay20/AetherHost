@@ -1,12 +1,12 @@
-use aether_authz::{
-    AuthenticatedSubject, AuthzEngine, AuthzMiddleware, Effect, InMemoryAuditSink, Policy,
-};
-use aether_telemetry::{actix_prometheus_metrics, ActixTelemetryMiddleware, MetricsRegistry};
 use actix_web::{
     get,
     test::{call_service, init_service, read_body, read_body_json, TestRequest},
     web, App, HttpResponse, Responder,
 };
+use aether_authz::{
+    AuthenticatedSubject, AuthzEngine, AuthzMiddleware, Effect, InMemoryAuditSink, Policy,
+};
+use aether_telemetry::{actix_prometheus_metrics, ActixTelemetryMiddleware, MetricsRegistry};
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -54,6 +54,7 @@ async fn test_actix_middleware_allow_deny_and_telemetry() {
 
     let app = init_service(
         App::new()
+            .app_data(web::Data::new(aether_authz::IdentityRegistry::from_json(r#"{"credentials":[{"token":"01234567890123456789012345678901","subject_id":"usr_dev_42","tenant_id":"tenant-alpha","role":"developer","expires_at":4102444800}],"resources":{"/api/v1/workloads":"tenant-alpha","/api/v1/foreign-workloads":"tenant-bravo","/metrics":"tenant-alpha"}}"#).unwrap()))
             .app_data(web::Data::from(metrics.clone()))
             .wrap(AuthzMiddleware::new(engine_clone))
             .wrap(ActixTelemetryMiddleware::new(metrics_clone))
@@ -65,6 +66,7 @@ async fn test_actix_middleware_allow_deny_and_telemetry() {
     // 1. ALLOWED Request: Same tenant developer
     let allow_req = TestRequest::get()
         .uri("/api/v1/workloads")
+        .insert_header(("authorization", "Bearer 01234567890123456789012345678901"))
         .insert_header(("x-user-id", "usr_dev_42"))
         .insert_header(("x-tenant-id", "tenant-alpha"))
         .insert_header(("x-role", "developer"))
@@ -95,7 +97,8 @@ async fn test_actix_middleware_allow_deny_and_telemetry() {
 
     // 2. DENIED Request: Cross-tenant unauthorized attempt
     let deny_req = TestRequest::get()
-        .uri("/api/v1/workloads")
+        .uri("/api/v1/foreign-workloads")
+        .insert_header(("authorization", "Bearer 01234567890123456789012345678901"))
         .insert_header(("x-user-id", "usr_rogue"))
         .insert_header(("x-tenant-id", "tenant-alpha"))
         .insert_header(("x-role", "developer"))
@@ -116,10 +119,13 @@ async fn test_actix_middleware_allow_deny_and_telemetry() {
     assert_eq!(allowed_rec.subject_id, "usr_dev_42");
 
     let denied_rec = records.iter().find(|r| !r.decision.is_allowed()).unwrap();
-    assert_eq!(denied_rec.subject_id, "usr_rogue");
+    assert_eq!(denied_rec.subject_id, "usr_dev_42");
 
     // 4. Verify Prometheus RED Metrics
-    let metrics_req = TestRequest::get().uri("/metrics").to_request();
+    let metrics_req = TestRequest::get()
+        .uri("/metrics")
+        .insert_header(("authorization", "Bearer 01234567890123456789012345678901"))
+        .to_request();
     let metrics_resp = call_service(&app, metrics_req).await;
     assert_eq!(metrics_resp.status(), 200);
 

@@ -22,6 +22,7 @@ spec:
     cleanupOnFail: true
   test:
     enable: true
+  # Set image.digest to an approved Cosign-verified platform digest before reconciling.
   values:
     replicaCount: 3
     ingress:

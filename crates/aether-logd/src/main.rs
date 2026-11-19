@@ -6,10 +6,11 @@ use tracing::info;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let state = AppState::new();
+    let mut state = AppState::new();
     let cors_env = std::env::var("CORS_ORIGIN").ok();
     let cors = build_cors_layer(cors_env.as_deref());
 
+    state.identities = aether_authz::IdentityRegistry::from_env()?;
     let app = build_app(state, cors);
 
     let port = std::env::var("PORT")
@@ -18,7 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(4001);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("🚀 AetherHost Log Daemon (aether-logd) listening on {}", addr);
+    info!(
+        "🚀 AetherHost Log Daemon (aether-logd) listening on {}",
+        addr
+    );
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

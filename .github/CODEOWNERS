@@ -1,0 +1,6 @@
+# Replace/add actual team reviewers as responsibilities evolve.
+* @Emjaay20
+/.github/ @Emjaay20
+/terraform/ @Emjaay20
+/deploy/ @Emjaay20
+/crates/aether-authz/ @Emjaay20

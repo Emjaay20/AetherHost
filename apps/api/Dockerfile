@@ -29,6 +29,7 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder --chown=node:node /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=node:node /app/apps/api/dist-security ./apps/api/dist-security
 COPY --from=builder --chown=node:node /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder --chown=node:node /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder --chown=node:node /app/apps/api/node_modules ./apps/api/node_modules

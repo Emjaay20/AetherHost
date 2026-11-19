@@ -1,0 +1,13 @@
+[Unit]
+Description=AetherHost deployed image vulnerability scan
+OnFailure=aetherhost-operation-alert@%n.service
+After=docker.service
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/aetherhost/control
+ExecStart=/srv/aetherhost/control/scripts/security/fleet-scan.sh /var/lib/aetherhost/security/latest
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/aetherhost/security /var/cache
+PrivateTmp=true

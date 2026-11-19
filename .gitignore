@@ -19,3 +19,12 @@ deployments/
 target/
 crates/target/
 **/target/
+
+# Local security evidence and infrastructure state must not enter source control.
+**/.terraform/
+**/terraform.tfstate*
+**/*.tfplan
+**/lab.plan
+**/identities.json
+**/__pycache__/
+**/dist-security/

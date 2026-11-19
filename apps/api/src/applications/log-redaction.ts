@@ -6,6 +6,9 @@ const secretKey = /(?:api[_-]?key|auth(?:orization)?|credential|pass(?:word)?|se
  */
 export function redactSensitiveLogContent(input: string): string {
   return input
+    .replace(/-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----[\s\S]*?-----END (?:[A-Z ]*PRIVATE KEY)-----/g, '[REDACTED PRIVATE KEY]')
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi, '$1[REDACTED]@')
+    .replace(/\b((?:[A-Za-z_][A-Za-z0-9_-]*(?:password|secret|token|api_key)|password|secret|token|api_key))\s*=\s*(["'])[\s\S]*?\2/gi, '$1=[REDACTED]')
     .replace(/\bAuthorization\s*:\s*[^\r\n]+/gi, 'Authorization: [REDACTED]')
     .replace(
       /(^|[\s,{])([A-Za-z_][A-Za-z0-9_-]*)(\s*[:=]\s*)([^\s,}\]]+)/g,

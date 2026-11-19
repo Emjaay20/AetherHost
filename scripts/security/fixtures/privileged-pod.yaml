@@ -1,0 +1,12 @@
+# Negative test only. Never apply without --dry-run=server in an isolated CI namespace.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: forbidden-security-test
+spec:
+  containers:
+    - name: privileged
+      image: busybox:1.37
+      securityContext:
+        privileged: true
+        runAsUser: 0

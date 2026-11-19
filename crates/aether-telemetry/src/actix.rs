@@ -108,10 +108,9 @@ where
 
                     if let Some(tp) = traceparent_header {
                         if let Ok(val) = header::HeaderValue::from_str(&tp) {
-                            response.headers_mut().insert(
-                                header::HeaderName::from_static("traceparent"),
-                                val,
-                            );
+                            response
+                                .headers_mut()
+                                .insert(header::HeaderName::from_static("traceparent"), val);
                         }
                     }
 

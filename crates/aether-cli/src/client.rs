@@ -1,6 +1,6 @@
 use crate::config::CliConfig;
-pub use aether_core::{AiIterationResult, Application, DeploymentLog};
 use aether_core::build_http_client;
+pub use aether_core::{AiIterationResult, Application, DeploymentLog};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 
 pub struct AetherClient {
@@ -56,7 +56,10 @@ impl AetherClient {
         Ok(apps)
     }
 
-    pub async fn get_logs(&self, app_id: &str) -> Result<Vec<DeploymentLog>, Box<dyn std::error::Error>> {
+    pub async fn get_logs(
+        &self,
+        app_id: &str,
+    ) -> Result<Vec<DeploymentLog>, Box<dyn std::error::Error>> {
         let url = format!("{}/v1/applications/{}/logs", self.config.api_url, app_id);
         let resp = self.http.get(&url).headers(self.headers()).send().await?;
 
@@ -104,7 +107,10 @@ impl AetherClient {
         app_id: &str,
         prompt: &str,
     ) -> Result<AiIterationResult, Box<dyn std::error::Error>> {
-        let url = format!("{}/v1/ai/applications/{}/iterate", self.config.api_url, app_id);
+        let url = format!(
+            "{}/v1/ai/applications/{}/iterate",
+            self.config.api_url, app_id
+        );
         let body = serde_json::json!({
             "prompt": prompt,
         });

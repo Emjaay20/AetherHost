@@ -1,6 +1,6 @@
 use aether_authz::{
-    Action, AuthzEngine, Decision, Effect, EvaluationContext, InMemoryAuditSink, Policy, Resource,
-    Subject,
+    Action, AuthzEngine, Decision, Effect, EvaluationContext, IdentityRegistry, InMemoryAuditSink,
+    Policy, Resource,
 };
 use aether_telemetry::{MetricsRegistry, W3cTraceContext};
 use axum::{
@@ -50,6 +50,7 @@ pub struct AppState {
     pub channels: Arc<RwLock<HashMap<String, broadcast::Sender<LogMessage>>>>,
     pub authz: AuthzEngine,
     pub audit_sink: InMemoryAuditSink,
+    pub identities: IdentityRegistry,
     pub telemetry: MetricsRegistry,
 }
 
@@ -81,6 +82,7 @@ impl AppState {
             channels: Arc::new(RwLock::new(HashMap::new())),
             authz,
             audit_sink,
+            identities: IdentityRegistry::default(),
             telemetry: MetricsRegistry::new("aether-logd"),
         }
     }
@@ -94,6 +96,7 @@ impl AppState {
             channels: Arc::new(RwLock::new(HashMap::new())),
             authz,
             audit_sink,
+            identities: IdentityRegistry::default(),
             telemetry,
         }
     }
@@ -133,17 +136,11 @@ pub fn build_cors_layer(raw_origins: Option<&str>) -> CorsLayer {
         .filter_map(|s| HeaderValue::from_str(s.trim()).ok())
         .collect();
 
-    if parsed.is_empty() {
-        CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers(Any)
-    } else {
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(parsed))
-            .allow_methods(Any)
-            .allow_headers(Any)
-    }
+    // Invalid origin configuration fails closed instead of enabling every origin.
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::list(parsed))
+        .allow_methods(Any)
+        .allow_headers(Any)
 }
 
 pub fn build_app(state: AppState, cors: CorsLayer) -> Router {
@@ -167,15 +164,16 @@ pub async fn health_check() -> impl IntoResponse {
     }))
 }
 
-pub async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
+pub async fn metrics_handler(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if state.identities.authenticate(&headers).is_err() {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
     let output = state.telemetry.render_prometheus();
     (
-        [(
-            header::CONTENT_TYPE,
-            "text/plain; version=0.0.4",
-        )],
+        [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],
         output,
     )
+        .into_response()
 }
 
 pub async fn ingest_log(
@@ -193,31 +191,20 @@ pub async fn ingest_log(
         .and_then(W3cTraceContext::parse_traceparent);
 
     // 2. Authorization enforcement
-    let subject_id = headers
-        .get("x-user-id")
-        .or_else(|| headers.get("x-subject-id"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("service-client");
-
-    let subject_tenant = headers
-        .get("x-tenant-id")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("default");
-
-    let subject_role = headers
-        .get("x-role")
-        .or_else(|| headers.get("x-actor-role"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("developer");
-
-    let target_tenant = headers
-        .get("x-app-tenant-id")
-        .or_else(|| headers.get("x-target-tenant"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("default");
-
-    let subject = Subject::new(subject_id, subject_tenant).with_role(subject_role);
-    let resource = Resource::new("application_logs", &payload.app_id, target_tenant);
+    let (subject, target_tenant) = match state.identities.resolve(&headers, &payload.app_id) {
+        Ok(identity) => identity,
+        Err(status) => {
+            state.telemetry.dec_in_flight();
+            state.telemetry.record_request(
+                "POST",
+                "/ingest",
+                status.as_u16(),
+                start_time.elapsed(),
+            );
+            return status.into_response();
+        }
+    };
+    let resource = Resource::new("application_logs", &payload.app_id, &target_tenant);
     let action = Action::from("ingest");
     let eval_ctx = EvaluationContext::new(subject, resource, action);
 
@@ -246,7 +233,10 @@ pub async fn ingest_log(
 
     match sender.send(payload) {
         Ok(subscribers) => {
-            info!("Ingested log for app {} -> {} live subscribers", app_id, subscribers);
+            info!(
+                "Ingested log for app {} -> {} live subscribers",
+                app_id, subscribers
+            );
         }
         Err(_) => {
             // Buffer empty or no active subscribers, still accepted
@@ -270,36 +260,47 @@ pub async fn ws_handler(
     headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Response {
-    let subject_id = headers
-        .get("x-user-id")
-        .or_else(|| headers.get("x-subject-id"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("anonymous");
-
-    let subject_tenant = headers
-        .get("x-tenant-id")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("default");
-
-    let subject_role = headers
-        .get("x-role")
-        .or_else(|| headers.get("x-actor-role"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("developer");
-
-    let target_tenant = headers
-        .get("x-app-tenant-id")
-        .or_else(|| headers.get("x-target-tenant"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("default");
-
-    let subject = Subject::new(subject_id, subject_tenant).with_role(subject_role);
-    let resource = Resource::new("application_logs", &app_id, target_tenant);
+    let start_time = Instant::now();
+    state.telemetry.inc_in_flight();
+    let (subject, target_tenant) = match state.identities.resolve(&headers, &app_id) {
+        Ok(identity) => identity,
+        Err(status) => {
+            state.telemetry.dec_in_flight();
+            state.telemetry.record_request(
+                "GET",
+                "/ws/:app_id",
+                status.as_u16(),
+                start_time.elapsed(),
+            );
+            return status.into_response();
+        }
+    };
+    let lifetime = match state.identities.session_duration(&headers) {
+        Ok(lifetime) => lifetime,
+        Err(status) => {
+            state.telemetry.dec_in_flight();
+            state.telemetry.record_request(
+                "GET",
+                "/ws/:app_id",
+                status.as_u16(),
+                start_time.elapsed(),
+            );
+            return status.into_response();
+        }
+    };
+    let resource = Resource::new("application_logs", &app_id, &target_tenant);
     let action = Action::from("read");
     let eval_ctx = EvaluationContext::new(subject, resource, action);
 
     let decision = state.authz.evaluate(&eval_ctx);
     if let Decision::Deny { reason, .. } = decision {
+        state.telemetry.dec_in_flight();
+        state.telemetry.record_request(
+            "GET",
+            "/ws/:app_id",
+            StatusCode::FORBIDDEN.as_u16(),
+            start_time.elapsed(),
+        );
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
@@ -311,10 +312,22 @@ pub async fn ws_handler(
             .into_response();
     }
 
-    ws.on_upgrade(move |socket| handle_socket(socket, app_id, state))
+    state.telemetry.dec_in_flight();
+    state.telemetry.record_request(
+        "GET",
+        "/ws/:app_id",
+        StatusCode::SWITCHING_PROTOCOLS.as_u16(),
+        start_time.elapsed(),
+    );
+    ws.on_upgrade(move |socket| handle_socket(socket, app_id, state, lifetime))
 }
 
-pub async fn handle_socket(socket: WebSocket, app_id: String, state: AppState) {
+pub async fn handle_socket(
+    socket: WebSocket,
+    app_id: String,
+    state: AppState,
+    lifetime: std::time::Duration,
+) {
     let (mut sender, mut receiver) = socket.split();
     let broadcast_tx = state.get_or_create_sender(&app_id);
     let mut broadcast_rx = broadcast_tx.subscribe();
@@ -342,6 +355,10 @@ pub async fn handle_socket(socket: WebSocket, app_id: String, state: AppState) {
     tokio::select! {
         _ = (&mut send_task) => recv_task.abort(),
         _ = (&mut recv_task) => send_task.abort(),
+        _ = tokio::time::sleep(lifetime) => {
+            send_task.abort();
+            recv_task.abort();
+        }
     };
 
     info!("Client disconnected from log stream for app: {}", app_id);

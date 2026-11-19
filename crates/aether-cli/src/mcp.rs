@@ -307,7 +307,10 @@ mod tests {
         };
         let res = handle_mcp_method(&req, &engine);
         assert!(res.error.is_none());
-        let content_text = res.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let content_text = res.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val: Value = serde_json::from_str(&content_text).unwrap();
         assert_eq!(val["platform"], "AetherHost");
         assert_eq!(val["default_port"], 3000);
@@ -332,7 +335,10 @@ mod tests {
             })),
         };
         let res = handle_mcp_method(&req_valid, &engine);
-        let content = res.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let content = res.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val: Value = serde_json::from_str(&content).unwrap();
         assert_eq!(val["valid"], true);
 
@@ -350,7 +356,10 @@ mod tests {
             })),
         };
         let res_inv = handle_mcp_method(&req_invalid, &engine);
-        let content_inv = res_inv.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let content_inv = res_inv.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val_inv: Value = serde_json::from_str(&content_inv).unwrap();
         assert_eq!(val_inv["valid"], false);
         assert!(val_inv["errors"].as_array().unwrap().len() >= 2);
@@ -379,7 +388,10 @@ mod tests {
             })),
         };
         let res_allow = handle_mcp_method(&req_allow, &engine);
-        let text_allow = res_allow.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text_allow = res_allow.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val_allow: Value = serde_json::from_str(&text_allow).unwrap();
         assert_eq!(val_allow["allowed"], true);
 
@@ -402,10 +414,16 @@ mod tests {
             })),
         };
         let res_deny = handle_mcp_method(&req_cross_tenant, &engine);
-        let text_deny = res_deny.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text_deny = res_deny.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val_deny: Value = serde_json::from_str(&text_deny).unwrap();
         assert_eq!(val_deny["allowed"], false);
-        assert!(val_deny["reason"].as_str().unwrap().contains("Default closed"));
+        assert!(val_deny["reason"]
+            .as_str()
+            .unwrap()
+            .contains("Default closed"));
 
         // 3. Denied: Unmatched role (viewer on modify action)
         let req_unmatched = JsonRpcRequest {
@@ -426,7 +444,10 @@ mod tests {
             })),
         };
         let res_unmatched = handle_mcp_method(&req_unmatched, &engine);
-        let text_unmatched = res_unmatched.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text_unmatched = res_unmatched.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val_unmatched: Value = serde_json::from_str(&text_unmatched).unwrap();
         assert_eq!(val_unmatched["allowed"], false);
     }
@@ -456,7 +477,10 @@ mod tests {
             })),
         };
         let res_tool = handle_mcp_method(&req_tool, &engine);
-        let text_tool = res_tool.result.unwrap()["content"][0]["text"].as_str().unwrap().to_string();
+        let text_tool = res_tool.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
         let val_tool: Value = serde_json::from_str(&text_tool).unwrap();
         assert!(val_tool["error"].as_str().unwrap().contains("Unknown tool"));
     }

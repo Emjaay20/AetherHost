@@ -3,7 +3,7 @@ import DocsClient from './DocsClient'
 
 export const metadata: Metadata = {
   title: 'Docs | AetherHost',
-  description: 'How AetherHost deploys apps, how the CLI works, and how plans are enforced.',
+  description: 'Deploy applications with AetherHost: identity, secret encryption, verified releases, Kubernetes hardening, and recovery operations.',
 }
 
 export default function DocsPage() {

@@ -7,8 +7,9 @@ use tower::ServiceExt;
 
 #[tokio::test]
 async fn test_logd_allowed_cross_tenant_denial_audit_and_metrics() {
-    let state = AppState::new();
+    let mut state = AppState::new();
     let cors = build_cors_layer(None);
+    state.identities = aether_authz::IdentityRegistry::from_json(r#"{"credentials": [{"token": "01234567890123456789012345678901", "subject_id": "service-account-1", "tenant_id": "tenant-alpha", "role": "developer", "expires_at": 4102444800}], "resources": {"app-alpha-service": "tenant-alpha", "app-beta-secrets": "tenant-beta"}}"#).unwrap();
     let app = build_app(state.clone(), cors);
 
     // 1. Test ALLOWED ingest: matching tenant
@@ -23,6 +24,7 @@ async fn test_logd_allowed_cross_tenant_denial_audit_and_metrics() {
         .method("POST")
         .uri("/ingest")
         .header("content-type", "application/json")
+        .header("authorization", "Bearer 01234567890123456789012345678901")
         .header("x-user-id", "service-account-1")
         .header("x-tenant-id", "tenant-alpha")
         .header("x-role", "developer")
@@ -49,9 +51,10 @@ async fn test_logd_allowed_cross_tenant_denial_audit_and_metrics() {
         .method("POST")
         .uri("/ingest")
         .header("content-type", "application/json")
+        .header("authorization", "Bearer 01234567890123456789012345678901")
         .header("x-user-id", "rogue-agent")
         .header("x-tenant-id", "tenant-alpha")
-        .header("x-role", "developer")
+        .header("x-role", "admin")
         .header("x-app-tenant-id", "tenant-beta") // Trying to inject into tenant-beta!
         .body(Body::from(
             serde_json::to_vec(&cross_tenant_payload).unwrap(),
@@ -85,7 +88,7 @@ async fn test_logd_allowed_cross_tenant_denial_audit_and_metrics() {
 
     let denied_record = records
         .iter()
-        .find(|r| r.subject_id == "rogue-agent")
+        .find(|r| !r.decision.is_allowed())
         .expect("Denied audit record should exist");
     assert_eq!(denied_record.action.as_str(), "ingest");
     assert!(!denied_record.decision.is_allowed());
@@ -94,6 +97,7 @@ async fn test_logd_allowed_cross_tenant_denial_audit_and_metrics() {
     let metrics_req = Request::builder()
         .method("GET")
         .uri("/metrics")
+        .header("authorization", "Bearer 01234567890123456789012345678901")
         .body(Body::empty())
         .unwrap();
 

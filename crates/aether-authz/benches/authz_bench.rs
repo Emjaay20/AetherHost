@@ -1,6 +1,5 @@
 use aether_authz::{
-    Action, AuthzEngine, Effect, EvaluationCache, EvaluationContext, Policy, Resource,
-    Subject,
+    Action, AuthzEngine, Effect, EvaluationCache, EvaluationContext, Policy, Resource, Subject,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::time::Duration;
@@ -63,7 +62,8 @@ fn bench_policy_evaluations(c: &mut Criterion) {
     group.bench_function("uncached_evaluation", |b| {
         b.iter(|| {
             counter += 1;
-            let sub = Subject::new(format!("usr_{}", counter), "tenant-prime").with_role("developer");
+            let sub =
+                Subject::new(format!("usr_{}", counter), "tenant-prime").with_role("developer");
             let res = Resource::new("application", format!("app_{}", counter), "tenant-prime");
             let uncached_ctx = EvaluationContext::new(sub, res, Action::Read);
             let decision = uncached_engine.evaluate(black_box(&uncached_ctx));
@@ -84,10 +84,13 @@ fn bench_cache_invalidation(c: &mut Criterion) {
             let sub = Subject::new(format!("sub_{}_{}", t, r), &tenant_id);
             let res = Resource::new("application", format!("res_{}_{}", t, r), &tenant_id);
             let ctx = EvaluationContext::new(sub, res, Action::Read);
-            cache.insert(&ctx, aether_authz::Decision::Allow {
-                matched_policy_id: Some("bench".to_string()),
-                reason: "benchmark".to_string(),
-            });
+            cache.insert(
+                &ctx,
+                aether_authz::Decision::Allow {
+                    matched_policy_id: Some("bench".to_string()),
+                    reason: "benchmark".to_string(),
+                },
+            );
         }
     }
 

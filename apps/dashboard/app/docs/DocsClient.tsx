@@ -39,20 +39,26 @@ const NAV: NavGroup[] = [
     ],
   },
   {
-    label: 'Security & Zero-Trust',
+    label: 'Security & operations',
     icon: ShieldCheck,
     items: [
-      { id: 'secret-vault', label: 'Envelope Encryption (AES-GCM)', badge: 'SOC 2' },
+      { id: 'security-posture', label: 'Security control status', badge: 'Updated' },
+      { id: 'secure-access', label: 'Identity & tenant boundaries' },
+      { id: 'secret-vault', label: 'Secret encryption & rotation' },
       { id: 'container-security', label: 'Immutable Container Profiles' },
-      { id: 'backup-dr', label: 'Restic Backup & 14s Restore Drill', badge: 'Verified' },
-      { id: 'supply-chain', label: 'CI Scans & STRIDE Threat Model' },
+      { id: 'backup-dr', label: 'Backups & database recovery' },
+      { id: 'supply-chain', label: 'Verified releases & CI guardrails' },
+      { id: 'data-governance', label: 'Data governance & retention' },
+      { id: 'fleet-security', label: 'Fleet vulnerability management' },
+      { id: 'incident-response', label: 'Incident response & evidence' },
+      { id: 'aws-security', label: 'AWS security environment' },
     ],
   },
   {
     label: 'Rust Core Platform',
     icon: Cpu,
     items: [
-      { id: 'platform-arch', label: 'Subsystem Architecture', badge: '189ns' },
+      { id: 'platform-arch', label: 'Subsystem Architecture' },
       { id: 'authz-engine', label: 'In-Memory RBAC/ABAC Engine' },
       { id: 'telemetry-metrics', label: 'W3C Tracing & RED Metrics' },
       { id: 'actix-integration', label: 'Actix-Web Middleware & Extractor' },
@@ -320,7 +326,7 @@ export default function DocsClient() {
               What is AetherHost?
             </h1>
             <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              AetherHost is a developer platform and enterprise workload orchestrator built for high reliability, strict multi-tenant isolation, and sub-microsecond internal security. It enables engineering teams to deploy microservices, APIs, and background workers while enforcing strict quotas, AES-256-GCM secret envelope encryption, and in-memory authorization across every single HTTP boundary.
+              AetherHost is a multi-tenant developer platform for deploying applications, APIs, and background workers. Its security architecture combines authenticated service access, tenant authorization, application secret encryption, hardened containers, and verified image releases. This guide distinguishes implemented controls from deployment evidence still to be collected.
             </p>
 
             {/* Platform Highlights Grid */}
@@ -328,19 +334,19 @@ export default function DocsClient() {
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3.5">
                 <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
                   <ShieldCheck className="h-4 w-4 text-emerald-400" />
-                  Zero-Trust Security
+                  Layered Security
                 </div>
                 <p className="mt-1 text-xs text-zinc-400 leading-5">
-                  Envelope encrypted secrets at rest, non-root immutable containers, and Docker socket proxy isolation.
+                  Application-bound AES-GCM encryption, container hardening, and scoped Docker discovery access.
                 </p>
               </div>
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3.5">
                 <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
                   <Cpu className="h-4 w-4 text-cyan-400" />
-                  189ns Rust Engine
+                  Rust Authorization
                 </div>
                 <p className="mt-1 text-xs text-zinc-400 leading-5">
-                  Sub-microsecond in-memory RBAC/ABAC authorization and W3C distributed tracing with RED metrics.
+                  In-memory RBAC/ABAC policies, server-owned service identities, W3C tracing, and RED metrics.
                 </p>
               </div>
               <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3.5">
@@ -431,112 +437,89 @@ export default function DocsClient() {
               </table>
             </div>
 
-            {/* 3. SECURITY & ZERO-TRUST */}
-            <div className="mt-16 rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-6">
-              <div className="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
-                <ShieldCheck className="h-5 w-5" />
-                Security & Zero-Trust Architecture
+            {/* 3. SECURITY CONTROLS */}
+            <div id="security-posture" className="mt-16 scroll-mt-24 rounded-xl border border-emerald-500/20 bg-emerald-950/10 p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                <ShieldCheck className="h-5 w-5" /> Security built into the deployment path
               </div>
-              <p className="mt-2 text-xs sm:text-sm text-zinc-300 leading-6">
-                All production systems operate under an explicit zero-trust security model. Secrets are never stored in plaintext, containers run immutably without root capabilities, and backup restores are continuously validated.
+              <p className="mt-3 text-sm leading-6 text-zinc-300">
+                Controls below are implemented in the repository. Production activation requires reviewed configuration, successful CI, and recorded deployment evidence. A control mapping is an internal assessment, not SOC 2 certification.
               </p>
-            </div>
-
-            <h2 id="secret-vault" className="mt-10 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
-              Envelope Encryption: Secret Vault (AES-256-GCM)
-            </h2>
-            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Customer database credentials, API tokens, and payment keys are sealed using our <code className="text-zinc-100 font-mono">SecretVaultService</code> before touching PostgreSQL. Raw secrets never exist unencrypted on disk.
-            </p>
-            <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950 p-4 font-mono text-xs text-zinc-300">
-              <div className="text-zinc-500">// Serialized Encrypted Envelope Structure</div>
-              <pre className="mt-2 text-emerald-300">{`{
-  "__encrypted": true,
-  "version": 1,
-  "iv": "a1b2c3...<96_bit_unique_iv>",
-  "authTag": "d4e5f6...<128_bit_gcm_tag>",
-  "ciphertext": "8a9b0c...<aes_256_gcm_ciphertext>"
-}`}</pre>
-            </div>
-            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-zinc-300 leading-6">
-              <li><strong>Unique Initialization Vectors (IV)</strong>: Every encryption call generates a cryptographically random 12-byte IV preventing identical ciphertexts.</li>
-              <li><strong>Tamper Detection</strong>: Any modification of the ciphertext or tag causes instant decryption rejection.</li>
-              <li><strong>Key Derivation & Rotation</strong>: Primary master keys derive operational keys via <code className="font-mono text-xs text-zinc-200">scrypt</code> with versioned key identifiers.</li>
-            </ul>
-
-            <h2 id="container-security" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
-              Immutable Containers & Docker Socket Proxy
-            </h2>
-            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Workload containers on the host execute under hardened, immutable runtime profiles:
-            </p>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[32rem] text-left text-xs sm:text-sm">
-                <thead className="text-zinc-500 border-b border-zinc-800">
-                  <tr>
-                    <th className="py-2 pr-4 font-medium">Control</th>
-                    <th className="py-2 pr-4 font-medium">Implementation</th>
-                    <th className="py-2 font-medium">Security Impact</th>
-                  </tr>
-                </thead>
-                <tbody className="text-zinc-300">
-                  <tr className="border-b border-zinc-800/60 font-mono text-xs">
-                    <td className="py-2.5 pr-4 text-white">Root Filesystem</td>
-                    <td className="py-2.5 pr-4 text-emerald-400">read_only: true</td>
-                    <td className="py-2.5 font-sans text-zinc-400">Prevents malware persistence and unauthorized binary execution.</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60 font-mono text-xs">
-                    <td className="py-2.5 pr-4 text-white">Capabilities</td>
-                    <td className="py-2.5 pr-4 text-emerald-400">cap_drop: [ALL]</td>
-                    <td className="py-2.5 font-sans text-zinc-400">Revokes all Linux kernel capabilities (raw sockets, ptrace, root bypass).</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60 font-mono text-xs">
-                    <td className="py-2.5 pr-4 text-white">Privilege Escalation</td>
-                    <td className="py-2.5 pr-4 text-emerald-400">no-new-privileges: true</td>
-                    <td className="py-2.5 font-sans text-zinc-400">Disallows SUID bit exploitation within guest containers.</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60 font-mono text-xs">
-                    <td className="py-2.5 pr-4 text-white">Daemon Isolation</td>
-                    <td className="py-2.5 pr-4 text-emerald-400">docker-socket-proxy</td>
-                    <td className="py-2.5 font-sans text-zinc-400">Blocks API from mounting raw host volumes or modifying host networking.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <h2 id="backup-dr" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
-              Restic Deduplicated Backups & 14-Second Restore Drills
-            </h2>
-            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Legacy tarball snapshots caused multi-hour backups and 4-hour timeouts. The platform was overhauled to use content-defined chunking (CDC) deduplication and automated restore verification:
-            </p>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                <p className="text-xs font-semibold text-emerald-400">Uncompressed CDC Pipeline</p>
-                <p className="mt-1 text-xs text-zinc-300 leading-5">
-                  Pre-syncs uncompressed PostgreSQL dumps, cutting snapshot runtime from <strong>4 hours to 5m 55s</strong> while achieving a 4.1x deduplication ratio.
-                </p>
-              </div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
-                <p className="text-xs font-semibold text-emerald-400">14-Second Automated Restore Drill</p>
-                <p className="mt-1 text-xs text-zinc-300 leading-5">
-                  Nightly systemd timers restore the latest backup into an isolated scratch container, running schema parity assertions in <strong>14.2 seconds</strong> with zero production downtime.
-                </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                {[['Prevent', 'Verified identities, tenant policies, encrypted secrets'], ['Detect', 'Secret scans, image scans, authorization audit events'], ['Recover', 'Isolated database restores and incident runbooks']].map(([title, description]) => (
+                  <div key={title} className="rounded-lg border border-emerald-500/15 bg-zinc-950/50 p-4">
+                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <p className="mt-2 text-xs leading-5 text-zinc-400">{description}</p>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <h2 id="supply-chain" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
-              Automated Supply Chain Security & Threat Modeling
-            </h2>
+            <h2 id="secure-access" className="mt-10 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Identity before authorization</h2>
             <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Every pull request passes through an automated security triage pipeline before merge:
+              Private Rust services authenticate expiring bearer credentials against a server-owned identity registry. The registry supplies the actor, role, tenant, and resource ownership. Client-supplied identity headers cannot grant access. Missing credentials are rejected, unknown resources fail closed, and cross-tenant access requires an explicit platform policy.
             </p>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-300 leading-6">
-              <li><strong>Gitleaks (Zero Committed Secrets)</strong>: Full git history scanning for leaked tokens, Stripe credentials, and private keys.</li>
-              <li><strong>Trivy Container & Dependency Audit</strong>: Rejects pull requests introducing HIGH or CRITICAL CVE vulnerabilities.</li>
-              <li><strong>Checkov Static IaC Analysis</strong>: Validates Terraform configurations against CIS security benchmarks.</li>
-              <li><strong>cargo-deny Supply Chain Policy</strong>: Audits Rust crates for unmaintained dependencies, unsound I/O safety issues, and license compliance (MIT, Apache-2.0, MPL-2.0).</li>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              This service adapter is separate from public tenant application traffic and Clerk-based console sign-in. Service tokens must stay on trusted servers; do not embed them in browser clients. The router removes service authorization and identity headers before forwarding requests.
+            </p>
+
+            <h2 id="secret-vault" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Application-bound encryption & key rotation</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
+              Tenant environment variables are encrypted using AES-256-GCM, a random 12-byte IV, and a 16-byte authentication tag. Version 2 payloads authenticate the key ID and application context as additional data. Moving ciphertext to another application fails authentication.
+            </p>
+            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-300">
+              <li><strong>Dedicated keys:</strong> Production startup rejects missing vault configuration. Agent credentials are not used for new encryption.</li>
+              <li><strong>Rotation:</strong> A named keyring reads older key IDs while new writes use the active key. A dry-run migration validates records before explicit application.</li>
+              <li><strong>Migration:</strong> Legacy plaintext and version 1 records remain readable for staged migration. Their presence must be assessed before claiming complete encrypted coverage.</li>
+              <li><strong>Scope:</strong> This is application encryption. KMS integration and separate data-key wrapping are not implied.</li>
             </ul>
+            <CodeBlock id="vault-migration" language="bash" text={`# Build maintenance tools locally; production images already include them.
+pnpm --filter @aetherhost/api security:build
+# Configure the protected keyring first; no secret values are printed.
+pnpm --filter @aetherhost/api security:migrate-secrets
+# After reviewing the dry-run and protecting a backup:
+pnpm --filter @aetherhost/api security:migrate-secrets --apply`} copied={copied} onCopy={copy} />
+
+            <h2 id="container-security" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Container & Kubernetes boundaries</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
+              Control-plane service profiles use read-only filesystems, capability restrictions, and no-new-privileges where supported. Traefik discovery uses a read-only Docker API proxy. The provisioning proxy retains lifecycle permissions and is a separate privileged trust boundary.
+            </p>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              The Helm chart uses non-root identities, RuntimeDefault seccomp, disabled service-account token mounting, and immutable image digests by default. Network policies permit selected ingress namespaces, DNS, and the configured backend. Enforcement requires a network-policy-capable CNI. CI also checks that restricted pod admission rejects a privileged workload.
+            </p>
+
+            <h2 id="backup-dr" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Backups that are restored and queried</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
+              Restic backs up uncompressed staging data off-host. The recovery drill samples repository data, extracts the database dump, restores it into a disposable PostgreSQL container with no network, and checks required tables and tenant relationships. It emits the measured drill duration and removes the sandbox on exit.
+            </p>
+            <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-950/10 p-4 text-sm leading-6 text-zinc-300">
+              Database recovery time is not full platform RTO. A complete recovery measurement must also include application startup, authenticated workflows, tenant workloads, and routing. Historical extraction timings do not establish that result.
+            </div>
+
+            <h2 id="supply-chain" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">A verified release, from commit to digest</h2>
+            <ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-6 text-zinc-300">
+              <li>Required language tests and security checks run before publication. Third-party Actions use immutable commit references; Checkov failures block the pipeline.</li>
+              <li>CI builds images for the approved revision, scans them, generates SBOM/provenance data, and signs passing images using GitHub OIDC and Cosign.</li>
+              <li>The deployment entry point resolves each image to a digest and verifies the expected signer, issuer, and source revision.</li>
+              <li>Production pulls the verified API, dashboard, and agent digests. Failed readiness checks fail the release.</li>
+            </ol>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">Branch protections, SSH restrictions, protected deployment environments, registry access, and public dashboard build configuration must be activated and verified in their respective systems.</p>
+
+            <h2 id="data-governance" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Data governance with explicit lifecycle rules</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">The data inventory classifies deployment secrets, credentials, billing metadata, device identifiers, and logs. Deployment output is redacted before persistence. Log retention uses an explicitly configured age, previews eligible records, and deletes only deployment logs when applied. Audit and billing records are excluded from that cleanup.</p>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">Authorization decisions emit structured audit events as well as a bounded diagnostic buffer. Durable collection, access restrictions, retention, and tamper resistance require an external logging destination and operational verification.</p>
+
+            <h2 id="fleet-security" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Findings with owners and deadlines</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">The fleet scanner inspects deployed image digests and writes machine-readable vulnerability reports. Temporary suppressions require an owner, rationale, tracking reference, and expiry. CI rejects unregistered or expired exceptions. Scheduled assessments reveal newly disclosed vulnerabilities after deployment.</p>
+            <CodeBlock id="fleet-check" language="bash" text={`python3 scripts/security/check-policy.py
+# On the production host with Trivy and Docker access:
+bash scripts/security/fleet-scan.sh /var/lib/aetherhost/security/latest`} copied={copied} onCopy={copy} />
+
+            <h2 id="incident-response" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Detect, contain, remediate, prevent</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">The security incident exercise covers a compromised deployment identity: preserve evidence, revoke access, isolate affected workloads, remediate the entry point, verify recovery, and assign preventive actions. Record timestamps and actual outcomes. A written exercise or unexecuted runbook must not be presented as a completed incident drill.</p>
+
+            <h2 id="aws-security" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">An isolated AWS security environment</h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">The optional Terraform environment defines private versioned S3 storage, KMS rotation, CloudTrail management and object access events, and a GitHub OIDC role restricted to writing an evidence prefix. GuardDuty is optional. Account setup, reviewed plans, protected state, and deployed evidence remain prerequisites; this example is not a claim that production runs on AWS.</p>
 
             {/* 4. RUST CORE PLATFORM */}
             <div className="mt-16 rounded-xl border border-cyan-500/20 bg-cyan-950/10 p-6">
@@ -549,56 +532,13 @@ export default function DocsClient() {
               </p>
             </div>
 
-            <h2 id="platform-arch" className="mt-10 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
-              Empirical Micro-Benchmark Latency Budgets
-            </h2>
-            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Performance claims are backed by rigorous Criterion micro-benchmarks profiled under high concurrency:
-            </p>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[34rem] text-left text-xs sm:text-sm">
-                <thead className="text-zinc-500 border-b border-zinc-800">
-                  <tr>
-                    <th className="py-2.5 pr-4 font-medium">Operation</th>
-                    <th className="py-2.5 pr-4 font-medium">Measured Latency (p50)</th>
-                    <th className="py-2.5 pr-4 font-medium">Throughput (single core)</th>
-                    <th className="py-2.5 font-medium">Budget Margin</th>
-                  </tr>
-                </thead>
-                <tbody className="text-zinc-300 font-mono text-xs">
-                  <tr className="border-b border-zinc-800/60">
-                    <td className="py-2.5 pr-4 font-sans text-white">Cached Policy Evaluation</td>
-                    <td className="py-2.5 pr-4 text-emerald-400 font-bold">189.28 ns</td>
-                    <td className="py-2.5 pr-4 text-zinc-400">~5,280,000 ops/sec</td>
-                    <td className="py-2.5 text-emerald-400">5.3x faster than budget (&lt; 1µs)</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60">
-                    <td className="py-2.5 pr-4 font-sans text-white">Uncached Policy Evaluation</td>
-                    <td className="py-2.5 pr-4 text-cyan-400 font-bold">1.168 µs</td>
-                    <td className="py-2.5 pr-4 text-zinc-400">~856,000 ops/sec</td>
-                    <td className="py-2.5 text-cyan-400">8.5x faster than budget (&lt; 10µs)</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60">
-                    <td className="py-2.5 pr-4 font-sans text-white">In-Flight Gauge Inc / Dec</td>
-                    <td className="py-2.5 pr-4 text-emerald-400 font-bold">3.93 ns</td>
-                    <td className="py-2.5 pr-4 text-zinc-400">~254,000,000 ops/sec</td>
-                    <td className="py-2.5 text-emerald-400">Lock-free atomic ops</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60">
-                    <td className="py-2.5 pr-4 font-sans text-white">Full RED Telemetry Recording</td>
-                    <td className="py-2.5 pr-4 text-zinc-200 font-bold">245.59 ns</td>
-                    <td className="py-2.5 pr-4 text-zinc-400">~4,070,000 ops/sec</td>
-                    <td className="py-2.5 text-emerald-400">4.0x faster than budget</td>
-                  </tr>
-                  <tr className="border-b border-zinc-800/60">
-                    <td className="py-2.5 pr-4 font-sans text-white">4-Thread Concurrent Contention</td>
-                    <td className="py-2.5 pr-4 text-purple-400 font-bold">209.63 ns</td>
-                    <td className="py-2.5 pr-4 text-zinc-400">~4,770,000 ops/sec</td>
-                    <td className="py-2.5 text-purple-400">Zero lock convoying</td>
-                  </tr>
-                </tbody>
-              </table>
+            <h2 id="platform-arch" className="mt-10 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Platform components & responsibilities</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[['aether-authz', 'Policy decisions, service identity validation, and audit events'], ['aether-router', 'Authenticated forwarding, tenant authorization, and traffic metrics'], ['aether-logd', 'Tenant-scoped log ingestion and WebSocket access'], ['aether-telemetry', 'W3C trace context and Prometheus metrics']].map(([name, description]) => (
+                <div key={name} className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"><code className="text-sm text-cyan-300">{name}</code><p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p></div>
+              ))}
             </div>
+            <p className="mt-4 text-sm leading-6 text-zinc-400">Criterion benchmarks are available in the repository. Publish results with the measured commit, hardware, workload, and command; microbenchmarks do not establish production latency or throughput.</p>
 
             <h2 id="authz-engine" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
               In-Memory Authorization Engine (<code className="font-mono text-zinc-300">aether-authz</code>)
@@ -610,7 +550,7 @@ export default function DocsClient() {
               <li><strong>Default-Closed Model</strong>: Any request not explicitly allowed by a matching policy is rejected with 403 Forbidden.</li>
               <li><strong>Role Inheritance</strong>: Roles cascade hierarchically (<code className="font-mono text-zinc-200">admin &rarr; developer &rarr; viewer</code>).</li>
               <li><strong>Tenant Boundary Isolation</strong>: Cross-tenant operations are denied at the boundary unless explicitly permitted by an authorized cross-tenant rule.</li>
-              <li><strong>Audit Recording</strong>: Every decision emits a structured nanosecond-precision audit record attributing decision, policy name, and reason.</li>
+              <li><strong>Audit Recording</strong>: Policy evaluations produce structured records identifying the actor, resource, decision, reason, and evaluation duration.</li>
             </ul>
 
             <h2 id="telemetry-metrics" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
@@ -637,7 +577,7 @@ export default function DocsClient() {
               Actix-Web Middleware & Ergonomic Extractor
             </h2>
             <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Feature teams integrate authentication and authorization in two lines using our <code className="text-zinc-100 font-mono">AuthzMiddleware</code> and <code className="text-zinc-100 font-mono">AuthenticatedSubject</code> extractor:
+              Actix applications register a server-owned IdentityRegistry, then use our <code className="text-zinc-100 font-mono">AuthzMiddleware</code> and <code className="text-zinc-100 font-mono">AuthenticatedSubject</code> extractor:
             </p>
             <CodeBlock
               id="actix-code"
@@ -647,7 +587,7 @@ use aether_authz::{actix::{AuthzMiddleware, AuthenticatedSubject}, AuthzEngine};
 use aether_telemetry::actix::ActixTelemetryMiddleware;
 
 async fn get_pcba_quote(subject: AuthenticatedSubject, path: web::Path<String>) -> impl Responder {
-    // subject.tenant_id and subject.subject_id guaranteed valid and authorized
+    // Identity comes from the server registry, not caller-supplied role headers.
     HttpResponse::Ok().json(serde_json::json!({
         "tenant": subject.tenant_id,
         "quote_id": path.into_inner(),
@@ -757,7 +697,7 @@ pub fn configure_app(cfg: &mut web::ServiceConfig, engine: AuthzEngine) {
               Kubernetes, KinD & Helm Deployment Validation
             </h2>
             <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              The platform maintains a dual-track deployment architecture: production workloads run on hardened VPS infrastructure, while Kubernetes Helm charts and GitOps manifests are continuously tested in automated CI:
+              The platform maintains a dual-track deployment architecture: production workloads run on hardened VPS infrastructure, while Kubernetes Helm charts and GitOps manifests have a separate validation path in CI:
             </p>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-300 leading-6">
               <li><strong>Helm Packaging (<code className="font-mono text-zinc-200">deploy/helm/aether-platform</code>)</strong>: Includes deployments, services, ingress routing, auto-scaling, and Prometheus ServiceMonitors.</li>
@@ -772,7 +712,7 @@ pub fn configure_app(cfg: &mut web::ServiceConfig, engine: AuthzEngine) {
               <section className="rounded-lg border border-zinc-800/80 bg-zinc-900/20 p-4">
                 <p className="font-semibold text-zinc-100">ADR 021: Unified In-Memory Authz and Telemetry in Rust Monolith</p>
                 <p className="mt-1 text-xs text-zinc-400">
-                  Rejected external network PDPs (like remote OPA) to avoid 5-15ms latency hops. Built in-memory <code className="text-zinc-300 font-mono">RwLock</code> cache with atomic metrics, achieving ~189ns evaluation with zero unsafe code.
+                  Rejected external network PDPs (like remote OPA) to avoid 5-15ms latency hops. Built in-memory <code className="text-zinc-300 font-mono">RwLock</code> cache with atomic metrics, with local policy evaluation and explicit tenant boundaries.
                 </p>
               </section>
               <section className="rounded-lg border border-zinc-800/80 bg-zinc-900/20 p-4">
