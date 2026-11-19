@@ -33,14 +33,10 @@ AETHER_AGENT_IMAGE="$(bash deploy/verify-image.sh ghcr.io/emjaay20/aetherhost-ag
 docker compose -p aetherhost -f docker-compose.prod.yml config --quiet
 docker compose -p aetherhost -f docker-compose.prod.yml run --rm --no-deps --entrypoint node api \
   -e 'new (require("/app/apps/api/dist/common/crypto/secret-vault.service.js").SecretVaultService)()'
-# Persist only public immutable image references for later operator compose commands.
-install -d -m 0750 /etc/aetherhost
-release_file="$(mktemp /etc/aetherhost/release.XXXXXX)"
-trap 'rm -f "$release_file"' EXIT
-printf 'AETHER_API_IMAGE=%s\nAETHER_DASHBOARD_IMAGE=%s\nAETHER_AGENT_IMAGE=%s\n' \
-  "$AETHER_API_IMAGE" "$AETHER_DASHBOARD_IMAGE" "$AETHER_AGENT_IMAGE" > "$release_file"
-chmod 0640 "$release_file"
-mv "$release_file" /etc/aetherhost/release.env
+# Exercise the same migration command and generated Prisma client that the API
+# will use at startup before replacing the healthy service.
+docker compose -p aetherhost -f docker-compose.prod.yml run --rm --no-deps --entrypoint sh api \
+  -c 'cd apps/api && ./node_modules/.bin/prisma migrate deploy && node -e "require(\"@prisma/client\")"'
 # Compose reads production secrets from the host .env. New key configuration is mandatory.
 docker compose -p aetherhost -f docker-compose.prod.yml up -d --no-build --remove-orphans api dashboard agent traefik docker-socket-proxy-readonly
 bash deploy/install-operations-timers.sh
@@ -55,6 +51,15 @@ for attempt in {1..30}; do
   sleep 2
 done
 [[ "$healthy" == true ]] || { echo 'Release failed readiness checks' >&2; exit 1; }
+# Persist only public immutable image references after the replacement is
+# healthy. A failed candidate therefore cannot become the operator default.
+install -d -m 0750 /etc/aetherhost
+release_file="$(mktemp /etc/aetherhost/release.XXXXXX)"
+trap 'rm -f "$release_file"' EXIT
+printf 'AETHER_API_IMAGE=%s\nAETHER_DASHBOARD_IMAGE=%s\nAETHER_AGENT_IMAGE=%s\n' \
+  "$AETHER_API_IMAGE" "$AETHER_DASHBOARD_IMAGE" "$AETHER_AGENT_IMAGE" > "$release_file"
+chmod 0640 "$release_file"
+mv "$release_file" /etc/aetherhost/release.env
 # Public metadata only. Fleet scanner consumes these exact deployed digests.
 printf '{"revision":"%s","api":"%s","dashboard":"%s","agent":"%s","verified_at":"%s"}\n' \
  "$revision" "$AETHER_API_IMAGE" "$AETHER_DASHBOARD_IMAGE" "$AETHER_AGENT_IMAGE" "$(date -u +%FT%TZ)" > /etc/aetherhost/release.json

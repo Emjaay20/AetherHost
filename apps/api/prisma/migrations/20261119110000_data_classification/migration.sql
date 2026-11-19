@@ -5,4 +5,7 @@ COMMENT ON COLUMN "ApiKey"."keyHash" IS 'classification=authentication-material;
 COMMENT ON COLUMN "DeploymentLog"."logContent" IS 'classification=tenant-confidential; handling=redact-before-write; retention=operator-configured';
 COMMENT ON COLUMN "PushDevice"."token" IS 'classification=personal-device-identifier; handling=tenant-scoped';
 COMMENT ON COLUMN "AuditLog"."metadata" IS 'classification=confidential-audit; handling=no-secrets; retention=separate-audit-policy';
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "DeploymentLog_createdAt_idx" ON "DeploymentLog" ("createdAt");
+-- Prisma applies this migration in a transaction. PostgreSQL prohibits
+-- CREATE INDEX CONCURRENTLY in a transaction block, so use the regular,
+-- idempotent form during the controlled migration window instead.
+CREATE INDEX IF NOT EXISTS "DeploymentLog_createdAt_idx" ON "DeploymentLog" ("createdAt");
