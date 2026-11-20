@@ -100,8 +100,6 @@ export class ApplicationsController {
       false,
       false,
       false,
-      3000,
-      '/',
     );
   }
 
