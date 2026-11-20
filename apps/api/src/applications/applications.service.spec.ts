@@ -160,6 +160,20 @@ describe('ApplicationsService', () => {
     expect(apps[0]).toHaveProperty('envVars', { DB_PASSWORD: 'hunter2' });
   });
 
+  it.each(['pending', 'provisioning', 'running'])(
+    'gives the agent plaintext env vars for %s apps stored encrypted',
+    async (status) => {
+      const vault = (service as unknown as { secretVault: { encrypt: (d: Record<string, string>, c: string) => unknown } }).secretVault;
+      const stored = vault.encrypt({ DB_PASSWORD: 'hunter2' }, 'application:tenant-a:app-1');
+      prisma.application.findMany.mockResolvedValue([
+        { id: 'app-1', tenantId: 'tenant-a', name: 'one', envVars: stored },
+      ]);
+      const apps = await service.findAll(status, undefined, SYSTEM_TENANT_ID);
+      // An encrypted envelope here would be written into the workload's .env.
+      expect(apps[0]).toHaveProperty('envVars', { DB_PASSWORD: 'hunter2' });
+    },
+  );
+
   it('audits environment reads without storing an environment value in the audit record', async () => {
     prisma.application.findUnique.mockResolvedValue({
       id: 'app-1',

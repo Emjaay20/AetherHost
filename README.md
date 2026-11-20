@@ -4,7 +4,7 @@
 
 **Enterprise Multi-Tenant Cloud Platform, AI Software Architect & Container Orchestrator**
 
-*A production-ready Platform-as-a-Service (PaaS) built with NestJS, Next.js 16, Go, and Rust. Features Lovable-style AI application synthesis, live split-view previewing, zero-downtime rolling container deployments, Traefik Let's Encrypt edge routing, and a native Rust systems toolchain.*
+*A production-ready Platform-as-a-Service (PaaS) built with NestJS, Next.js 16, Go, and Rust. Features Lovable-style AI application synthesis, live split-view previewing, health-checked container deployments, Traefik Let's Encrypt edge routing, and a native Rust systems toolchain.*
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-10.x-ea2849?style=for-the-badge&logo=nestjs)](https://nestjs.com/)
@@ -177,7 +177,7 @@ flowchart LR
 * **Source Code Inspector**: Tabbed code explorer showing syntax-highlighted code for all project files with 1-click clipboard copy.
 * **Auto-Reload on Deploy**: The preview automatically reloads as soon as container hot-reload and health verification complete.
 
-### 2. Zero-Downtime Blue/Green Deployments
+### 2. Health-Checked Deployments
 * **HTTP Readiness Probing**: Solves race-condition `502 Bad Gateway` errors. During package installation (`npm install`, `pip install`, `cargo build`), the Go Agent polls container port 3000 until `200 OK` is returned before Traefik exposes the route.
 * **Automatic Rollback**: If a build fails or times out (60s), the failed container is automatically torn down and the failure reason is recorded.
 
@@ -210,7 +210,7 @@ Built with modern, memory-safe Rust and Staff-level platform engineering standar
 * **Same tenant boundary everywhere**: Mobile authentication is handled by Clerk and every project, domain, log, environment, billing, and API-key request remains tenant-scoped by the control-plane API.
 * **Away-from-desk diagnostics**: Deployment timelines, live logs, domain DNS/HTTPS checks, and AI deployment insights put the most useful operator signals on a small screen.
 * **Store-free preview delivery**: A signed Android APK is available directly from the marketing site while iPhone testing remains in Expo Go.
-* **Operational Recovery**: Encrypted off-host backup scripts, a non-destructive weekly restore drill, and bounded Docker cache maintenance. See [docs/OPERATIONS.md](docs/OPERATIONS.md).
+* **Operational Recovery**: Encrypted off-host backup scripts, a non-destructive daily restore drill, and bounded Docker cache maintenance. See [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ---
 
@@ -347,21 +347,21 @@ AetherHost operates on an audited, defense-in-depth security model designed to i
 
 ```mermaid
 flowchart TD
-    Internet["Untrusted Internet / API Clients"] -->|TLS 1.3 / WAF Rate Limiting| Traefik["Traefik Edge Proxy\n(read_only: true, cap_drop: ALL)"]
+    Internet["Untrusted Internet / API Clients"] -->|TLS via Let's Encrypt| Traefik["Traefik Edge Proxy\n(read_only: true, cap_drop: ALL)"]
     Traefik -->|Internal Bridge| API["NestJS Control Plane\n(Clerk Auth, AuditLogger, LogRedaction)"]
     API -->|AES-256-GCM Envelope Encryption| PG[("PostgreSQL\n(Encrypted envVars at rest)")]
     API -->|HMAC Authenticated IPC| Agent["Go Runtime Supervisor\n(filepath.Clean traversal enforcer)"]
-    Agent -->|tecnativa/docker-socket-proxy\nEXEC=0, BUILD=0, POST=0| DockerEngine["Host Docker Daemon"]
-    DockerEngine -->|Deploy Sandbox| Tenant["Tenant Workloads\n(read_only: true, cap_drop: ALL, tmpfs: /tmp)"]
+    Agent -->|provisioning socket proxy\ninternal network only| DockerEngine["Host Docker Daemon"]
+    DockerEngine -->|Deploy Sandbox| Tenant["Tenant Workloads\n(cap_drop: ALL, no-new-privileges)"]
 ```
 
 ### Core Security Controls & Evidence
 * **Tenant Secret Envelope Encryption:** Customer environment variables and secrets are encrypted at rest with **AES-256-GCM** using unique 12-byte random IVs and 16-byte authentication tags ([SecretVaultService](apps/api/src/common/crypto/secret-vault.service.ts)).
 * **Zero-Trust Docker Socket Proxy:** Direct `/var/run/docker.sock` access is completely eliminated. Workload orchestrators communicate exclusively through a hardened proxy with container execution (`EXEC`) and arbitrary build (`BUILD`) primitives disabled.
-* **Immutable Container Sandboxes:** Production services run with `read_only: true`, `cap_drop: [ALL]`, and non-root execution profiles. Temporary file access is confined to memory-backed `tmpfs`.
-* **Automated Daily Disaster Recovery Drill:** Restic backups utilize Content-Defined Chunking (CDC) for multi-tier deduplication. Daily non-destructive drills ([restore-check.sh](deploy/backup/restore-check.sh)) verify snapshot cryptography and extract database schemas in **14 seconds** without affecting production.
+* **Immutable Platform Containers:** The API, dashboard, agent and Traefik run with `read_only: true`, `cap_drop: [ALL]` (Traefik keeps only `NET_BIND_SERVICE`), `no-new-privileges` and `tmpfs` scratch space. The two Docker socket proxies drop all capabilities but need a writable root for their generated config. Tenant workloads drop all capabilities.
+* **Automated Daily Disaster Recovery Drill:** Restic backups utilize Content-Defined Chunking (CDC) for multi-tier deduplication. Daily non-destructive drills ([restore-check.sh](deploy/backup/restore-check.sh)) verify snapshot cryptography and extract database schemas in under four minutes without affecting production.
 * **Supply Chain Attestation:** Images pushed to GHCR are signed using keyless **Cosign** (Sigstore OIDC) and accompanied by **Syft** SPDX Software Bills of Materials.
-* **Declarative Infrastructure as Code:** Cloudflare DNS, WAF rate-limiting rules, and GitHub branch protection are managed via [Terraform](terraform/) and audited by Checkov.
+* **Infrastructure as Code:** Cloudflare DNS records and GitHub branch protection are defined in [Terraform](terraform/), validated and scanned by Checkov in CI. Importing the live resources and the first apply are pending.
 * **Multi-Node Kubernetes Roadmap:** Documented Architectural Decision Record ([deploy/KUBERNETES.md](deploy/KUBERNETES.md)) and Flux v2 GitOps manifests ([deploy/gitops](deploy/gitops)) with restricted Pod Security Standards.
 
 ### Security Documentation & Showcase

@@ -1,6 +1,6 @@
 variable "cloudflare_api_token" {
   type        = string
-  description = "Cloudflare API token with Zone.DNS and Zone.WAF edit permissions"
+  description = "Cloudflare API token with Zone.DNS edit permission"
   sensitive   = true
 }
 
@@ -37,4 +37,10 @@ variable "github_repository" {
   type        = string
   description = "GitHub repository name"
   default     = "AetherHost"
+}
+
+variable "required_approving_review_count" {
+  type        = number
+  description = "Approvals required before merging to main. 0 while the repository has a single maintainer; raise it when a second reviewer exists."
+  default     = 0
 }

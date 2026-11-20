@@ -1,37 +1,31 @@
-# Ingress DNS Records managed via Cloudflare
+# Ingress DNS records, hosted on Cloudflare.
+#
+# Records are DNS-only (`proxied = false`) on purpose: Traefik terminates TLS on
+# the VPS and obtains certificates with the Let's Encrypt HTTP-01 challenge, so
+# clients connect to the origin directly. These definitions mirror what is
+# live; import the existing records before the first apply (see README.md).
 
-resource "cloudflare_record" "apex" {
-  zone_id = var.cloudflare_zone_id
-  name    = "@"
-  value   = var.server_ip
-  type    = "A"
-  proxied = true
-  comment = "AetherHost primary ingress"
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
-resource "cloudflare_record" "api" {
-  zone_id = var.cloudflare_zone_id
-  name    = "api"
-  value   = var.server_ip
-  type    = "A"
-  proxied = true
-  comment = "AetherHost NestJS Control Plane API"
+locals {
+  ingress_records = {
+    apex          = { name = "@", comment = "AetherHost marketing site and console" }
+    api           = { name = "api", comment = "AetherHost control-plane API" }
+    console       = { name = "console", comment = "AetherHost management console" }
+    wildcard      = { name = "*", comment = "Tenant application subdomains" }
+    wildcard_apps = { name = "*.apps", comment = "Tenant preview subdomains" }
+  }
 }
 
-resource "cloudflare_record" "console" {
-  zone_id = var.cloudflare_zone_id
-  name    = "console"
-  value   = var.server_ip
-  type    = "A"
-  proxied = true
-  comment = "AetherHost Next.js Management Console"
-}
+resource "cloudflare_record" "ingress" {
+  for_each = local.ingress_records
 
-resource "cloudflare_record" "wildcard_apps" {
   zone_id = var.cloudflare_zone_id
-  name    = "*.apps"
+  name    = each.value.name
   value   = var.server_ip
   type    = "A"
-  proxied = true
-  comment = "AetherHost dynamic tenant runtime preview subdomains"
+  proxied = false
+  comment = each.value.comment
 }

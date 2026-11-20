@@ -1,8 +1,8 @@
 [Unit]
-Description=Run AetherHost restore drill every Sunday
+Description=Run AetherHost restore drill every day
 
 [Timer]
-OnCalendar=Sun *-*-* 04:15:00
+OnCalendar=*-*-* 04:15:00
 Persistent=true
 Unit=aetherhost-restore-check.service
 

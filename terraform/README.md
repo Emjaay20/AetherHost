@@ -2,14 +2,26 @@
 
 This directory defines the automated cloud perimeter and supply chain security controls for AetherHost:
 
-- **DNS Management (`dns.tf`)**: Declarative apex, API, console, and preview subdomain routing through Cloudflare CDN/WAF.
-- **Edge Firewall (`firewall.tf`)**: Simple user-agent probe filters at the Cloudflare edge. These can be bypassed by changing the user agent and are not a complete WAF policy.
-- **GitHub Branch Protection (`github.tf`)**: Strict branch protection for `main`, enforcing green CI checks, review approvals, linear history, and administrator enforcement.
+- **DNS (`dns.tf`)**: apex, API, console and wildcard tenant records on Cloudflare, DNS-only (`proxied = false`) to match production, where Traefik terminates TLS.
+- **Network exposure (`firewall.tf`)**: documents the public ingress ports. The boundary is enforced on the host by ufw (`deploy/harden-production.sh`); DNS records are DNS-only, so a Cloudflare edge rule would have no effect.
+- **GitHub Branch Protection (`github.tf`)**: Strict branch protection for `main`, requiring a pull request and green CI checks, enforced for administrators. Approvals default to 0 for a single maintainer.
+
+## Status
+
+Validated and scanned by Checkov in CI, but **not applied yet**: the live DNS
+records and branch protection were created by hand. Import them before the
+first apply so it changes nothing unexpectedly, for example:
+
+```bash
+terraform -chdir=terraform import 'cloudflare_record.ingress["api"]' <zone_id>/<record_id>
+terraform -chdir=terraform import github_branch_protection.main AetherHost:main
+terraform -chdir=terraform plan   # expect no changes
+```
 
 ## Prerequisites
 
 - Terraform >= 1.5.0
-- Cloudflare API token with `Zone.DNS` and `Zone.WAF` permissions
+- Cloudflare API token with `Zone.DNS` edit permission
 - GitHub Personal Access Token (classic with `repo` scope, or fine-grained with Administration permissions)
 
 ## Usage
