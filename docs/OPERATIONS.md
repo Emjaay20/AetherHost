@@ -125,28 +125,32 @@ authority and have no public metrics endpoint.
 
 ---
 
-## CI Pipeline Performance & Optimization Benchmark
+## CI Pipeline Performance & Measured Job Durations
 
-To keep PR turnaround fast while maintaining rigorous engineering quality gates across our polyglot repository (Rust, TypeScript, Go, Terraform, Kubernetes), the CI pipeline (`.github/workflows/ci.yml`) was benchmarked and optimized.
+To track CI execution times across our polyglot repository (Rust, TypeScript, Go, Terraform, Kubernetes), per-job median durations for `.github/workflows/ci.yml` were computed directly from GitHub Actions run telemetry (`gh run list` and `gh run view <id> --json jobs`).
 
-### Baseline vs. Target Pipeline Performance
+### Measured Per-Job Median Durations
 
-Measured across historical GitHub Actions baseline runs (Runs `#43718680336`, `#43718567328`, `#43716554681`, `#43716481729`) with targets for new jobs:
+Durations below are measured medians across three distinct cohorts:
+1. **Pre-`4e7a61b` Baseline (`2026-11-15T12:57:40Z` – `2026-11-15T13:22:36Z`, plus `main` runs through `2026-11-16T08:30:43Z`)**:
+   - The 4 historical baseline runs prior to commit `4e7a61b` (`2026-11-16T08:49:01Z`): `#43716481729`, `#43716554681`, `#43718567328`, `#43718680336` (and the 6 pre-`4e7a61b` `main` push runs on 15–16 Nov: `#43677164777`, `#43699292346`, `#43699543713`, `#43716554681`, `#43718680336`, `#43831806981`). Prior to `4e7a61b`, path filtering, Checkov, KinD validation, `aether-authz`, `aether-telemetry`, `cargo-nextest`, and `cargo-deny` were not yet in the workflow.
+2. **Full Runs on `main` (`gh run list --branch main --workflow ci.yml --limit 15`, `2026-11-16T10:05:02Z` – `2026-11-19T19:06:54Z`)**:
+   - 15 runs: `#44594918177`, `#44589860918`, `#44518138456`, `#44516244813`, `#44399936658`, `#44394253338`, `#44224694009`, `#44222231679`, `#43856640904`, `#43855449758`, `#43854420281`, `#43849514837`, `#43848291509`, `#43847043368`, `#43845593490`.
+3. **Pull Request Runs with Path-Filter Skipping (`gh run list --event pull_request --workflow ci.yml --limit 15`, `2026-11-19T11:50:52Z` – `2026-11-20T03:43:23Z`)**:
+   - 15 runs: `#44669630947`, `#44669564173`, `#44594673971`, `#44593309032`, `#44590495378`, `#44590491186`, `#44590482218`, `#44590481827`, `#44590455673`, `#44589610058`, `#44518463092`, `#44518458856`, `#44518459017`, `#44518450630`, `#44518447501`.
 
-| Workflow Job | Baseline Duration | Optimized Scoped PR | Full CI Run Target | Key Optimizations Applied |
+| Workflow Job | Pre-`4e7a61b` Baseline Median | Full Runs on `main` Median (n=15) | PR Runs Median (Path-Skipped vs. Executed) | Measured Scope & Execution Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **API, Shared Libs & Dashboard** (TypeScript) | ~46s | **~2s** (Fast path-filter pass) | ~32s | `pnpm store` caching, `pnpm install --prefer-offline`, path-filtered fast gate |
-| **Go Runtime Agent** (Go) | ~15s | **~2s** (Fast path-filter pass) | ~12s | Go module cache, path-filtered fast gate |
-| **Rust Crates** (aether-authz, aether-router, etc.) | ~18s | **~2s** (Fast path-filter pass) | ~14s | `cargo-nextest` parallel runner, `Swatinem/rust-cache`, `cargo-deny` audit |
-| **Security & Dependency Checks** (Gitleaks, Trivy) | ~11s | ~11s (Always runs) | ~11s | Trivy fs scanner, Gitleaks secrets audit |
-| **Terraform Security Analysis** (Checkov) | ~12s | **~2s** (Fast path-filter pass) | ~10s | Checkov static analysis, path-filtered fast gate |
-| **Kubernetes KinD & Helm Deployment Validation** | *New job (no baseline)* | **~2s** (Fast path-filter pass) | ~85s (Target full KinD deploy) | KinD cluster validation, `kubeconform` schema audit, endpoint smoke tests |
-| **Total Typical Scoped PR Turnaround** | **~50s - 1m15s** | **~15s - 25s** | **~1m30s** | **~60-70% turnaround reduction**; zero redundant runs via concurrency cancel |
-
-> *Note: Target numbers for newly introduced KinD and nextest jobs will be calibrated with exact timings following the initial GitHub Actions pipeline runs.*
+| **Change Detection & Path Filter** | *No baseline (added in `4e7a61b`)* | **5.0s** (range 4s–11s) | **5.0s** (always runs; range 4s–10s, n=15) | `dorny/paths-filter` checkout and diff evaluation |
+| **API, Shared Libs & Dashboard** (TypeScript) | **42.0s** (4 cited runs; **42.0s** across 6 `main` runs) | **43.0s** (range 34s–50s) | **4.0s** when path-skipped (range 2s–4s, n=5)<br>**51.5s** when executed (n=10 all; **54.0s** across 8 passing) | `pnpm` cache, Prisma client generation, API unit/e2e tests, Dashboard typecheck & tests |
+| **Go Runtime Agent** (Go) | **14.0s** (4 cited runs; **14.0s** across 6 `main` runs) | **16.0s** (range 9s–29s) | **4.0s** when path-skipped (range 2s–7s, n=15) | `go vet` and unit tests with Go module cache |
+| **Rust Crates** (`aether-core`, `aether-cli`, `aether-logd`, `aether-router`, `aether-authz`, `aether-telemetry`) | **22.0s** (4 cited runs; **24.0s** across 6 `main` runs, 4 crates before `4e7a61b`) | **107.0s / 1m 47s** (n=15 all; **107.5s** across 14 passing, range 95s–119s; 107s on `#44594918177`) | **16.0s** when path-skipped (range 13s–25s, n=14; action setup runs before step skip) | Toolchain setup, `Swatinem/rust-cache`, `cargo-nextest` install & run, `cargo-deny`, `clippy -D warnings`, doc tests |
+| **Security and Dependency Checks** | **12.0s** (4 cited runs; **16.0s** across 6 `main` runs) | **23.0s** (range 17s–38s) | **21.0s** (always runs; range 17s–31s, n=15) | Security policy unit tests, Gitleaks secret scan, Trivy filesystem scan |
+| **Terraform Security Analysis (Checkov)** | *No baseline (added in `4e7a61b`)* | **18.0s** (range 15s–226s) | **10.0s** when path-skipped (range 9s–14s, n=15; Checkov action prep runs before step skip) | Terraform `init -backend=false`, `validate`, and Checkov static analysis |
+| **Kubernetes KinD & Helm Deployment Validation** | *No baseline (added in `4e7a61b`)* | **164.0s / 2m 44s** (range 140s–174s; 155s / 2m 35s on `#44594918177`) | **4.0s** when path-skipped (range 2s–7s, n=14) | Helm lint, `kubeconform`, KinD cluster boot, Docker image build & load, admission negative test, endpoint smoke tests |
 
 ### Pipeline Engineering Details
-1. **Concurrency Group Cancellation**: Redundant superseded runs on pull requests are automatically cancelled (`concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true`), preventing runner queue starvation during rapid iterations.
-2. **Reliable Merge Gating with Path Filtering**: Unchanged language checks execute a fast pass-through step rather than omitting the job, ensuring required GitHub branch protection checks always report success without hanging.
-3. **Supply Chain Security Gate**: Integrated `cargo-deny` in CI verifying license compliance (MIT/Apache-2/BSD/ISC), banning untrusted dependencies, and checking RUSTSEC vulnerability advisories.
+1. **Concurrency Group Cancellation**: Redundant superseded runs on pull requests are automatically cancelled (`concurrency: group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}`), preventing runner queue starvation during rapid iterations (for example, PR run `#44669564173` was cancelled in favor of `#44669630947`).
+2. **Reliable Merge Gating with Path Filtering**: Unchanged language checks on pull requests execute a fast pass-through step (`Skip check when unchanged`) rather than omitting the job, ensuring required GitHub branch protection checks always report a status. Jobs that reference composite/container actions (`rust-crates`, `terraform-checkov`) still incur GitHub Actions runner action-preparation time (median **16.0s** and **10.0s** respectively) even when all build steps are skipped.
+3. **Supply Chain Security Gate**: Integrated `cargo-deny` in CI verifying license compliance, banning untrusted dependencies, and checking RUSTSEC vulnerability advisories.
 

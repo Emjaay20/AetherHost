@@ -61,7 +61,7 @@ const NAV: NavGroup[] = [
       { id: 'platform-arch', label: 'Subsystem Architecture' },
       { id: 'authz-engine', label: 'In-Memory RBAC/ABAC Engine' },
       { id: 'telemetry-metrics', label: 'W3C Tracing & RED Metrics' },
-      { id: 'actix-integration', label: 'Actix-Web Middleware & Extractor' },
+      { id: 'actix-integration', label: 'Actix-Web Library Middleware' },
     ],
   },
   {
@@ -79,6 +79,7 @@ const NAV: NavGroup[] = [
     items: [
       { id: 'edge-proxy', label: 'Edge Proxy & Realtime Log Daemon' },
       { id: 'kubernetes-kind', label: 'Kubernetes KinD & Helm CI' },
+      { id: 'ci-timings', label: 'Measured CI Pipeline Timings' },
       { id: 'decisions', label: 'Architecture Decisions (ADRs)' },
       { id: 'billing', label: 'Quotas & Billing Mechanics' },
     ],
@@ -550,6 +551,8 @@ bash scripts/security/fleet-scan.sh /var/lib/aetherhost/security/latest`} copied
               <li><strong>Default-Closed Model</strong>: Any request not explicitly allowed by a matching policy is rejected with 403 Forbidden.</li>
               <li><strong>Role Inheritance</strong>: Roles cascade hierarchically (<code className="font-mono text-zinc-200">admin &rarr; developer &rarr; viewer</code>).</li>
               <li><strong>Tenant Boundary Isolation</strong>: Cross-tenant operations are denied at the boundary unless explicitly permitted by an authorized cross-tenant rule.</li>
+              <li><strong>Bounded TTL Evaluation Cache (<code className="font-mono text-zinc-200">EvaluationCache</code>)</strong>: Stores cached decisions in an <code className="font-mono text-zinc-200">Arc&lt;RwLock&lt;HashMap&lt;CacheKey, CachedEntry&gt;&gt;&gt;</code> (<code className="font-mono text-zinc-200">crates/aether-authz/src/cache.rs</code>) with per-entry TTL expiration and a <code className="font-mono text-zinc-200">max_capacity</code> bound (default <code className="font-mono text-zinc-200">10,000</code>). It is not LRU: when <code className="font-mono text-zinc-200">map.len() &gt;= max_capacity</code> on insert, it calls <code className="font-mono text-zinc-200">map.clear()</code> to evict all cached entries before inserting the new entry.</li>
+              <li><strong>Criterion Benchmarks</strong>: Measured at <code className="font-mono text-zinc-200">189.28 ns</code> median for cached evaluation (<code className="font-mono text-zinc-200">crates/aether-authz/benches/authz_bench.rs :: authz_policy_evaluation/cached_evaluation</code>) and <code className="font-mono text-zinc-200">1.168 µs</code> median for uncached evaluation (<code className="font-mono text-zinc-200">authz_policy_evaluation/uncached_evaluation</code>).</li>
               <li><strong>Audit Recording</strong>: Policy evaluations produce structured records identifying the actor, resource, decision, reason, and evaluation duration.</li>
             </ul>
 
@@ -565,7 +568,7 @@ bash scripts/security/fleet-scan.sh /var/lib/aetherhost/security/latest`} copied
               <div className="mt-1 text-zinc-500">            └─ ver └─ 128-bit trace id ───────────┘ └─ 64-bit parent ┘ └─ flags</div>
             </div>
             <p className="mt-4 text-sm text-zinc-300">
-              Exposes standard Prometheus RED metrics at <code className="text-zinc-100 font-mono">/_aether/metrics</code>:
+              Exposes standard Prometheus RED metrics at <code className="text-zinc-100 font-mono">/_aether/metrics</code> (single-thread metric recording measured at <code className="text-zinc-100 font-mono">245.59 ns</code> median in <code className="text-zinc-100 font-mono">crates/aether-telemetry/benches/telemetry_bench.rs :: telemetry_metrics_single_thread/record_request_single_thread</code>):
             </p>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-zinc-400 font-mono">
               <li>http_requests_total{'{'}service, method, status{'}'}</li>
@@ -574,10 +577,10 @@ bash scripts/security/fleet-scan.sh /var/lib/aetherhost/security/latest`} copied
             </ul>
 
             <h2 id="actix-integration" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
-              Actix-Web Middleware & Ergonomic Extractor
+              Actix-Web Library Middleware & Extractor
             </h2>
             <p className="mt-4 text-[15px] leading-7 text-zinc-300">
-              Actix applications register a server-owned IdentityRegistry, then use our <code className="text-zinc-100 font-mono">AuthzMiddleware</code> and <code className="text-zinc-100 font-mono">AuthenticatedSubject</code> extractor:
+              The control-plane API (<code className="text-zinc-100 font-mono">apps/api</code>) is a NestJS service and the running Rust daemons (<code className="text-zinc-100 font-mono">aether-router</code>, <code className="text-zinc-100 font-mono">aether-logd</code>) use Axum; no production Actix-Web service runs in this repository. To support future Actix-Web services, <code className="text-zinc-100 font-mono">aether-authz</code> and <code className="text-zinc-100 font-mono">aether-telemetry</code> provide reusable library middleware (<code className="text-zinc-100 font-mono">AuthzMiddleware</code>, <code className="text-zinc-100 font-mono">ActixTelemetryMiddleware</code>) and the <code className="text-zinc-100 font-mono">AuthenticatedSubject</code> extractor, validated in integration tests (<code className="text-zinc-100 font-mono">crates/aether-authz/tests/actix_integration.rs</code>) and the standalone proving-ground example (<code className="text-zinc-100 font-mono">crates/aether-authz/examples/actix_monolith.rs</code>):
             </p>
             <CodeBlock
               id="actix-code"
@@ -701,18 +704,81 @@ pub fn configure_app(cfg: &mut web::ServiceConfig, engine: AuthzEngine) {
             </p>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-zinc-300 leading-6">
               <li><strong>Helm Packaging (<code className="font-mono text-zinc-200">deploy/helm/aether-platform</code>)</strong>: Includes deployments, services, ingress routing, auto-scaling, and Prometheus ServiceMonitors.</li>
-              <li><strong>Kubeconform Validation</strong>: All rendered manifests are strictly validated against Kubernetes 1.31 schemas.</li>
-              <li><strong>KinD In-Cluster Testing</strong>: Every CI run provisions an ephemeral KinD cluster, builds the platform image, performs a Helm rollout, and smoke-tests live health and Prometheus metrics endpoints.</li>
+              <li><strong>Kubeconform Validation</strong>: All rendered manifests are validated with <code className="font-mono text-zinc-200">kubeconform -strict</code> against Kubernetes 1.31 schemas.</li>
+              <li><strong>KinD In-Cluster Testing</strong>: Every CI run on <code className="font-mono text-zinc-200">main</code> (and Kubernetes-touching PRs) provisions an ephemeral KinD cluster, builds the platform image, performs a Helm rollout, and smoke-tests live health and Prometheus metrics endpoints.</li>
             </ul>
+
+            <h2 id="ci-timings" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
+              Measured CI Pipeline Timings (<code className="font-mono text-zinc-300">ci.yml</code>)
+            </h2>
+            <p className="mt-4 text-[15px] leading-7 text-zinc-300">
+              Per-job median durations measured directly from GitHub Actions runs across pre-<code className="font-mono text-zinc-200">4e7a61b</code> baseline runs (<code className="font-mono text-zinc-200">#43716481729</code>, <code className="font-mono text-zinc-200">#43716554681</code>, <code className="font-mono text-zinc-200">#43718567328</code>, <code className="font-mono text-zinc-200">#43718680336</code> on <code className="font-mono text-zinc-200">2026-11-15</code>), full runs on <code className="font-mono text-zinc-200">main</code> (<code className="font-mono text-zinc-200">n=15</code>, <code className="font-mono text-zinc-200">2026-11-16</code>–<code className="font-mono text-zinc-200">2026-11-19</code>, including <code className="font-mono text-zinc-200">#44594918177</code>), and path-filtered PR runs (<code className="font-mono text-zinc-200">n=15</code>, <code className="font-mono text-zinc-200">2026-11-19</code>–<code className="font-mono text-zinc-200">2026-11-20</code>):
+            </p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[38rem] text-left text-xs sm:text-sm">
+                <thead className="text-zinc-500 border-b border-zinc-800">
+                  <tr>
+                    <th className="py-2.5 pr-4 font-medium">Job</th>
+                    <th className="py-2.5 pr-4 font-medium">Pre-4e7a61b Baseline</th>
+                    <th className="py-2.5 pr-4 font-medium">Full Runs on main (n=15)</th>
+                    <th className="py-2.5 font-medium">PR Runs w/ Path Filter (n=15)</th>
+                  </tr>
+                </thead>
+                <tbody className="text-zinc-300 font-mono text-xs">
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">Change Detection &amp; Path Filter</td>
+                    <td className="py-2.5 pr-4 text-zinc-500">None (added in 4e7a61b)</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">5.0s (4s–11s)</td>
+                    <td className="py-2.5 text-cyan-400">5.0s (always runs)</td>
+                  </tr>
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">API, Shared Libs &amp; Dashboard</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">42.0s</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">43.0s (34s–50s)</td>
+                    <td className="py-2.5 text-cyan-400">4.0s skipped / 51.5s executed</td>
+                  </tr>
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">Go Runtime Agent</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">14.0s</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">16.0s (9s–29s)</td>
+                    <td className="py-2.5 text-cyan-400">4.0s skipped</td>
+                  </tr>
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">Rust Crates (6 workspace crates)</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">22.0s (4 crates)</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">107.0s / 1m 47s (95s–119s)</td>
+                    <td className="py-2.5 text-cyan-400">16.0s skipped (action setup)</td>
+                  </tr>
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">Security &amp; Dependency Checks</td>
+                    <td className="py-2.5 pr-4 text-zinc-400">12.0s</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">23.0s (17s–38s)</td>
+                    <td className="py-2.5 text-cyan-400">21.0s (always runs)</td>
+                  </tr>
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">Terraform Security (Checkov)</td>
+                    <td className="py-2.5 pr-4 text-zinc-500">None (added in 4e7a61b)</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">18.0s (15s–226s)</td>
+                    <td className="py-2.5 text-cyan-400">10.0s skipped (image pull)</td>
+                  </tr>
+                  <tr className="border-b border-zinc-800/60">
+                    <td className="py-2.5 pr-4 font-sans text-white">Kubernetes KinD &amp; Helm Validation</td>
+                    <td className="py-2.5 pr-4 text-zinc-500">None (added in 4e7a61b)</td>
+                    <td className="py-2.5 pr-4 text-emerald-400">164.0s / 2m 44s (140s–174s)</td>
+                    <td className="py-2.5 text-cyan-400">4.0s skipped</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
             <h2 id="decisions" className="mt-12 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">
               Key Architectural Decisions (ADRs)
             </h2>
             <div className="mt-4 max-w-3xl space-y-5 text-sm leading-6 text-zinc-300">
               <section className="rounded-lg border border-zinc-800/80 bg-zinc-900/20 p-4">
-                <p className="font-semibold text-zinc-100">ADR 021: Unified In-Memory Authz and Telemetry in Rust Monolith</p>
+                <p className="font-semibold text-zinc-100">ADR 021: Unified In-Memory Authz &amp; Telemetry Library API</p>
                 <p className="mt-1 text-xs text-zinc-400">
-                  Rejected external network PDPs (like remote OPA) to avoid 5-15ms latency hops. Built in-memory <code className="text-zinc-300 font-mono">RwLock</code> cache with atomic metrics, with local policy evaluation and explicit tenant boundaries.
+                  Rejected external network PDPs (like remote OPA) to avoid 5–15ms latency hops. Built an in-memory <code className="text-zinc-300 font-mono">RwLock&lt;HashMap&gt;</code> evaluation cache with per-entry TTL and simple capacity-bound full-map eviction (<code className="text-zinc-300 font-mono">map.clear()</code> at <code className="text-zinc-300 font-mono">max_capacity</code>; not LRU), reusable across the Axum daemons and the Actix-Web library middleware/extractor API.
                 </p>
               </section>
               <section className="rounded-lg border border-zinc-800/80 bg-zinc-900/20 p-4">

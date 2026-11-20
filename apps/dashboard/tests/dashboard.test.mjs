@@ -130,3 +130,17 @@ test('docs page enforces responsive mobile drawer with backdrop and offscreen tr
   assert.match(docsClient, /event\.key === 'Escape'/);
   assert.match(docsClient, /document\.body\.style\.overflow = 'hidden'/);
 });
+
+test('docs page presents truthful Actix library middleware, non-LRU cache eviction, Criterion benches, and measured CI timings', () => {
+  const docsClient = fs.readFileSync(
+    path.join(dashboardRoot, 'app', 'docs', 'DocsClient.tsx'),
+    'utf8',
+  );
+  assert.match(docsClient, /no production Actix-Web service runs in this repository/);
+  assert.match(docsClient, /examples\/actix_monolith\.rs/);
+  assert.match(docsClient, /It is not LRU/);
+  assert.match(docsClient, /map\.clear\(\)/);
+  assert.match(docsClient, /crates\/aether-authz\/benches\/authz_bench\.rs/);
+  assert.match(docsClient, /Measured CI Pipeline Timings/);
+  assert.match(docsClient, /#44594918177/);
+});
