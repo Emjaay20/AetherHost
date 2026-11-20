@@ -27,7 +27,7 @@ jobs:
       kubernetes: ${{ steps.filter.outputs.kubernetes }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Evaluate Changed Paths
         uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -64,7 +64,7 @@ jobs:
 
       - name: Checkout repository
         if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Enable Corepack & pnpm
         if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
@@ -119,7 +119,7 @@ jobs:
 
       - name: Checkout repository
         if: github.event_name == 'push' || needs.changes.outputs.go == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Go
         if: github.event_name == 'push' || needs.changes.outputs.go == 'true'
@@ -146,7 +146,7 @@ jobs:
 
       - name: Checkout repository
         if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Rust toolchain
         if: github.event_name == 'push' || needs.changes.outputs.rust == 'true'
@@ -193,7 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
 
@@ -229,7 +229,7 @@ jobs:
 
       - name: Checkout repository
         if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Terraform
         if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
@@ -269,7 +269,7 @@ jobs:
 
       - name: Checkout repository
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Helm
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
