@@ -37,11 +37,15 @@ syntax. See <https://spacefast.com/docs/api/>.
    hashed state, encrypted token storage, refresh-token rotation, scoped team
    selection, disconnect, and audit records.
 4. Publishing requires an explicit static export and idempotency key. The
-   adapter accepts only a stored `index.html` at the project root, `public/`, or
-   `dist/`, plus safe static assets (HTML, CSS, browser JavaScript, images,
-   fonts, and JSON). It packages at most 200 files / 10 MiB as a ZIP. It never
-   guesses a monorepo root, reads the tenant filesystem, publishes `.env`, or
-   publishes a running backend container.
+   adapter accepts only an `index.html` in `public/` or `dist/` and includes
+   only safe browser assets below that one selected directory. It strips the
+   selected directory prefix so `index.html` is at the ZIP root. It excludes
+   source maps, `.env*`, `*.config.*`, package manifests, and lockfiles even
+   when their extensions would otherwise be allowed. It packages at most 200
+   files / 10 MiB. A root-level `index.html` is deliberately rejected: that
+   layout commonly mixes a backend entry point and package metadata with the
+   frontend. The adapter never guesses a monorepo root, reads the tenant
+   filesystem, or publishes a running backend container.
 5. New Spaces are private. Making a Space public, connecting a custom domain,
    managing DNS, or rolling back a version must each be separate user-approved
    actions.
@@ -128,6 +132,22 @@ The `ExternalFrontendDeployment` record is unique per application and provider.
 It stores provider identifiers and safe status/error codes, not a bearer token
 or artifact content. Consent and publish lifecycle events are written to the
 existing audit log.
+
+## Archive layout and legacy applications
+
+Spacefast preserves archive paths and serves `index.html` at the website root
+when that file is at the archive root. AetherHost therefore re-roots a chosen
+`public/` or `dist/` directory before it uploads the archive. This prevents a
+`dist/index.html` archive from being served only at `/dist/index.html` and keeps
+the archive from looking like source that Spacefast should build. See
+[Spacefast's publishing guide](https://developers.spacefast.com/docs/publish/)
+and its [plain HTML recipe](https://spacefast.com/docs/recipes/html/).
+
+Apps created by the original AetherPress Launchpad template stored browser files
+at the repository root. They are intentionally not migrated automatically:
+moving stored files could alter an application outside an explicit deployment.
+Recreate the demo with the current template, or create a new application whose
+finished frontend files live in `public/` or `dist/`, then publish that export.
 
 ## Customer-owned OAuth setup
 

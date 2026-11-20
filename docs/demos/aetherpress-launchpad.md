@@ -25,9 +25,11 @@ AetherHost secret.
 2. In **Applications**, select **Create demo** in the **AetherPress Launchpad**
    card. Paste the public HTTPS WordPress site origin, not an endpoint or a
    credential.
-3. AetherHost creates a small Node application with a static `index.html`,
-   `styles.css`, `app.js`, and `config.js`. It runs normally on AetherHost and
-   renders the latest three published posts from WordPress in the browser.
+3. AetherHost creates a small Node application with its backend entry point and
+   package manifest at the app root, plus `public/index.html`, `public/styles.css`,
+   `public/app.js`, and `public/config.js`. Its server exposes only `public/`.
+   It runs normally on AetherHost and renders the latest three published posts
+   from WordPress in the browser.
 4. Once the deployment is running, open **External frontend → Spacefast
    publishing**, expand the Launchpad row, approve the exact static export,
    and choose **Publish privately**.
@@ -54,5 +56,8 @@ AetherHost secret.
   migration, or administrative integration.
 - Spacefast is optional and private by default. Publishing it does not update
   DNS or replace the AetherHost workload.
+- Publishing selects only `public/`, re-roots those four frontend files in the
+  Spacefast archive, and cannot expose `package.json` or `server.mjs`. Older
+  root-level Launchpad apps should be recreated before publication.
 - A browser can read the configured WordPress endpoint only when that endpoint
   is publicly reachable and permits normal cross-origin REST access.

@@ -14,6 +14,7 @@ import { Runtime } from '@aetherhost/domain';
 import { ApplicationsService } from './applications.service';
 import { createAetherPressLaunchpadFiles } from './aetherpress-launchpad.template';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { CreateAetherPressLaunchpadDto } from './dto/create-aetherpress-launchpad.dto';
 import {
   AddApplicationLogDto,
   UpdateApplicationStatusDto,
@@ -72,7 +73,7 @@ export class ApplicationsController {
   @Post('templates/aetherpress-launchpad')
   createAetherPressLaunchpad(
     @TenantId() tenantId: string,
-    @Body() body: { wordpressSiteUrl?: string },
+    @Body() body: CreateAetherPressLaunchpadDto,
   ) {
     if (tenantId === SYSTEM_TENANT_ID) {
       const configuredTenantId = process.env.DEFAULT_SYSTEM_TENANT_ID?.trim();

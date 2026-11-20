@@ -4,8 +4,8 @@ export type AetherPressLaunchpadFile = { path: string; content: string };
 
 /**
  * A small, dependency-free companion frontend for the WordPress × AetherHost ×
- * Spacefast demo. The same stored files run as a normal AetherHost Node app
- * and are the only files eligible for an explicit Spacefast publication.
+ * Spacefast demo. The root files run the AetherHost Node app; only the
+ * deliberately separated public/ files are eligible for Spacefast publishing.
  */
 export function createAetherPressLaunchpadFiles(wordpressSiteUrl?: string): AetherPressLaunchpadFile[] {
   const wordpressPostsUrl = normalizeWordPressPostsUrl(wordpressSiteUrl);
@@ -27,7 +27,7 @@ export function createAetherPressLaunchpadFiles(wordpressSiteUrl?: string): Aeth
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 
-const root = process.cwd();
+const root = resolve(process.cwd(), 'public');
 const types = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.html': 'text/html; charset=utf-8' };
 const server = createServer((request, response) => {
   const pathname = new URL(request.url || '/', 'http://localhost').pathname;
@@ -47,11 +47,11 @@ server.listen(process.env.PORT || 3000, '0.0.0.0');
 `,
     },
     {
-      path: 'config.js',
+      path: 'public/config.js',
       content: `window.AETHERPRESS_CONFIG = ${config};\n`,
     },
     {
-      path: 'index.html',
+      path: 'public/index.html',
       content: `<!doctype html>
 <html lang="en">
   <head>
@@ -88,11 +88,11 @@ server.listen(process.env.PORT || 3000, '0.0.0.0');
 `,
     },
     {
-      path: 'styles.css',
+      path: 'public/styles.css',
       content: `:root{--ink:#15172a;--muted:#5e6278;--paper:#f7f5f0;--panel:#fffefa;--line:#dedbd3;--violet:#5b42d6;--cyan:#62d6e5}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1120px;margin:auto;padding:28px 28px 72px}nav{display:flex;justify-content:space-between;align-items:center;font-size:.88rem}.brand{font-weight:800;letter-spacing:-.03em;font-size:1.1rem;display:flex;gap:.5rem;align-items:center}.brand i{width:22px;height:22px;background:var(--violet);border-radius:6px;box-shadow:8px 8px 0 var(--cyan)}.status{border:1px solid var(--line);border-radius:999px;padding:.45rem .7rem;color:var(--muted);background:var(--panel)}.hero{padding:105px 0 76px;max-width:850px}.eyebrow{font-size:.72rem;letter-spacing:.13em;text-transform:uppercase;font-weight:800;color:var(--violet);margin:0 0 .8rem}.hero h1{font-size:clamp(2.8rem,7vw,5.8rem);line-height:.94;letter-spacing:-.075em;margin:0}.lede{font-size:1.16rem;line-height:1.65;color:var(--muted);max-width:720px;margin:2rem 0}.flow{display:flex;flex-wrap:wrap;gap:.7rem;align-items:center;font-size:.83rem;font-weight:700}.flow span{border:1px solid var(--line);background:var(--panel);border-radius:99px;padding:.55rem .8rem}.flow b{color:var(--violet)}.proof{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;border-top:1px solid var(--line);padding-top:18px}.proof article{border:1px solid var(--line);background:var(--panel);padding:20px;min-height:170px}.proof strong{color:var(--violet);font-size:.76rem}.proof h2{font-size:1rem;margin:1.4rem 0 .4rem}.proof p,.message{font-size:.86rem;line-height:1.55;color:var(--muted);margin:0}.stories{margin-top:96px}.section-heading{display:flex;gap:1rem;align-items:end;justify-content:space-between}.section-heading h2{font-size:2rem;letter-spacing:-.05em;margin:0}.section-heading button{border:1px solid var(--ink);background:var(--ink);color:white;padding:.7rem .9rem;border-radius:6px;font:inherit;font-size:.82rem;font-weight:700;cursor:pointer}.section-heading button:hover{background:var(--violet);border-color:var(--violet)}.message{min-height:1.3rem;margin:1rem 0}.story-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.story{background:var(--panel);border:1px solid var(--line);padding:22px;min-height:220px;display:flex;flex-direction:column}.story time{font-size:.76rem;color:var(--violet);font-weight:800}.story h3{font-size:1.18rem;letter-spacing:-.035em;line-height:1.1;margin:1rem 0 .65rem}.story p{font-size:.86rem;color:var(--muted);line-height:1.55;margin:0}.story a{margin-top:auto;padding-top:1.5rem;color:var(--ink);font-size:.82rem;font-weight:800;text-decoration:none}.story a:hover{text-decoration:underline}footer{border-top:1px solid var(--line);padding:24px 28px;color:var(--muted);font-size:.76rem}@media(max-width:720px){main{padding:22px 18px 56px}.hero{padding:72px 0 56px}.proof,.story-grid{grid-template-columns:1fr}.section-heading{align-items:start;flex-direction:column}.status{display:none}}`,
     },
     {
-      path: 'app.js',
+      path: 'public/app.js',
       content: `const config = window.AETHERPRESS_CONFIG || {};
 const stories = document.querySelector('#stories');
 const message = document.querySelector('#message');

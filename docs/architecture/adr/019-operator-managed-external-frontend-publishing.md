@@ -26,8 +26,13 @@ target with these boundaries:
    the tenant owns the application; it never trusts a tenant ID supplied by a
    browser.
 2. The server reads only saved `aiFiles`, never an arbitrary source repository
-   or deployment directory. A valid export needs a known `index.html` and may
-   include only safe static asset extensions, up to 200 files / 10 MiB.
+   or deployment directory. A valid export needs `index.html` in an explicit
+   `public/` or `dist/` directory. It includes only safe static asset extensions
+   below that one directory, strips the directory prefix in the archive, and
+   excludes source maps, `.env*`, `*.config.*`, package manifests, and lockfiles.
+   Root-level `index.html` is rejected because it may share a directory with a
+   backend entry point or runtime configuration. The export remains bounded to
+   200 files / 10 MiB.
 3. The selected files are packaged as a ZIP and uploaded to a private Space.
    No `.env`, token, database, Docker configuration, backend process, or
    custom-domain change is eligible for transfer.
@@ -54,8 +59,9 @@ auditing, and a tenant connection-management UI.
 
 ## Verification
 
-- Unit tests prove consent is required, static selection excludes unsafe paths
-  and `.env`, and the generated archive has a ZIP central directory.
+- Unit tests prove consent is required, static selection excludes unsafe paths,
+  maps, configuration-like files, and `.env`, and roots the generated archive
+  at the selected frontend directory.
 - A prior controlled private-space publish verified the provider contract and
   asynchronous operation completion. See
   `docs/validation/2026-11-15-spacefast-private-publish.md`.

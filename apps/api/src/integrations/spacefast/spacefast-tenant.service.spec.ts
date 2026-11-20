@@ -7,13 +7,14 @@ jest.mock('./spacefast.service', () => ({ SpacefastService: class SpacefastServi
 jest.mock('./spacefast-oauth.service', () => ({ SpacefastOAuthService: class SpacefastOAuthService {} }));
 
 import { createZip, selectStaticArtifact, SpacefastTenantService } from './spacefast-tenant.service';
+import { createAetherPressLaunchpadFiles } from '../../applications/aetherpress-launchpad.template';
 
 describe('SpacefastTenantService', () => {
   const baseApp = {
     id: 'app_123456', tenantId: 'tenant_123', name: 'Marketing Site',
     aiFiles: [
-      { path: 'index.html', content: '<!doctype html><link rel="stylesheet" href="/site.css"><h1>Hello</h1>' },
-      { path: 'site.css', content: 'h1 { color: rebeccapurple; }' },
+      { path: 'public/index.html', content: '<!doctype html><link rel="stylesheet" href="/site.css"><h1>Hello</h1>' },
+      { path: 'public/site.css', content: 'h1 { color: rebeccapurple; }' },
       { path: '.env', content: 'DATABASE_URL=must-not-leave-aetherhost' },
     ],
   };
@@ -52,24 +53,83 @@ describe('SpacefastTenantService', () => {
     expect(text).toContain('site.css');
     expect(text).not.toContain('.env');
     expect(text).not.toContain('DATABASE_URL');
+    expect(text).not.toContain('public/');
     expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'EXTERNAL_FRONTEND_CONSENTED' }) }));
+  });
+
+  it('explains how legacy root-level applications become eligible', async () => {
+    const { service, prisma } = makeService();
+    prisma.application.findFirst.mockResolvedValueOnce({
+      ...baseApp,
+      aiFiles: [
+        { path: 'index.html', content: '<h1>legacy</h1>' },
+        { path: 'server.mjs', content: 'console.log("backend")' },
+      ],
+    });
+
+    await expect(service.publish('tenant_123', 'app_123456', true)).rejects.toThrow(
+      'Spacefast exports must be stored in public/ or dist/',
+    );
   });
 });
 
 describe('Spacefast static export boundary', () => {
-  it('requires a known index.html path and only selects safe static files', () => {
+  it('publishes exactly the AetherPress browser export at the archive root', async () => {
+    const artifact = selectStaticArtifact(createAetherPressLaunchpadFiles('https://editorial.example.com'));
+    expect(artifact).toEqual(expect.objectContaining({
+      indexPath: 'public/index.html',
+      files: expect.arrayContaining([
+        expect.objectContaining({ path: 'index.html' }),
+        expect.objectContaining({ path: 'styles.css' }),
+        expect.objectContaining({ path: 'app.js' }),
+        expect.objectContaining({ path: 'config.js' }),
+      ]),
+    }));
+    expect(artifact?.files).toHaveLength(4);
+    const archive = new TextDecoder().decode(await createZip(artifact!.files).arrayBuffer());
+    expect(archive).toContain('index.html');
+    expect(archive).not.toContain('public/');
+    expect(archive).not.toContain('package.json');
+    expect(archive).not.toContain('server.mjs');
+  });
+
+  it('selects only the explicit public export and roots the archive there', () => {
     expect(selectStaticArtifact([{ path: 'package.json', content: '{}' }])).toBeNull();
+    expect(selectStaticArtifact([
+      { path: 'server.js', content: 'console.log("backend")' },
+      { path: 'package.json', content: '{}' },
+      { path: 'public/index.html', content: '<h1>ok</h1>' },
+      { path: 'public/app.js', content: 'console.log(1)' },
+      { path: 'public/site.js.map', content: 'source map' },
+      { path: 'public/runtime.config.js', content: 'secret-like configuration' },
+      { path: 'public/package.json', content: '{"scripts":{"start":"node server.js"}}' },
+      { path: 'public/.env.local', content: 'DATABASE_URL=nope' },
+      { path: '../secrets.txt', content: 'nope' },
+    ])).toEqual({
+      indexPath: 'public/index.html',
+      files: [
+        { path: 'index.html', content: '<h1>ok</h1>' },
+        { path: 'app.js', content: 'console.log(1)' },
+      ],
+    });
+  });
+
+  it('roots a dist export and rejects root-only frontend files', () => {
     expect(selectStaticArtifact([
       { path: 'dist/index.html', content: '<h1>ok</h1>' },
       { path: 'dist/app.js', content: 'console.log(1)' },
-      { path: '../secrets.txt', content: 'nope' },
+      { path: 'server.js', content: 'console.log("backend")' },
     ])).toEqual({
       indexPath: 'dist/index.html',
       files: [
-        { path: 'dist/index.html', content: '<h1>ok</h1>' },
-        { path: 'dist/app.js', content: 'console.log(1)' },
+        { path: 'index.html', content: '<h1>ok</h1>' },
+        { path: 'app.js', content: 'console.log(1)' },
       ],
     });
+    expect(selectStaticArtifact([
+      { path: 'index.html', content: '<h1>legacy app</h1>' },
+      { path: 'server.mjs', content: 'console.log("backend")' },
+    ])).toBeNull();
   });
 
   it('creates a valid-looking ZIP with a central directory', async () => {
