@@ -21,7 +21,6 @@ import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
 import { getGithubToken, ensureGithubWebhook } from './github-utils';
 import { validateCustomDomain } from './domain-validator';
 import { resolve4 } from 'node:dns/promises';
-import { Prisma } from '@prisma/client';
 import { redactSensitiveLogContent } from './log-redaction';
 import { SecretVaultService } from '../common/crypto/secret-vault.service';
 
@@ -469,14 +468,18 @@ if __name__ == '__main__':
     const app = await this.prisma.application.findUnique({ where: { id } });
     if (!app) throw new NotFoundException('App not found');
 
-    // If transitioning from running/pending to failed or terminated, release the slot.
-    const clearAppliedGithubPatch =
+    // A successful first GitHub write retires the one-time agent write marker.
+    // Keep the tenant's original file manifest: integrations such as Spacefast
+    // derive an explicitly-approved static export from it. The agent only writes
+    // generated files while this marker is present, so retaining the manifest
+    // cannot overwrite subsequent repository work.
+    const clearInitialWriteMarker =
       status === 'running' &&
       !!app.githubRepo &&
       app.commitMessage?.startsWith('aetherhost-ai-pending:');
     const statusData = {
       status,
-      ...(clearAppliedGithubPatch ? { aiFiles: Prisma.DbNull, commitMessage: null } : {}),
+      ...(clearInitialWriteMarker ? { commitMessage: null } : {}),
     };
 
     if ((app.status !== 'failed' && app.status !== 'terminated') && 

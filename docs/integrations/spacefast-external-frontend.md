@@ -59,7 +59,9 @@ syntax. See <https://spacefast.com/docs/api/>.
 2. They choose **Publish a static artifact to Spacefast** in the AetherHost
    console and explicitly consent to that specific transfer (including a new
    version).
-3. AetherHost selects only the saved static export, creates or reuses one
+3. AetherHost retains the tenant's saved application manifest after its initial
+   generated deployment completes, then selects only the saved static export,
+   creates or reuses one
    private Space, and publishes a ZIP. It writes a consent audit record before
    the provider call and a request/failure/result record afterwards.
 4. The console displays only verified provider state: private URL, version ID,
@@ -148,6 +150,12 @@ at the repository root. They are intentionally not migrated automatically:
 moving stored files could alter an application outside an explicit deployment.
 Recreate the demo with the current template, or create a new application whose
 finished frontend files live in `public/` or `dist/`, then publish that export.
+
+For current generated applications, completing the first GitHub-backed deploy
+clears only the one-time source-write marker. It does not discard the saved
+manifest used for static-export selection. This keeps an approved `public/` or
+`dist/` export available without permitting the provisioning agent to replay
+stale generated source over later repository work.
 
 ## Customer-owned OAuth setup
 

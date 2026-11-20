@@ -25,8 +25,11 @@ target with these boundaries:
 1. The tenant must explicitly consent per publish request. The server verifies
    the tenant owns the application; it never trusts a tenant ID supplied by a
    browser.
-2. The server reads only saved `aiFiles`, never an arbitrary source repository
-   or deployment directory. A valid export needs `index.html` in an explicit
+2. The server reads only the tenant's saved application manifest, never an
+   arbitrary source repository or deployment directory. When an initial
+   generated deployment finishes, AetherHost clears its one-time write marker
+   but retains that manifest so an eligible static export remains publishable;
+   the agent will not reapply it after the marker is cleared. A valid export needs `index.html` in an explicit
    `public/` or `dist/` directory. It includes only safe static asset extensions
    below that one directory, strips the directory prefix in the archive, and
    excludes source maps, `.env*`, `*.config.*`, package manifests, and lockfiles.
