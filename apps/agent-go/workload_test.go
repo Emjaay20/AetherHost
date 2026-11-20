@@ -277,6 +277,9 @@ func TestWordPressAetherPressIntelligenceInstallsOnlyWhenExplicitlyConfigured(t 
 	if !strings.Contains(plan.Compose, "service_completed_successfully") || !strings.Contains(plan.Compose, "aetherpress-intelligence.php") {
 		t.Fatalf("expected explicit AetherPress Intelligence bootstrap in compose:\n%s", plan.Compose)
 	}
+	if !strings.Contains(plan.Compose, "cap_add:\n      - DAC_OVERRIDE") {
+		t.Fatal("plugin bootstrap must retain only the write capability required for an existing WordPress volume")
+	}
 	if !strings.Contains(plan.ConfigFiles["aetherpress-intelligence.php"], "Imports explicitly approved SmartCrawler research") {
 		t.Fatal("expected audited AetherPress Intelligence plugin asset")
 	}

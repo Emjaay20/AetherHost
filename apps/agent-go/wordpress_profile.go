@@ -209,7 +209,10 @@ func writeAetherPressPluginBootstrap(b *strings.Builder, name string) {
 	b.WriteString("    image: alpine:3.20\n")
 	fmt.Fprintf(b, "    container_name: %s\n", name)
 	b.WriteString("    command: [\"/bin/sh\", \"-ec\", \"mkdir -p /var/www/html/wp-content/mu-plugins && install -m 0644 /opt/aetherhost/aetherpress-intelligence.php /var/www/html/wp-content/mu-plugins/aetherpress-intelligence.php\"]\n")
-	b.WriteString("    restart: \"no\"\n    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n")
+	// Existing WordPress volumes may be owned by the unprivileged PHP worker.
+	// The bootstrap needs only DAC_OVERRIDE to replace this one managed file;
+	// it does not join ingress or receive any tenant credential.
+	b.WriteString("    restart: \"no\"\n    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n    cap_add:\n      - DAC_OVERRIDE\n")
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./aetherpress-intelligence.php:/opt/aetherhost/aetherpress-intelligence.php:ro\n")
 	b.WriteString("    networks:\n      private: {}\n")
 }
