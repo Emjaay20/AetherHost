@@ -1,23 +1,31 @@
 # Security rollout and evidence checklist
 
-Complete local changes and CI first. Do not activate cloud resources or replace
-production keys without a reviewed plan and recoverable key backup.
+Updated 20 November 2026 from [observed CI/deployment evidence](../validation/2026-11-20-security-rollout-evidence.md).
+The previous “everything is local” summary is superseded: the signed release
+`c173abb65937a41c967e2fbfaac37c7328a6fdfd` deployed successfully.
+A verified release is not evidence that every operational control is finished.
 
-| Order | Action | Acceptance evidence |
-| --- | --- | --- |
-| 1 | Review code, CI results and expiring inherited findings | Required checks pass; no hidden broad exceptions |
-| 2 | Provision protected vault keyring and legacy read key if needed | API starts; dry-run migration decrypts all records |
-| 3 | Configure dashboard public build variables, GHCR pull access and Cosign | All built images pass scans and signer verification |
-| 4 | Bootstrap root-owned release scripts through administrator access | CI account cannot modify scripts or execute general sudo commands |
-| 5 | Apply branch/environment protection; set SSH fingerprint | API exports/settings review, denied direct push and unapproved deployment |
-| 6 | Deploy release by approved revision and verify readiness | `/etc/aetherhost/release.json`, image digests and actual signer evidence |
-| 7 | Apply secret migration; retain old keys for retained backups | No conflicts; follow-up dry-run and application checks pass |
-| 8 | Provision private-service registry from trusted ownership | Forged headers, expired/revoked credentials and cross-tenant access fail |
-| 9 | Install scanner/timer and approved backup DB image | Real fleet report and isolated DB restore result |
-| 10 | Choose deployment-log retention; schedule protected cleanup | Dry-run count, approved policy, deletion result, audit data retained |
-| 11 | Review Kubernetes digest/identity secret/CNI settings and reconcile | Restricted pod denial and enforced ingress/egress isolation |
-| 12 | Validate/plan optional AWS environment using protected remote state | Reviewed account/cost plan; after apply, OIDC negative tests and CloudTrail evidence |
-| 13 | Execute synthetic incident and full environment recovery | Dated timeline, observed containment and user-flow recovery result |
+| Order | Action | Current status | Remaining acceptance evidence |
+| --- | --- | --- | --- |
+| 1 | Code, CI and inherited findings | CI verified | Remediate/close expiring inherited findings; documented exceptions remain risks |
+| 2 | Vault configuration and legacy compatibility | API startup verified | Read-only inventory and migration preview; no key rotation inferred |
+| 3 | Public build configuration, registry pulls and Cosign | Verified in real build/deploy | Preserve dated signature/SBOM evidence for each release |
+| 4 | Root-owned release path and operator least privilege | Entry point executed | Review effective permissions, broader sudo grants, Docker group and independent emergency access |
+| 5 | Branch/environment protection and SSH fingerprint | Partial | Add Terraform/Kubernetes required contexts; restrict production to main; fingerprint is now mandatory in the next deployment |
+| 6 | Approved-revision deploy and readiness | Verified for linked release | New releases record their own digests and runtime observations |
+| 7 | Secret migration and retained recovery keys | Preview collection implemented | Review preview; protect backup/keys, then apply migration and verify no conflicts |
+| 8 | Trusted private-service ownership registry | CI tested | Provision/reconcile only on target deployments of those services; no production registry inferred |
+| 9 | Scanner, backup image and recovery | Fleet installer/scan and timers executed | Review current digest-matched reports, backup image and fresh isolated restore result |
+| 10 | Deployment-log retention | 90-day read-only preview implemented | Review policy/preview; enable restricted scheduled cleanup explicitly |
+| 11 | Kubernetes reconciliation and isolation | KinD admission/rollout verified | Target-cluster identity/digest review and observed CNI ingress/egress denials |
+| 12 | Optional AWS environment | Both Terraform roots validated | Reviewed account/cost/state plan, then actual OIDC/CloudTrail/CSPM evidence after apply |
+| 13 | Incident exercise and full recovery | Runbooks and regression coverage | Execute and record actual containment and user-workflow recovery |
 
-These external actions are not marked complete by code changes. The docs page
-reflects repository controls and states the remaining activation requirements.
+The read-only post-deploy collector produces private host evidence plus a value-free
+CI summary. It never rotates keys, changes privileges, migrates secrets, deletes
+logs, activates AWS resources or starts a destructive restore.
+
+[Administrator activation steps](admin-activation.md) cover the settings that the
+GitHub integration cannot modify. Do not replace keys or remove existing privileged
+access without a reviewed plan, protected recovery material and a tested alternate
+administrator path.

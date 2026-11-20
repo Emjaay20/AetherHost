@@ -64,3 +64,9 @@ mv "$release_file" /etc/aetherhost/release.env
 printf '{"revision":"%s","api":"%s","dashboard":"%s","agent":"%s","verified_at":"%s"}\n' \
  "$revision" "$AETHER_API_IMAGE" "$AETHER_DASHBOARD_IMAGE" "$AETHER_AGENT_IMAGE" "$(date -u +%FT%TZ)" > /etc/aetherhost/release.json
 echo "Verified release deployed: $revision"
+
+# Collect value-free observations after a healthy release. Findings remain explicit
+# follow-up work; inability to collect evidence does not take a healthy API offline.
+if ! python3 scripts/security/collect-runtime-evidence.py; then
+  echo 'Security evidence collection unavailable; release health is unchanged and verification remains open.' >&2
+fi

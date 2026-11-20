@@ -444,7 +444,7 @@ export default function DocsClient() {
                 <ShieldCheck className="h-5 w-5" /> Security built into the deployment path
               </div>
               <p className="mt-3 text-sm leading-6 text-zinc-300">
-                Controls below are implemented in the repository. Production activation requires reviewed configuration, successful CI, and recorded deployment evidence. A control mapping is an internal assessment, not SOC 2 certification.
+                The verified release on 20 November 2026 passed CI, built and signed all four platform images, and deployed the API, dashboard, and agent after signature and readiness checks. Host access review, secret migration evidence, and full recovery verification are tracked separately. A control mapping is an internal assessment, not SOC 2 certification.
               </p>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 {[['Prevent', 'Verified identities, tenant policies, encrypted secrets'], ['Detect', 'Secret scans, image scans, authorization audit events'], ['Recover', 'Isolated database restores and incident runbooks']].map(([title, description]) => (
@@ -454,6 +454,26 @@ export default function DocsClient() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="mt-5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-white">Observed release evidence · 20 November 2026</h3>
+                <a href="https://github.com/Emjaay20/AetherHost/actions/runs/44712911205" target="_blank" rel="noreferrer" className="text-xs font-medium text-emerald-400 underline underline-offset-4">Inspect the CI and deployment run</a>
+              </div>
+              <table className="mt-4 w-full min-w-[30rem] text-left text-xs leading-6 text-zinc-300">
+                <thead className="border-b border-zinc-800 text-zinc-500"><tr><th className="py-2 pr-4 font-medium">Control</th><th className="py-2 pr-4 font-medium">Observed result</th><th className="py-2 font-medium">Scope</th></tr></thead>
+                <tbody>
+                  {[
+                    ['Application tests', '121 unit · 10 e2e passed', 'CI test harness'],
+                    ['Rust platform', '36 passed · no skips', 'Workspace tests, plus doc tests'],
+                    ['Kubernetes', 'Admission rejection and rollout passed', 'Isolated KinD environment'],
+                    ['Image supply chain', 'Four images built, scanned, and signed', 'API, dashboard, agent, Rust platform'],
+                    ['Production release', 'Signer verification and readiness passed', 'VPS API, dashboard, and agent'],
+                  ].map(([control, result, scope]) => <tr key={control} className="border-b border-zinc-800/60 last:border-0"><td className="py-2 pr-4 text-white">{control}</td><td className="py-2 pr-4 text-emerald-300">{result}</td><td className="py-2 text-zinc-400">{scope}</td></tr>)}
+                </tbody>
+              </table>
+              <p className="mt-4 text-xs leading-5 text-zinc-400">These results belong to the linked release. A CI admission test does not prove production network isolation; a healthy deploy does not prove complete recovery or effective operator least privilege. Read-only runtime evidence is collected after subsequent releases to identify the remaining work without exposing credentials or tenant data.</p>
             </div>
 
             <h2 id="secure-access" className="mt-10 scroll-mt-24 border-b border-zinc-800 pb-2 text-xl font-semibold text-white">Identity before authorization</h2>
