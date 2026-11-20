@@ -1,4 +1,5 @@
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import Script from "next/script";
 import "./landing.css";
 
 const sans = IBM_Plex_Sans({
@@ -23,6 +24,13 @@ export default function MarketingLayout({
   return (
     <div className={`landing ${sans.variable} ${mono.variable} ${sans.className}`}>
       {children}
+      <Script
+        id="flowmeet-widget"
+        src="https://flowmeet.aetherhost.app/widget.js"
+        strategy="afterInteractive"
+        data-slug="aetherhost"
+        data-no-button="true"
+      />
     </div>
   );
 }
