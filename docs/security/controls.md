@@ -1,5 +1,7 @@
 # Internal security control mapping
 
+Actual CI and production results are recorded in the [20 November rollout evidence](../validation/2026-11-20-security-rollout-evidence.md). The signed VPS release is verified; operational access, data migration, and full recovery are tracked separately.
+
 Assessment: repository implementation review, 19 November 2026. These are working
 technical categories, not an auditor-approved SOC 2 mapping or compliance claim.
 Code presence, passing tests, applied configuration and operating effectiveness
