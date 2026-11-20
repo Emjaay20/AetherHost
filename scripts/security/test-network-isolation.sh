@@ -41,7 +41,31 @@ kubectl exec -n ingress-system network-probe -- curl -fsS --max-time 10 "$allowe
 kubectl exec -n ingress-system network-probe -- curl -fsS --max-time 10 "$blocked_backend/policy-proof"
 kubectl set env "$platform" -n aether-system --containers=aether-router DEFAULT_BACKEND="$allowed_backend"
 kubectl rollout status "$platform" -n aether-system --timeout=120s
-kubectl exec -n ingress-system network-probe -- curl -fsS --max-time 40 -H "$authorization" -H 'Host: network-probe.aetherhost.internal' "$router/policy-proof" | grep -q 'network-policy-proof'
+allowed=false
+for attempt in {1..3}; do
+  allowed_response="$(kubectl exec -n ingress-system network-probe -- curl -sS --max-time 40 -w '\n%{http_code}' -H "$authorization" -H 'Host: network-probe.aetherhost.internal' "$router/policy-proof")"
+  allowed_status="${allowed_response##*
+echo 'NETWORK_POLICY egress: selected backend reachable through authenticated router'
+
+kubectl set env "$platform" -n aether-system --containers=aether-router DEFAULT_BACKEND="$blocked_backend"
+kubectl rollout status "$platform" -n aether-system --timeout=120s
+started="$(date +%s)"
+response="$(kubectl exec -n ingress-system network-probe -- curl -sS --connect-timeout 3 --max-time 45 -w '\n%{http_code}' -H "$authorization" -H 'Host: network-probe.aetherhost.internal' "$router/policy-proof")"
+status="${response##*$'\n'}"
+[[ "$status" == 502 ]] || { echo "Expected router upstream failure (502), observed $status" >&2; exit 1; }
+# Connection refusal or DNS failure is fast; require the configured upstream timeout.
+elapsed=$(( $(date +%s) - started ))
+[[ "$elapsed" -ge 20 ]] || { echo 'Upstream failed before the expected policy timeout' >&2; exit 1; }
+echo 'NETWORK_POLICY egress: unselected but healthy backend blocked with a policy timeout'
+\n'}"
+  if [[ "$allowed_status" == 200 ]] && printf '%s' "$allowed_response" | grep -q 'network-policy-proof'; then
+    allowed=true
+    break
+  fi
+  printf 'Allowed-backend attempt %s returned %s: %.500s\n' "$attempt" "$allowed_status" "$allowed_response" >&2
+  sleep 2
+done
+[[ "$allowed" == true ]] || { kubectl logs "$platform" -n aether-system -c aether-router --tail=40; exit 1; }
 echo 'NETWORK_POLICY egress: selected backend reachable through authenticated router'
 
 kubectl set env "$platform" -n aether-system --containers=aether-router DEFAULT_BACKEND="$blocked_backend"

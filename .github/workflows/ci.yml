@@ -263,6 +263,9 @@ jobs:
 
   kubernetes-ci:
     name: Kubernetes KinD & Helm Deployment Validation
+    permissions:
+      contents: read
+      packages: read
     needs: [changes]
     runs-on: ubuntu-latest
     steps:
@@ -319,10 +322,32 @@ jobs:
           kubectl rollout status daemonset/cilium -n kube-system --timeout=180s
           kubectl wait --for=condition=Ready nodes --all --timeout=180s
 
+      - name: Install Cosign for unchanged-source image verification
+        if: github.event_name == 'pull_request' && needs.changes.outputs.rust != 'true'
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da
+
+      - name: Read published base images
+        if: github.event_name == 'pull_request' && needs.changes.outputs.rust != 'true'
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Platform Docker Image
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RUST_CHANGED: ${{ needs.changes.outputs.rust }}
+          BASE_REVISION: ${{ github.event.pull_request.base.sha }}
         run: |
-          docker build -t ghcr.io/emjaay20/aether-platform:latest -f crates/Dockerfile .
+          if [[ "$EVENT_NAME" == pull_request && "$RUST_CHANGED" != true ]]; then
+            # No Rust source changed: reuse only the signature-verified base image.
+            verified_image="$(bash deploy/verify-image.sh ghcr.io/emjaay20/aether-platform "$BASE_REVISION")"
+            docker tag "$verified_image" ghcr.io/emjaay20/aether-platform:latest
+          else
+            docker build -t ghcr.io/emjaay20/aether-platform:latest -f crates/Dockerfile .
+          fi
 
       - name: Load Image into KinD
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
@@ -385,6 +410,13 @@ jobs:
       - name: Verify real ingress and egress policy enforcement
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
         run: bash scripts/security/test-network-isolation.sh
+
+      - name: Capture isolated network-test diagnostics
+        if: failure() && (github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true')
+        run: |
+          kubectl get pods -n aether-system -o wide || true
+          kubectl logs deployment/aether-platform-platform -n aether-system -c aether-router --tail=60 || true
+          kubectl get networkpolicy -n aether-system -o yaml || true
 
   publish:
     name: Publish approved release
