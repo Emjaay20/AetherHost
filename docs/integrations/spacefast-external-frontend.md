@@ -103,6 +103,23 @@ a separate static presentation artifact. This demonstrates a clear ownership
 boundary and a reversible integration; it does not claim that a static artifact
 can substitute for WordPress's dynamic runtime.
 
+## AetherPress Intelligence Hub (WordPress + SmartCrawler)
+
+The optional AetherPress Intelligence workload capability is a safe way to
+demonstrate an editorial WordPress workflow without turning Spacefast into a
+backend or giving a static frontend a crawler credential. When a WordPress app
+is explicitly configured with a dedicated SmartCrawler key and an approved
+HTTPS source list, AetherHost installs a Must-Use WordPress plugin during the
+workload deployment. It can request a SmartCrawler job and import a completed
+result only as a WordPress draft. A human editor must review and publish it.
+
+The AetherPress Launchpad then reads only the published
+`/wp-json/aetherpress/v1/insights` endpoint. Spacefast receives the Launchpad's
+selected `public/` directory; it does not receive WordPress, the research job
+store, SmartCrawler keys, or unpublished drafts. The complete setup and
+screen-recording script is in
+[AetherPress Intelligence Hub](../demos/aetherpress-intelligence-hub.md).
+
 ## Operator verification
 
 The control plane exposes two operator-only endpoints:

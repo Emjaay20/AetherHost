@@ -257,6 +257,75 @@ func TestWorkloadConfigMountsUseHostProjectDirectory(t *testing.T) {
 	}
 }
 
+func TestWordPressAetherPressIntelligenceInstallsOnlyWhenExplicitlyConfigured(t *testing.T) {
+	app := Application{
+		ID:               "app_aetherpress_12345678",
+		Name:             "AetherPress Editorial",
+		Runtime:          "wordpress",
+		WorkloadMemoryMB: 1024,
+		EnvVars: map[string]string{
+			"AETHERPRESS_INTELLIGENCE_ENABLED":         "true",
+			"AETHERPRESS_INTELLIGENCE_CRAWLER_URL":     "https://smart-crawler.aetherhost.app",
+			"AETHERPRESS_INTELLIGENCE_CRAWLER_TOKEN":   "sc_live_example_scoped_key",
+			"AETHERPRESS_INTELLIGENCE_ALLOWED_SOURCES": "https://developer.wordpress.org,https://wordpress.org",
+		},
+	}
+	plan, err := buildWorkloadWithIdentity(app, workloadDeploymentName(app), "PostgresPass123", "MariaDbPass123", "RedisPass123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.Compose, "service_completed_successfully") || !strings.Contains(plan.Compose, "aetherpress-intelligence.php") {
+		t.Fatalf("expected explicit AetherPress Intelligence bootstrap in compose:\n%s", plan.Compose)
+	}
+	if !strings.Contains(plan.ConfigFiles["aetherpress-intelligence.php"], "Imports explicitly approved SmartCrawler research") {
+		t.Fatal("expected audited AetherPress Intelligence plugin asset")
+	}
+	if !strings.Contains(plan.WordPressEnv, "AETHERPRESS_INTELLIGENCE_CRAWLER_TOKEN=sc_live_example_scoped_key") {
+		t.Fatal("expected scoped crawler credential in protected WordPress env file")
+	}
+
+	disabled := app
+	disabled.EnvVars = map[string]string{}
+	plain, err := buildWorkloadWithIdentity(disabled, workloadDeploymentName(disabled), "PostgresPass123", "MariaDbPass123", "RedisPass123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(plain.Compose, "aetherpress-intelligence.php") || plain.ConfigFiles["aetherpress-intelligence.php"] != "" {
+		t.Fatal("plugin must not be installed for ordinary WordPress apps")
+	}
+}
+
+func TestWordPressAetherPressIntelligenceRejectsUnsafeConfiguration(t *testing.T) {
+	base := Application{
+		Name:             "Editorial",
+		Runtime:          "wordpress",
+		WorkloadMemoryMB: 1024,
+		EnvVars: map[string]string{
+			"AETHERPRESS_INTELLIGENCE_ENABLED":         "true",
+			"AETHERPRESS_INTELLIGENCE_CRAWLER_URL":     "https://smart-crawler.aetherhost.app",
+			"AETHERPRESS_INTELLIGENCE_CRAWLER_TOKEN":   "sc_live_example_scoped_key",
+			"AETHERPRESS_INTELLIGENCE_ALLOWED_SOURCES": "https://wordpress.org",
+		},
+	}
+	for name, mutate := range map[string]func(map[string]string){
+		"insecure crawler": func(env map[string]string) { env["AETHERPRESS_INTELLIGENCE_CRAWLER_URL"] = "http://crawler.example" },
+		"short key":        func(env map[string]string) { env["AETHERPRESS_INTELLIGENCE_CRAWLER_TOKEN"] = "short" },
+		"unsafe source":    func(env map[string]string) { env["AETHERPRESS_INTELLIGENCE_ALLOWED_SOURCES"] = "http://wordpress.org" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := base
+			app.EnvVars = map[string]string{}
+			for key, value := range base.EnvVars {
+				app.EnvVars[key] = value
+			}
+			mutate(app.EnvVars)
+			if _, err := buildWorkload(app, "PostgresPass123", "MariaDbPass123", "RedisPass123"); err == nil {
+				t.Fatal("expected unsafe AetherPress Intelligence configuration to be rejected")
+			}
+		})
+	}
+}
+
 func TestWordPressTuningScalesWithBudgetAndStaysBounded(t *testing.T) {
 	smallResources, err := wordpressResources(1024)
 	if err != nil {

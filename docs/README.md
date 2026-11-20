@@ -13,6 +13,7 @@ Welcome to the AetherHost technical documentation repository. This directory hou
 | **AI Agents & MCP** | [AGENTS.md](../AGENTS.md) | Developer & AI Agent Guide for Claude Code, Cursor, and Antigravity via embedded `aether mcp` stdio JSON-RPC server. |
 | **Operations & CI/CD** | [docs/OPERATIONS.md](../docs/OPERATIONS.md)<br>[docs/CONTABO_DEPLOYMENT.md](../docs/CONTABO_DEPLOYMENT.md)<br>[deploy/KUBERNETES.md](../deploy/KUBERNETES.md) | Fast CI loops (`nextest`, path filtering, `cargo-deny`), KinD Kubernetes validation, and production Contabo VPS hosting. |
 | **Staff Case Studies** | [docs/portfolio/staff-security-case-study.md](../docs/portfolio/staff-security-case-study.md)<br>[docs/CASE_STUDY.md](../docs/CASE_STUDY.md) | End-to-end platform overhaul, deduplicated Restic backup pipeline, and incident post-mortems. |
+| **Editorial integrations** | [AetherPress Intelligence Hub](demos/aetherpress-intelligence-hub.md)<br>[Spacefast external frontend](integrations/spacefast-external-frontend.md) | A review-first WordPress + SmartCrawler workflow with an optional private Spacefast static frontend. |
 
 ---
 

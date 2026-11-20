@@ -9,7 +9,8 @@ export type AetherPressLaunchpadFile = { path: string; content: string };
  */
 export function createAetherPressLaunchpadFiles(wordpressSiteUrl?: string): AetherPressLaunchpadFile[] {
   const wordpressPostsUrl = normalizeWordPressPostsUrl(wordpressSiteUrl);
-  const config = JSON.stringify({ wordpressPostsUrl }, null, 2);
+  const wordpressInsightsUrl = normalizeWordPressInsightsUrl(wordpressSiteUrl);
+  const config = JSON.stringify({ wordpressPostsUrl, wordpressInsightsUrl }, null, 2);
 
   return [
     {
@@ -76,7 +77,7 @@ server.listen(process.env.PORT || 3000, '0.0.0.0');
         <article><strong>03</strong><h2>Private release</h2><p>Spacefast receives the approved frontend—not the WordPress runtime or AetherHost controls.</p></article>
       </section>
       <section class="stories" aria-labelledby="stories-heading">
-        <div class="section-heading"><div><p class="eyebrow">Latest from the newsroom</p><h2 id="stories-heading">Editorial briefs</h2></div><button id="refresh" type="button">Refresh posts</button></div>
+        <div class="section-heading"><div><p class="eyebrow">Latest from the newsroom</p><h2 id="stories-heading">Editorial briefs</h2></div><button id="refresh" type="button">Refresh content</button></div>
         <p id="message" class="message" role="status"></p>
         <div id="stories" class="story-grid" aria-live="polite"></div>
       </section>
@@ -108,10 +109,10 @@ function render(posts) {
   stories.replaceChildren();
   posts.forEach((post) => {
     const article = document.createElement('article'); article.className = 'story';
-    const time = document.createElement('time'); time.dateTime = post.date || ''; time.textContent = post.date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(post.date)) : 'Editorial brief';
+    const time = document.createElement('time'); time.dateTime = post.date || ''; time.textContent = post.sourceTitle || (post.date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(post.date)) : 'Editorial brief');
     const heading = document.createElement('h3'); heading.textContent = plainText(post.title?.rendered || post.title);
     const excerpt = document.createElement('p'); excerpt.textContent = plainText(post.excerpt?.rendered || post.excerpt);
-    const link = document.createElement('a'); link.href = post.link || '#'; link.textContent = post.link ? 'Read the original post →' : 'Demo content'; if (post.link) { link.target = '_blank'; link.rel = 'noreferrer'; }
+    const link = document.createElement('a'); link.href = post.link || post.sourceUrl || '#'; link.textContent = post.sourceUrl ? 'Read the reviewed insight →' : post.link ? 'Read the original post →' : 'Demo content'; if (post.link || post.sourceUrl) { link.target = '_blank'; link.rel = 'noreferrer'; }
     article.append(time, heading, excerpt, link); stories.append(article);
   });
 }
@@ -119,6 +120,15 @@ async function load() {
   message.textContent = 'Loading published editorial content…';
   if (!config.wordpressPostsUrl) { render(fallback); message.textContent = 'Showing bundled demo content. Add a public WordPress site URL when creating this project to load live posts.'; sourceStatus.textContent = 'Demo content'; return; }
   try {
+    if (config.wordpressInsightsUrl) {
+      const insightsResponse = await fetch(config.wordpressInsightsUrl, { headers: { Accept: 'application/json' } });
+      if (insightsResponse.ok) {
+        const insights = await insightsResponse.json();
+        if (Array.isArray(insights) && insights.length > 0) {
+          render(insights.slice(0, 3)); message.textContent = 'Live reviewed research insights from the configured WordPress site.'; sourceStatus.textContent = 'Live editorial insights'; return;
+        }
+      }
+    }
     const response = await fetch(config.wordpressPostsUrl, { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error('WordPress returned ' + response.status);
     const posts = await response.json();
@@ -145,4 +155,19 @@ function normalizeWordPressPostsUrl(value?: string) {
   }
   site.pathname = site.pathname.replace(/\/+$/, '');
   return `${site.toString().replace(/\/$/, '')}/wp-json/wp/v2/posts?per_page=3&_embed=1&_fields=id,date,link,title,excerpt`;
+}
+
+function normalizeWordPressInsightsUrl(value?: string) {
+  if (!value?.trim()) return null;
+  let site: URL;
+  try {
+    site = new URL(value.trim());
+  } catch {
+    throw new BadRequestException('Enter a valid public WordPress site URL, including https://');
+  }
+  if (site.protocol !== 'https:' || site.username || site.password || site.search || site.hash) {
+    throw new BadRequestException('The WordPress site URL must be a public HTTPS origin without credentials, a query, or a fragment');
+  }
+  site.pathname = site.pathname.replace(/\/+$/, '');
+  return `${site.toString().replace(/\/$/, '')}/wp-json/aetherpress/v1/insights`;
 }

@@ -18,6 +18,8 @@ describe('AetherPress Launchpad template', () => {
     expect(byPath.get('public/index.html')).toContain('WordPress × AetherHost × Spacefast');
     expect(byPath.get('public/app.js')).toContain('replaceChildren');
     expect(byPath.get('public/config.js')).toContain('https://editorial.example.com/wp-json/wp/v2/posts');
+    expect(byPath.get('public/config.js')).toContain('https://editorial.example.com/wp-json/aetherpress/v1/insights');
+    expect(byPath.get('public/app.js')).toContain('Live reviewed research insights');
     expect(byPath.get('server.mjs')).toContain("file.startsWith(root + sep)");
     expect(byPath.get('server.mjs')).toContain("resolve(process.cwd(), 'public')");
   });
