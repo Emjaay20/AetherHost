@@ -144,3 +144,23 @@ test('docs page presents truthful Actix library middleware, non-LRU cache evicti
   assert.match(docsClient, /Measured CI Pipeline Timings/);
   assert.match(docsClient, /#44594918177/);
 });
+
+test('marketing layout and landing page include FlowMeet scheduling with progressive enhancement', () => {
+  const layoutContent = fs.readFileSync(
+    path.join(dashboardRoot, 'app', '(marketing)', 'layout.tsx'),
+    'utf8',
+  );
+  assert.match(layoutContent, /https:\/\/flowmeet\.aetherhost\.app\/widget\.js/);
+  assert.match(layoutContent, /data-slug="aetherhost"/);
+  assert.match(layoutContent, /data-no-button="true"/);
+
+  const pageContent = fs.readFileSync(
+    path.join(dashboardRoot, 'app', '(marketing)', 'page.tsx'),
+    'utf8',
+  );
+  assert.match(pageContent, /https:\/\/flowmeet\.aetherhost\.app\/book\/aetherhost/);
+  assert.match(pageContent, /data-flowmeet-open/);
+  assert.match(pageContent, /Talk to founder/);
+  assert.match(pageContent, /Book enterprise demo/);
+  assert.match(pageContent, /Scheduling powered by/);
+});

@@ -650,6 +650,10 @@ html:has(.landing) body {
   margin-top: 10px;
 }
 
+.close .actions {
+  margin-top: 0;
+}
+
 .cta-btn {
   height: 44px;
   padding: 0 18px;

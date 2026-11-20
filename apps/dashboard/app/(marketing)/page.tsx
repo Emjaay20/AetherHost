@@ -58,6 +58,12 @@ export default function LandingPage() {
             <a href="#plans">Plans</a>
             <a href="#mobile">Mobile app</a>
             <Link href="/docs">Docs</Link>
+            <a
+              href="https://flowmeet.aetherhost.app/book/aetherhost"
+              data-flowmeet-open
+            >
+              Talk to founder
+            </a>
             <Show when="signed-out">
               <Link href="/sign-in">Sign in</Link>
             </Show>
@@ -90,6 +96,13 @@ export default function LandingPage() {
                 memberHref="/console"
                 memberLabel="Open the control plane"
               />
+              <a
+                href="https://flowmeet.aetherhost.app/book/aetherhost"
+                data-flowmeet-open
+                className="btn"
+              >
+                Talk to founder
+              </a>
               <a href="#use" className="btn">
                 See how it works
               </a>
@@ -170,7 +183,7 @@ export default function LandingPage() {
               <li>
                 <h3>Predictable billing and resource limits.</h3>
                 <p>
-                  Track sites, storage, bandwidth, and AI usage under one unified plan. Easily monitor what's running and how many resources are left before onboarding your next client.
+                  Track sites, storage, bandwidth, and AI usage under one unified plan. Easily monitor what&apos;s running and how many resources are left before onboarding your next client.
                 </p>
               </li>
               <li>
@@ -354,7 +367,7 @@ export default function LandingPage() {
 
         <section className="section">
           <div className="wrap">
-            <h2>We handle the edge cases so you don't have to.</h2>
+            <h2>We handle the edge cases so you don&apos;t have to.</h2>
             <ul className="proofs">
               <li className="proof">
                 <h3>Atomic Quota Enforcement</h3>
@@ -408,18 +421,27 @@ export default function LandingPage() {
         <section className="section close">
           <div className="wrap close-row">
             <div>
-              <h2>Ready to secure your agency's margins?</h2>
+              <h2>Ready to secure your agency&apos;s margins?</h2>
               <p className="intro">
                 Start deploying workloads safely today. Your first client site is completely free, with full resource tracking right out of the box.
               </p>
             </div>
-            <AccountLink
-              className="btn btn-primary cta-btn"
-              guestHref="/sign-up"
-              guestLabel="Start free"
-              memberHref="/console"
-              memberLabel="Open the control plane"
-            />
+            <div className="actions">
+              <AccountLink
+                className="btn btn-primary cta-btn"
+                guestHref="/sign-up"
+                guestLabel="Start free"
+                memberHref="/console"
+                memberLabel="Open the control plane"
+              />
+              <a
+                href="https://flowmeet.aetherhost.app/book/aetherhost"
+                data-flowmeet-open
+                className="btn cta-btn"
+              >
+                Book enterprise demo
+              </a>
+            </div>
           </div>
         </section>
       </main>
@@ -431,6 +453,12 @@ export default function LandingPage() {
         <Link href="/docs">
           Documentation & Architecture
         </Link>
+        <span>
+          Scheduling powered by{" "}
+          <a href="https://flowmeet.aetherhost.app" target="_blank" rel="noopener noreferrer">
+            FlowMeet
+          </a>
+        </span>
         <span>
           Built by <a href="https://yusufsaka.dev/" target="_blank" rel="noopener noreferrer">Yusuf</a>
         </span>
