@@ -149,12 +149,16 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	fmt.Fprintf(b, "  %s:\n", nginxName)
 	b.WriteString("    image: nginx:1.27-alpine\n")
 	fmt.Fprintf(b, "    container_name: %s\n", nginxName)
+	// WordPress initializes its shared files as www-data (UID/GID 82).  Run
+	// nginx with that same unprivileged identity so its try_files checks can
+	// traverse a freshly initialized WordPress volume even when the upstream
+	// image preserves restrictive file modes.
+	b.WriteString("    user: \"82:82\"\n")
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html:ro\n      - ./wordpress-nginx.conf:/etc/nginx/conf.d/default.conf:ro\n      - ./wordpress-ready.php:/var/www/html/aetherhost-ready.php:ro\n")
 	writeServiceLifecycle(b, resources.NginxMB, 96, true)
-	// nginx binds the routed HTTP port, initializes its private cache directory,
-	// then drops its workers to the nginx user and group. Grant only the four
-	// capabilities that lifecycle requires after the default capability drop.
-	b.WriteString("    cap_add:\n      - NET_BIND_SERVICE\n      - CHOWN\n      - SETGID\n      - SETUID\n")
+	// nginx binds the routed HTTP port but never starts as root, so it needs
+	// only the bind capability after the default capability drop.
+	b.WriteString("    cap_add:\n      - NET_BIND_SERVICE\n")
 	b.WriteString("    labels:\n")
 	b.WriteString("      - \"traefik.enable=true\"\n")
 	b.WriteString("      - \"traefik.docker.network=aetherhost-net\"\n")
