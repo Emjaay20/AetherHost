@@ -414,7 +414,7 @@ services:
     image: %s
     command: sh -c "%s"
     volumes:
-      - %s/deployments/%s:/app
+      - %s/%s:/app
     working_dir: /app
     labels:
       - "traefik.enable=true"

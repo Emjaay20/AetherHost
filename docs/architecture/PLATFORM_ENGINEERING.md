@@ -7,10 +7,10 @@ This document details the architectural design of the AetherHost Core Platform s
 ## 1. High-Performance Fine-Grained Authorization Engine (`aether-authz`)
 
 ### Overview & Mission
-In high-throughput multi-tenant architectures, querying the persistence layer (PostgreSQL) for every authorization check degrades p99 tail latency and creates database contention. `aether-authz` provides a **sub-microsecond in-memory policy engine** combining Role-Based Access Control (RBAC) with Attribute-Based Access Control (ABAC).
+In high-throughput multi-tenant architectures, querying the persistence layer (PostgreSQL) for every authorization check degrades p99 tail latency and creates database contention. `aether-authz` provides an **in-memory policy engine with sub-microsecond cached evaluation** (`189.28 ns` median in `crates/aether-authz/benches/authz_bench.rs`, `authz_policy_evaluation/cached_evaluation`; `1.168 µs` median uncached in `authz_policy_evaluation/uncached_evaluation`), combining Role-Based Access Control (RBAC) with Attribute-Based Access Control (ABAC).
 
 ### Key Architectural Characteristics
-- **Default-Closed Security Model**: If no registered policy grants access, evaluation strictly defaults to `Deny`.
+- **Default-Closed Security Model**: If no registered policy grants access, evaluation defaults to `Deny`.
 - **Role Inheritance Hierarchy**: Supports multi-level role expansion (e.g. `Admin` inherits `Editor`, which inherits `Viewer`).
 - **Granular ABAC Conditions**:
   - `SameTenant`: Validates strict isolation between subject tenant and target resource tenant.
@@ -41,7 +41,7 @@ Provides high-cardinality distributed tracing and standardized Prometheus RED (R
   - `http_requests_total`: Counter tagged with `service`, `method`, `route`, and `status`.
   - `http_requests_in_flight`: Concurrency gauge tracking active requests via atomic fetch_add/fetch_sub.
   - `http_request_duration_seconds`: High-resolution latency histograms with standard web latency buckets (0.005s to 10.0s).
-- **Axum & Actix-Web Middleware**: Standardized middleware (`telemetry_middleware` and `TelemetryMiddleware`) that automatically binds trace spans and metric records to request lifecycles.
+- **Axum & Actix-Web Library Middleware**: Middleware adapters for Axum (`telemetry_middleware`, used by `aether-router` and `aether-logd`) and Actix-Web (`ActixTelemetryMiddleware` in `crates/aether-telemetry/src/actix.rs`, demonstrated in `crates/aether-authz/examples/actix_monolith.rs`) that bind trace spans and metric records to request lifecycles.
 
 ---
 
@@ -61,21 +61,21 @@ cargo bench --workspace --manifest-path crates/Cargo.toml
 
 ### Measured Results
 
-| Benchmark Target | Operation / Scenario | Measured Median Latency | Throughput / Characteristics |
-| :--- | :--- | :--- | :--- |
-| `aether-authz` | **Cached policy evaluation** | **189.28 ns** (< 0.2 µs) | **5.28M ops/sec** (Strictly sub-microsecond) |
-| `aether-authz` | **Uncached policy evaluation** | **1.168 µs** | **856K ops/sec** (Full RBAC/ABAC rule evaluation) |
-| `aether-authz` | **Cache invalidation (tenant)** | **3.030 µs** | Granular partition retain across 1,000 entries |
-| `aether-authz` | **Cache invalidation (subject)** | **2.473 µs** | Granular key retain across 1,000 entries |
-| `aether-authz` | **Cache invalidation (resource)** | **2.444 µs** | Granular resource retain across 1,000 entries |
-| `aether-telemetry` | **Single-thread request record** | **245.59 ns** | Atomic counter + histogram bucket update |
-| `aether-telemetry` | **In-flight gauge update** | **3.93 ns** | Lock-free `AtomicI64` fetch_add / fetch_sub |
-| `aether-telemetry` | **Prometheus text rendering** | **2.468 µs** | Full exposition format generation |
-| `aether-telemetry` | **Concurrent recording (4 threads)**| **209.63 ns** | High-contention parallel recording |
+| Benchmark Target | Operation / Scenario | Criterion Benchmark (`file :: group/function`) | Measured Median Latency | Throughput / Characteristics |
+| :--- | :--- | :--- | :--- | :--- |
+| `aether-authz` | **Cached policy evaluation** | `crates/aether-authz/benches/authz_bench.rs :: authz_policy_evaluation/cached_evaluation` | **189.28 ns** (< 0.2 µs) | **5.28M ops/sec** (Sub-microsecond cached lookup) |
+| `aether-authz` | **Uncached policy evaluation** | `crates/aether-authz/benches/authz_bench.rs :: authz_policy_evaluation/uncached_evaluation` | **1.168 µs** | **856K ops/sec** (Full RBAC/ABAC rule evaluation) |
+| `aether-authz` | **Cache invalidation (tenant)** | `crates/aether-authz/benches/authz_bench.rs :: authz_cache_invalidation/invalidate_tenant` | **3.030 µs** | Granular partition retain across 1,000 entries |
+| `aether-authz` | **Cache invalidation (subject)** | `crates/aether-authz/benches/authz_bench.rs :: authz_cache_invalidation/invalidate_subject` | **2.473 µs** | Granular key retain across 1,000 entries |
+| `aether-authz` | **Cache invalidation (resource)** | `crates/aether-authz/benches/authz_bench.rs :: authz_cache_invalidation/invalidate_resource` | **2.444 µs** | Granular resource retain across 1,000 entries |
+| `aether-telemetry` | **Single-thread request record** | `crates/aether-telemetry/benches/telemetry_bench.rs :: telemetry_metrics_single_thread/record_request_single_thread` | **245.59 ns** | Atomic counter + histogram bucket update |
+| `aether-telemetry` | **In-flight gauge update** | `crates/aether-telemetry/benches/telemetry_bench.rs :: telemetry_metrics_single_thread/in_flight_gauge_inc_dec` | **3.93 ns** | `AtomicI64` fetch_add / fetch_sub |
+| `aether-telemetry` | **Prometheus text rendering** | `crates/aether-telemetry/benches/telemetry_bench.rs :: telemetry_metrics_single_thread/render_prometheus` | **2.468 µs** | Full exposition format generation |
+| `aether-telemetry` | **Concurrent recording (4 threads)** | `crates/aether-telemetry/benches/telemetry_bench.rs :: telemetry_metrics_contention/concurrent_record_request_4_threads` | **209.63 ns** | High-contention parallel recording |
 
 ### Architectural Reality & Transparency
-- **Concurrency**: Fast-path metrics (gauges and histogram bucket counters) use atomic primitives (`AtomicU64`, `AtomicI64`) with `Ordering::Relaxed`. Route indexing and cache lookup utilize fine-grained read-write locks (`std::sync::RwLock`) for concurrent parallel read evaluation.
-- **Memory**: Cache keys and contexts allocate small bounded strings (`Subject.id`, `Tenant.id`, `Resource.id`) for multi-tenant isolation safety, with in-memory footprint bounded by configurable LRU capacity. Unbounded heap allocations are strictly prevented.
+- **Concurrency**: Fast-path metrics (gauges and histogram bucket counters) use atomic primitives (`AtomicU64`, `AtomicI64`) with `Ordering::Relaxed`. Route indexing and cache lookup utilize read-write locks (`std::sync::RwLock`) for concurrent read evaluation.
+- **Memory & Cache Eviction**: `EvaluationCache` (`crates/aether-authz/src/cache.rs`) stores owned string fields in `CacheKey` (`subject_id`, `tenant_id`, `resource_kind`, `resource_id`) inside an `Arc<RwLock<HashMap<CacheKey, CachedEntry>>>` with a per-entry TTL (`expires_at`) and a `max_capacity` bound (default `10,000`, pre-allocating up to `max_capacity.min(4096)`). It is **not** LRU: when `map.len() >= self.max_capacity` on `insert()`, it calls `map.clear()` to remove all cached entries before inserting the new entry.
 
 ---
 

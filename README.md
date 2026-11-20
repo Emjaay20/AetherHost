@@ -188,7 +188,7 @@ flowchart LR
 
 ### 4. Native Rust Platform & Systems Subsystem (`crates/`)
 Built with modern, memory-safe Rust and Staff-level platform engineering standards:
-* **`aether-authz`**: High-performance in-memory authorization engine (RBAC/ABAC) featuring role inheritance hierarchies, multi-tenant isolation guarantees, sub-microsecond TTL evaluation caching with bounded capacity, and structured audit trails.
+* **`aether-authz`**: High-performance in-memory authorization engine (RBAC/ABAC) featuring role inheritance hierarchies, multi-tenant isolation guarantees, sub-microsecond TTL evaluation caching (`189.28 ns` median in `crates/aether-authz/benches/authz_bench.rs`, `authz_policy_evaluation/cached_evaluation`) with simple capacity-bound full-map clear eviction, and structured audit trails.
 * **`aether-telemetry`**: Production observability layer standardizing W3C `traceparent` distributed tracing (Honeycomb/Jaeger) and atomic Prometheus RED metrics (Rate, Errors, Duration) with p50/p95/p99 latency histograms and Axum middleware.
 * **`aether-core`**: Shared platform kernel featuring typed error hierarchies (`PlatformError`), concurrency-safe circuit breakers (`CircuitBreaker`) preventing cascading upstream outages, and fail-fast startup configuration validation.
 * **`aether-cli`**: The official developer CLI and agent interface. Features `aether doctor` for 1-click environment diagnostics, `aether mcp` running an AI Model Context Protocol server over stdio for coding agents (Claude, Cursor, Antigravity), instant `aether status`, `aether list`, `aether logs`, and terminal-based AI generation (`aether ai <id> "<prompt>"`).
