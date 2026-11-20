@@ -305,6 +305,8 @@ jobs:
           version: v0.25.0
           node_image: kindest/node:v1.31.2
           config: scripts/security/fixtures/kind-network-policy.yaml
+          # Nodes cannot become Ready until the enforcing CNI is installed.
+          wait: "0s"
 
       - name: Install a policy-enforcing CNI
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
@@ -315,6 +317,7 @@ jobs:
             --set ipam.mode=kubernetes --set kubeProxyReplacement=false \
             --set operator.replicas=1 --wait --timeout=300s
           kubectl rollout status daemonset/cilium -n kube-system --timeout=180s
+          kubectl wait --for=condition=Ready nodes --all --timeout=180s
 
       - name: Build Platform Docker Image
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
