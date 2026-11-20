@@ -1,9 +1,20 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
+	"net/url"
+	"sort"
 	"strings"
 )
+
+// aetherPressIntelligencePlugin is deliberately shipped with the agent rather
+// than fetched during tenant provisioning. That keeps a WordPress workload
+// reproducible and prevents an install-time dependency from gaining access to
+// the site volume.
+//
+//go:embed assets/aetherpress-intelligence.php
+var aetherPressIntelligencePlugin string
 
 // buildWordPressWorkload is a platform-owned profile. It uses the same plan,
 // credentials, private network and health-gated lifecycle as an image
@@ -33,8 +44,16 @@ func buildWordPressWorkload(app Application, identity, mariaDBPassword, redisPas
 
 	var b strings.Builder
 	b.WriteString("services:\n")
+	pluginEnabled, err := aetherPressIntelligenceEnabled(app)
+	if err != nil {
+		return WorkloadPlan{}, err
+	}
+	pluginName := "aetherhost-" + identity + "-aetherpress-plugin"
 	writeWordPressNginx(&b, nginxName, phpName, identity, publicName, app.CustomDomain, resources)
-	writeWordPressPHP(&b, phpName, mariaName, redisName, resources)
+	if pluginEnabled {
+		writeAetherPressPluginBootstrap(&b, pluginName)
+	}
+	writeWordPressPHP(&b, phpName, mariaName, redisName, pluginName, pluginEnabled, resources)
 	writeWordPressMariaDB(&b, mariaName, resources)
 	writeWordPressRedis(&b, redisName, resources)
 	b.WriteString("\nnetworks:\n")
@@ -46,26 +65,84 @@ func buildWordPressWorkload(app Application, identity, mariaDBPassword, redisPas
 	fmt.Fprintf(&b, "  wordpress_data:\n    name: aetherhost-%s_wordpress_data\n", identity)
 	fmt.Fprintf(&b, "  db_data:\n    name: aetherhost-%s_db_data\n", identity)
 
-	wordpressEnv := fmt.Sprintf("WORDPRESS_DB_HOST=%s\nWORDPRESS_DB_USER=wordpress\nWORDPRESS_DB_PASSWORD=%s\nWORDPRESS_DB_NAME=wordpress\nREDIS_PASSWORD=%s\nWORDPRESS_CONFIG_EXTRA=define('WP_REDIS_HOST', '%s'); define('WP_REDIS_PORT', 6379); define('WP_REDIS_PASSWORD', getenv('REDIS_PASSWORD'));\n", mariaName, mariaDBPassword, redisPassword, redisName)
+	wordpressAppEnv, err := renderWordPressApplicationEnv(app.EnvVars)
+	if err != nil {
+		return WorkloadPlan{}, err
+	}
+	wordpressEnv := fmt.Sprintf("WORDPRESS_DB_HOST=%s\nWORDPRESS_DB_USER=wordpress\nWORDPRESS_DB_PASSWORD=%s\nWORDPRESS_DB_NAME=wordpress\nREDIS_PASSWORD=%s\nWORDPRESS_CONFIG_EXTRA=define('WP_REDIS_HOST', '%s'); define('WP_REDIS_PORT', 6379); define('WP_REDIS_PASSWORD', getenv('REDIS_PASSWORD'));\n%s", mariaName, mariaDBPassword, redisPassword, redisName, wordpressAppEnv)
 	mariaEnv := fmt.Sprintf("MARIADB_DATABASE=wordpress\nMARIADB_USER=wordpress\nMARIADB_PASSWORD=%s\nMARIADB_RANDOM_ROOT_PASSWORD=1\n", mariaDBPassword)
 	redisEnv := fmt.Sprintf("REDIS_PASSWORD=%s\n", redisPassword)
+
+	configFiles := map[string]string{
+		"wordpress-nginx.conf":   wordpressNginxConfig(phpName),
+		"wordpress-php-fpm.conf": wordpressPHPFPMConfig(tuning),
+		"wordpress-mariadb.cnf":  wordpressMariaDBConfig(tuning),
+		"wordpress-ready.php":    wordpressReadyScript(),
+	}
+	if pluginEnabled {
+		configFiles["aetherpress-intelligence.php"] = aetherPressIntelligencePlugin
+	}
 
 	return WorkloadPlan{
 		Compose:      b.String(),
 		WordPressEnv: wordpressEnv,
 		MariaDbEnv:   mariaEnv,
 		RedisEnv:     redisEnv,
-		ConfigFiles: map[string]string{
-			"wordpress-nginx.conf":   wordpressNginxConfig(phpName),
-			"wordpress-php-fpm.conf": wordpressPHPFPMConfig(tuning),
-			"wordpress-mariadb.cnf":  wordpressMariaDBConfig(tuning),
-			"wordpress-ready.php":    wordpressReadyScript(),
-		},
-		Alias:      nginxName,
-		Containers: []string{nginxName, phpName, mariaName, redisName},
-		Port:       80,
-		HealthPath: "/.aetherhost/ready",
+		ConfigFiles:  configFiles,
+		Alias:        nginxName,
+		Containers:   []string{nginxName, phpName, mariaName, redisName},
+		Port:         80,
+		HealthPath:   "/.aetherhost/ready",
 	}, nil
+}
+
+func aetherPressIntelligenceEnabled(app Application) (bool, error) {
+	enabled := strings.EqualFold(strings.TrimSpace(app.EnvVars["AETHERPRESS_INTELLIGENCE_ENABLED"]), "true")
+	if !enabled {
+		return false, nil
+	}
+	baseURL := strings.TrimSuffix(strings.TrimSpace(app.EnvVars["AETHERPRESS_INTELLIGENCE_CRAWLER_URL"]), "/")
+	token := strings.TrimSpace(app.EnvVars["AETHERPRESS_INTELLIGENCE_CRAWLER_TOKEN"])
+	sources := strings.TrimSpace(app.EnvVars["AETHERPRESS_INTELLIGENCE_ALLOWED_SOURCES"])
+	if !strings.HasPrefix(baseURL, "https://") || strings.ContainsAny(baseURL, "\r\n") {
+		return false, fmt.Errorf("AetherPress Intelligence requires an HTTPS crawler URL")
+	}
+	if len(token) < 16 || strings.ContainsAny(token, "\r\n") {
+		return false, fmt.Errorf("AetherPress Intelligence requires a scoped crawler API key")
+	}
+	if sources == "" || strings.ContainsAny(sources, "\r\n") {
+		return false, fmt.Errorf("AetherPress Intelligence requires at least one approved source origin")
+	}
+	for _, source := range strings.Split(sources, ",") {
+		parsed, parseErr := url.ParseRequestURI(strings.TrimSpace(source))
+		if parseErr != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+			return false, fmt.Errorf("AetherPress Intelligence approved sources must be HTTPS origins")
+		}
+	}
+	return true, nil
+}
+
+func renderWordPressApplicationEnv(values map[string]string) (string, error) {
+	if len(values) == 0 {
+		return "", nil
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, key := range keys {
+		value := values[key]
+		if !envKeyPattern.MatchString(key) || len(value) > 500 || strings.ContainsAny(value, "\r\n\x00") {
+			return "", fmt.Errorf("invalid WordPress application environment")
+		}
+		if isReservedEnv(key) {
+			return "", fmt.Errorf("reserved WordPress environment %s", key)
+		}
+		fmt.Fprintf(&b, "%s=%s\n", key, value)
+	}
+	return b.String(), nil
 }
 
 func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publicName, customDomain string, resources WordPressResources) {
@@ -101,7 +178,7 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	b.WriteString("      interval: 5s\n      timeout: 3s\n      retries: 20\n")
 }
 
-func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string, resources WordPressResources) {
+func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName, pluginName string, pluginEnabled bool, resources WordPressResources) {
 	fmt.Fprintf(b, "  %s:\n", phpName)
 	// Keep the legacy major PHP version for data-preserving migrations. Runtime
 	// upgrades are a separate, tested customer change rather than a side effect
@@ -117,8 +194,24 @@ func writeWordPressPHP(b *strings.Builder, phpName, mariaName, redisName string,
 	b.WriteString("    cap_add:\n      - CHOWN\n      - DAC_OVERRIDE\n      - SETGID\n      - SETUID\n")
 	b.WriteString("    networks:\n      private: {}\n")
 	b.WriteString("    depends_on:\n")
+	if pluginEnabled {
+		fmt.Fprintf(b, "      %s:\n        condition: service_completed_successfully\n", pluginName)
+	}
 	fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", mariaName)
 	fmt.Fprintf(b, "      %s:\n        condition: service_healthy\n", redisName)
+}
+
+// The sidecar runs once and copies the audited MU plugin into the persistent
+// WordPress volume before PHP-FPM starts. The crawler credential remains in
+// wordpress.env; it is never written into the plugin or served by nginx.
+func writeAetherPressPluginBootstrap(b *strings.Builder, name string) {
+	fmt.Fprintf(b, "  %s:\n", name)
+	b.WriteString("    image: alpine:3.20\n")
+	fmt.Fprintf(b, "    container_name: %s\n", name)
+	b.WriteString("    command: [\"/bin/sh\", \"-ec\", \"mkdir -p /var/www/html/wp-content/mu-plugins && install -m 0644 /opt/aetherhost/aetherpress-intelligence.php /var/www/html/wp-content/mu-plugins/aetherpress-intelligence.php\"]\n")
+	b.WriteString("    restart: \"no\"\n    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n")
+	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./aetherpress-intelligence.php:/opt/aetherhost/aetherpress-intelligence.php:ro\n")
+	b.WriteString("    networks:\n      private: {}\n")
 }
 
 func writeWordPressMariaDB(b *strings.Builder, mariaName string, resources WordPressResources) {
