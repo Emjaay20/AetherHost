@@ -240,6 +240,29 @@ describe('ApplicationsService', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('keeps the approved static manifest after the initial GitHub write completes', async () => {
+    const files = [
+      { path: 'public/index.html', content: '<h1>AetherPress</h1>' },
+      { path: 'public/app.js', content: 'console.log("ready")' },
+      { path: 'server.mjs', content: '/* runtime source */' },
+    ];
+    prisma.application.findUnique.mockResolvedValue({
+      id: 'app_1',
+      status: 'pending',
+      githubRepo: 'https://github.com/example/aetherpress.git',
+      commitMessage: 'aetherhost-ai-pending: Initial AetherHost source',
+      aiFiles: files,
+    });
+    prisma.application.update.mockResolvedValue({ id: 'app_1', status: 'running' });
+
+    await service.updateStatus('app_1', 'running');
+
+    expect(prisma.application.update).toHaveBeenCalledWith({
+      where: { id: 'app_1' },
+      data: { status: 'running', commitMessage: null },
+    });
+  });
+
   it('rejects an invalid container image on updateDockerImage', async () => {
     prisma.application.findUnique.mockResolvedValue({
       id: 'app_1',

@@ -29,7 +29,10 @@ AetherHost secret.
    package manifest at the app root, plus `public/index.html`, `public/styles.css`,
    `public/app.js`, and `public/config.js`. Its server exposes only `public/`.
    It runs normally on AetherHost and renders the latest three published posts
-   from WordPress in the browser.
+   from WordPress in the browser. After its first GitHub-backed deployment,
+   AetherHost retains this manifest solely so the selected `public/` export can
+   be published later; it clears the one-time write marker, so it will not
+   replay the generated files over future repository changes.
 4. Once the deployment is running, open **External frontend → Spacefast
    publishing**, expand the Launchpad row, approve the exact static export,
    and choose **Publish privately**.
