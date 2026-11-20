@@ -6,10 +6,10 @@ import { SpacefastOAuthService } from './spacefast-oauth.service';
 import { SpacefastService } from './spacefast.service';
 
 const PROVIDER = 'spacefast';
-const INDEX_PATHS = ['index.html', 'public/index.html', 'dist/index.html'];
+const EXPORT_DIRECTORIES = ['public', 'dist'] as const;
 const STATIC_EXTENSIONS = new Set([
   '.html', '.css', '.js', '.mjs', '.json', '.svg', '.png', '.jpg', '.jpeg',
-  '.gif', '.webp', '.ico', '.txt', '.map', '.woff', '.woff2', '.ttf',
+  '.gif', '.webp', '.ico', '.txt', '.woff', '.woff2', '.ttf',
   '.webmanifest',
 ]);
 const MAX_STATIC_FILES = 200;
@@ -50,7 +50,7 @@ export class SpacefastTenantService {
     const artifact = selectStaticArtifact(app.aiFiles);
     if (!artifact) {
       throw new BadRequestException(
-        'No explicit static export with an index.html file is available for this application. Build and attach a static export before publishing it externally.',
+        staticArtifactError(app.aiFiles),
       );
     }
 
@@ -169,12 +169,20 @@ export class SpacefastTenantService {
 export function selectStaticArtifact(value: unknown): { indexPath: string; files: Array<{ path: string; content: string }> } | null {
   if (!Array.isArray(value)) return null;
   const files = value as AiFile[];
-  const indexPath = INDEX_PATHS.find((path) => files.some((file) => file.path === path && typeof file.content === 'string'));
+  const indexPath = EXPORT_DIRECTORIES
+    .map((directory) => `${directory}/index.html`)
+    .find((path) => files.some((file) => file.path === path && typeof file.content === 'string'));
   if (!indexPath) return null;
+
+  const exportDirectory = indexPath.slice(0, indexPath.lastIndexOf('/'));
+  const prefix = `${exportDirectory}/`;
 
   const selected = files
     .filter((file): file is { path: string; content: string } => typeof file.path === 'string' && typeof file.content === 'string')
-    .filter((file) => isSafeStaticPath(file.path));
+    .filter((file) => file.path.startsWith(prefix))
+    .filter((file) => isSafeStaticPath(file.path))
+    .filter((file) => !isExcludedStaticPath(file.path))
+    .map((file) => ({ path: file.path.slice(prefix.length), content: file.content }));
   const bytes = selected.reduce((total, file) => total + new TextEncoder().encode(file.content).byteLength, 0);
   if (selected.length === 0 || selected.length > MAX_STATIC_FILES || bytes > MAX_STATIC_BYTES) {
     throw new BadRequestException('The static export must contain at most 200 safe static files and be 10 MiB or smaller.');
@@ -182,10 +190,28 @@ export function selectStaticArtifact(value: unknown): { indexPath: string; files
   return { indexPath, files: selected };
 }
 
+function staticArtifactError(value: unknown) {
+  if (Array.isArray(value) && value.some((file: AiFile) => file.path === 'index.html' && typeof file.content === 'string')) {
+    return 'This application has a root-level index.html. Spacefast exports must be stored in public/ or dist/ so backend files cannot be published. Recreate this legacy app from the current template or move its frontend files into public/ or dist/ before publishing.';
+  }
+  return 'No explicit static export is available. Put index.html and its browser assets in public/ or dist/ before publishing externally.';
+}
+
 function isSafeStaticPath(path: string) {
   if (path.startsWith('/') || path.includes('\\') || path.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return false;
   const lower = path.toLowerCase();
   return [...STATIC_EXTENSIONS].some((extension) => lower.endsWith(extension));
+}
+
+function isExcludedStaticPath(path: string) {
+  const lower = path.toLowerCase();
+  const basename = lower.slice(lower.lastIndexOf('/') + 1);
+  if (basename.startsWith('.env') || basename.includes('.config.')) return true;
+  return new Set([
+    'package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock',
+    'bun.lock', 'bun.lockb', 'npm-shrinkwrap.json', 'composer.lock',
+    'poetry.lock', 'cargo.lock', 'go.sum',
+  ]).has(basename);
 }
 
 function externalSlug(name: string, applicationId: string) {
