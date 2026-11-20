@@ -49,6 +49,9 @@ jobs:
             terraform:
               - 'terraform/**'
             kubernetes:
+              - '.github/workflows/ci.yml'
+              - 'scripts/security/test-network-isolation.sh'
+              - 'scripts/security/fixtures/**'
               - 'deploy/helm/**'
               - 'deploy/gitops/**'
               - 'crates/**'
@@ -301,6 +304,17 @@ jobs:
           cluster_name: aether-kind
           version: v0.25.0
           node_image: kindest/node:v1.31.2
+          config: scripts/security/fixtures/kind-network-policy.yaml
+
+      - name: Install a policy-enforcing CNI
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          helm repo add cilium https://helm.cilium.io/
+          helm repo update cilium
+          helm install cilium cilium/cilium --version 1.18.17 --namespace kube-system \
+            --set ipam.mode=kubernetes --set kubeProxyReplacement=false \
+            --set operator.replicas=1 --wait --timeout=300s
+          kubectl rollout status daemonset/cilium -n kube-system --timeout=180s
 
       - name: Build Platform Docker Image
         if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
@@ -317,8 +331,9 @@ jobs:
         run: |
           kubectl apply -f deploy/gitops/namespace.yaml
           ci_identity_token="$(openssl rand -hex 32)"
+          echo "::add-mask::$ci_identity_token"
           printf 'CI_IDENTITY_TOKEN=%s\n' "$ci_identity_token" >> "$GITHUB_ENV"
-          identities_json="$(printf '{\"credentials\":[{\"token\":\"%s\",\"subject_id\":\"ci\",\"tenant_id\":\"ci\",\"role\":\"developer\",\"expires_at\":4102444800}],\"resources\":{}}' "$ci_identity_token")"
+          identities_json="$(python3 -c 'import json,sys; print(json.dumps({"credentials":[{"token":sys.argv[1],"subject_id":"ci","tenant_id":"ci","role":"developer","expires_at":4102444800}],"resources":{"network-probe":"ci"}}))' "$ci_identity_token")"
           kubectl create secret generic aether-cluster-secrets -n aether-system \
             --from-literal=agent-secret-key="$ci_identity_token" \
             --from-literal=identities.json="$identities_json"
@@ -363,6 +378,10 @@ jobs:
           curl -sf --header "$auth_header" http://127.0.0.1:4001/metrics | grep "http_requests"
 
           kill $PF_PID || true
+
+      - name: Verify real ingress and egress policy enforcement
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: bash scripts/security/test-network-isolation.sh
 
   publish:
     name: Publish approved release
