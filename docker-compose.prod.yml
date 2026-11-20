@@ -5,11 +5,21 @@ services:
   # 1. Edge Ingress: Traefik with Automated Let's Encrypt SSL/TLS
   # =========================================================================
   traefik:
-    image: traefik:latest
+    # Pinned to the release verified against Docker Engine 29 in production.
+    # Releases before v3.6 speak Docker API 1.24, which Engine 29 rejects.
+    image: traefik:v3.7.14
     container_name: aetherhost-traefik
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Immutable root filesystem; writable paths are explicit tmpfs mounts.
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
     environment:
       - DOCKER_API_VERSION=1.44
     command:
@@ -146,6 +156,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Not read_only: the image's entrypoint renders haproxy.cfg at start-up,
+    # so a read-only root crash-loops the proxy and Traefik loses every route.
+    cap_drop:
+      - ALL
     environment:
       CONTAINERS: 1
       NETWORKS: 1
@@ -174,6 +188,10 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Not read_only: the image's entrypoint renders haproxy.cfg at start-up,
+    # so a read-only root crash-loops the proxy and Traefik loses every route.
+    cap_drop:
+      - ALL
     environment:
       CONTAINERS: 1
       NETWORKS: 1
@@ -207,6 +225,12 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Immutable root filesystem; writable paths are explicit tmpfs mounts.
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -286,6 +310,13 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Immutable root filesystem; writable paths are explicit tmpfs mounts.
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+      - /app/apps/dashboard/.next/cache
     depends_on:
       - api
     environment:
@@ -330,6 +361,12 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    # Immutable root filesystem; writable paths are explicit tmpfs mounts.
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
     depends_on:
       - api
       - docker-socket-proxy

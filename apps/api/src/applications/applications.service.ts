@@ -270,7 +270,13 @@ export class ApplicationsService {
       const appsWithTokens = await Promise.all(
         apps.map(async (app) => {
           const token = await getGithubToken(app.tenantId);
-          return { ...app, githubToken: token } as unknown as Application;
+          // The agent writes envVars straight into the workload's .env file,
+          // so it must receive plaintext here, never the encrypted envelope.
+          return {
+            ...app,
+            envVars: this.decryptForAgent(app),
+            githubToken: token,
+          } as unknown as Application;
         })
       );
       return appsWithTokens;
@@ -280,7 +286,7 @@ export class ApplicationsService {
       // The agent needs secret values to provision containers.
       return apps.map((app) => ({
         ...app,
-        envVars: this.secretVault.decrypt((app as any).envVars, `application:${app.tenantId}:${app.id}`),
+        envVars: this.decryptForAgent(app),
       }));
     }
 
@@ -293,6 +299,14 @@ export class ApplicationsService {
       delete listed.envVars;
       return listed;
     });
+  }
+
+  /** Plaintext env vars for the agent, from a row stored encrypted or legacy. */
+  private decryptForAgent(app: Application): Record<string, string> {
+    return this.secretVault.decrypt(
+      (app as unknown as { envVars?: unknown }).envVars,
+      `application:${app.tenantId}:${app.id}`,
+    );
   }
 
   private getBoilerplateFiles(runtime: string): { path: string; content: string }[] {

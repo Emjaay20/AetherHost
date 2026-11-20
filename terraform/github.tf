@@ -24,10 +24,14 @@ resource "github_branch_protection" "main" {
     ]
   }
 
+  # checkov:skip=CKV_GIT_5: GitHub does not let authors approve their own pull
+  # requests. With a single maintainer, any required approval combined with
+  # enforce_admins blocks every merge; raise the variable when a second
+  # reviewer exists. Pull requests and green CI remain mandatory.
   required_pull_request_reviews {
     dismiss_stale_reviews           = true
-    require_code_owner_reviews      = true
-    required_approving_review_count = 2
+    require_code_owner_reviews      = false
+    required_approving_review_count = var.required_approving_review_count
   }
 
   allows_force_pushes = false

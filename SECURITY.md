@@ -9,14 +9,14 @@ AetherHost takes security and multi-tenant isolation seriously. This document ou
 AetherHost operates on a **zero-trust and least-privilege** model designed to isolate untrusted customer applications from the underlying host and orchestrator.
 
 ### Core Security Controls
-* **Tenant Secret Envelope Encryption:** Application environment variables and credentials are encrypted at rest using **AES-256-GCM** with unique 12-byte initialization vectors (IVs) and 16-byte authentication tags. See [SecretVaultService](file:///Users/yusufabubakar/Documents/AetherHost/apps/api/src/common/crypto/secret-vault.service.ts).
+* **Tenant Secret Envelope Encryption:** Application environment variables and credentials are encrypted at rest using **AES-256-GCM** with unique 12-byte initialization vectors (IVs) and 16-byte authentication tags. See [SecretVaultService](apps/api/src/common/crypto/secret-vault.service.ts).
 * **Zero-Trust Docker Socket Proxy:** Neither user workloads nor the public edge proxy have direct access to `/var/run/docker.sock`. All container orchestration is mediated through a restricted socket proxy (`tecnativa/docker-socket-proxy`) with `EXEC=0`, `BUILD=0`, and `POST=0`.
-* **Container Hardening:** All production containers run with `read_only: true`, `cap_drop: [ALL]`, isolated temporary `tmpfs` mounts, and non-root execution profiles.
-* **Continuous Disaster Recovery Verification:** Automated daily non-destructive restore drills verify backup cryptographic integrity and extract database snapshots in **14 seconds** without affecting production. See [Disaster Recovery Runbook](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/disaster-recovery-drill.md).
+* **Container Hardening:** The API, dashboard, agent and Traefik run with `read_only: true`, `cap_drop: [ALL]` (Traefik keeps only `NET_BIND_SERVICE`), `no-new-privileges` and `tmpfs` scratch space. The two Docker socket proxies drop all capabilities but need a writable root for their generated config. Tenant workloads drop all capabilities.
+* **Continuous Disaster Recovery Verification:** Automated daily non-destructive restore drills verify backup cryptographic integrity and extract database snapshots in under four minutes without affecting production. See [Disaster Recovery Runbook](docs/security/disaster-recovery-drill.md).
 * **Cryptographic Supply Chain Security:** All container images are built in GitHub Actions with pinned commit dependencies, published to GHCR, signed with keyless **Cosign** (Sigstore), and accompanied by **Syft** Software Bills of Materials (SBOMs).
-* **Infrastructure as Code (IaC):** Edge routing, WAF rate limiting, and GitHub branch protection are declaratively defined in Terraform and scanned by Checkov. See [terraform/](file:///Users/yusufabubakar/Documents/AetherHost/terraform/).
+* **Infrastructure as Code (IaC):** DNS records and GitHub branch protection are defined in Terraform, validated and scanned by Checkov in CI; importing the live resources and the first apply are pending. See [terraform/](terraform/).
 
-Detailed STRIDE analysis and trust boundary mappings are available in our [STRIDE Threat Model](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/threat-model.md).
+Detailed STRIDE analysis and trust boundary mappings are available in our [STRIDE Threat Model](docs/security/threat-model.md).
 
 ---
 
@@ -27,7 +27,7 @@ Our operational and technical controls are mapped directly to AICPA SOC 2 Type I
 * **System Operations (CC7.1–CC7.4):** Vulnerability management, incident management postmortems, and systemd failure alerting.
 * **Availability (A1.2–A1.4):** Restic CDC deduplicated backups and automated daily restore drills.
 
-Review the complete matrix in [SOC 2 Controls Mapping](file:///Users/yusufabubakar/Documents/AetherHost/docs/security/controls.md).
+Review the complete matrix in [SOC 2 Controls Mapping](docs/security/controls.md).
 
 ---
 

@@ -8,7 +8,7 @@ This runbook makes day-two operations explicit: observe, contain, recover, and r
 | --- | --- | --- |
 | Docker cache maintenance | daily at 03:30 | caps BuildKit at 10GB and removes unused images older than seven days; never removes volumes |
 | Encrypted backup | daily at 02:30 | backs up platform configuration, data volumes, and control-plane dump; excludes rebuildable images/cache |
-| Restore drill | Sunday at 04:15 | validates and restores into a temporary directory only; it never overwrites production data |
+| Restore drill | Daily at 04:15 | validates and restores into a temporary directory only; it never overwrites production data |
 | Application health | every deploy | failed readiness probe tears down only the newly-created workload |
 
 Install the timers after deployment:

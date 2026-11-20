@@ -65,7 +65,7 @@ sequenceDiagram
     participant Backup as restic backup job
     participant VPS as VPS data and volumes
     participant Drive as Google Drive (encrypted)
-    participant Drill as weekly restore check
+    participant Drill as daily restore check
     participant Operator as Operator
 
     Timer->>Backup: daily backup
@@ -83,7 +83,7 @@ sequenceDiagram
 | --- | --- | --- |
 | Availability | readiness checks, restart policy, health probes, safe failure teardown | deployment log and health result |
 | Capacity | CPU, memory and PID ceilings; 10GB bounded BuildKit cache | dashboard telemetry and maintenance logs |
-| Data integrity | private credentialed data services; encrypted off-host backups | backup report and weekly restore drill |
+| Data integrity | private credentialed data services; encrypted off-host backups | backup report and daily restore drill |
 | Security | no public datastore ports, non-privileged workload defaults, separated read-only Docker discovery for ingress | compose output and security review |
 | Developer experience | one deployment contract for app, worker and optional data services | generated workload manifest and runbook |
 

@@ -73,6 +73,23 @@ retry_restic() {
   done
 }
 
+# Volumes to back up: every volume named for the platform, plus every named
+# volume mounted by any container on the host. Tenant stacks name volumes
+# freely (`resolvegrid_mysql_data`, `gadgetsgarden_gg_pgdata`) and may run
+# under their own Compose project, so neither a name prefix nor a project
+# filter catches them all. Anonymous volumes (64-hex names) and BuildKit state
+# are reproducible and excluded.
+backup_volumes() {
+  {
+    docker volume ls --format '{{.Name}}' | grep -E '^aetherhost([-_]|$)' || true
+    docker ps -aq | while IFS= read -r container; do
+      docker inspect --format \
+        '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{println}}{{end}}{{end}}' \
+        "$container" 2>/dev/null || true
+    done
+  } | grep -vE '^(buildx_buildkit_|[0-9a-f]{64}$)' | grep -v '^$' | sort -u
+}
+
 mkdir -p "$work_dir/volumes"
 
 if docker ps --format '{{.Names}}' | grep -qx 'aetherhost-postgres'; then
@@ -93,7 +110,7 @@ while IFS= read -r volume; do
   if [[ -d "/var/lib/docker/volumes/${volume}/_data" ]]; then
     rsync -a --delete "/var/lib/docker/volumes/${volume}/_data/" "$work_dir/volumes/${volume}/"
   fi
-done < <(docker volume ls --format '{{.Name}}' | grep -E '^aetherhost([-_]|$)' || true)
+done < <(backup_volumes)
 
 # Configuration and tenant source are included uncompressed; Git metadata and local
 # build/dependency caches are omitted.

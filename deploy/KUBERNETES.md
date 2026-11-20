@@ -9,7 +9,7 @@ This document formalizes the deployment architecture, scaling strategy, and GitO
 ### Context
 AetherHost serves two primary execution models:
 1. **Tier-1 Edge / Control Plane (Current Production - `194.163.172.101`)**: Single-tenant or compact multi-tenant orchestrator running on hardened bare-metal / VPS compute.
-2. **Tier-2 Distributed Enterprise Engine (`deploy/helm`, `deploy/gitops`)**: Multi-region, auto-scaling workload executor running on managed Kubernetes (AWS EKS, GCP GKE, or k3s edge clusters).
+2. **Tier-2 Distributed Engine (`deploy/helm`, `deploy/gitops`), design only and not deployed**: a multi-node workload executor intended for managed Kubernetes (EKS, GKE) or k3s. The chart is validated in CI on a throwaway KinD cluster; no long-running cluster runs it.
 
 ### Decision
 - **Production Edge Nodes**: Run hardened **Docker Compose** (`docker-compose.prod.yml`). This eliminates Kubernetes control plane memory overhead (~1.5GB to 2GB RAM), avoids etcd quorum latency across single nodes, and keeps the blast radius minimal using Linux namespaces, `read_only: true`, `cap_drop: [ALL]`, and the read-only Docker socket proxy.
@@ -68,10 +68,10 @@ flowchart LR
 ```
 
 ### GitOps Manifests
-- **[namespace.yaml](file:///Users/yusufabubakar/Documents/AetherHost/deploy/gitops/namespace.yaml)**: Enforces namespace-level restricted PSS and audit logging.
-- **[gitrepository.yaml](file:///Users/yusufabubakar/Documents/AetherHost/deploy/gitops/gitrepository.yaml)**: Configures Git sync targeting `deploy/helm/aether-platform` and `deploy/gitops`.
-- **[helmrelease.yaml](file:///Users/yusufabubakar/Documents/AetherHost/deploy/gitops/helmrelease.yaml)**: Automates canary rollouts, auto-rollback on failure (`remediation.retries: 3`), and sets replica limits.
-- **[kustomization.yaml](file:///Users/yusufabubakar/Documents/AetherHost/deploy/gitops/kustomization.yaml)**: Reconciles all Kubernetes resources every 10 minutes with state pruning.
+- **[namespace.yaml](../deploy/gitops/namespace.yaml)**: Enforces namespace-level restricted PSS and audit logging.
+- **[gitrepository.yaml](../deploy/gitops/gitrepository.yaml)**: Configures Git sync targeting `deploy/helm/aether-platform` and `deploy/gitops`.
+- **[helmrelease.yaml](../deploy/gitops/helmrelease.yaml)**: Automates canary rollouts, auto-rollback on failure (`remediation.retries: 3`), and sets replica limits.
+- **[kustomization.yaml](../deploy/gitops/kustomization.yaml)**: Reconciles all Kubernetes resources every 10 minutes with state pruning.
 
 ---
 

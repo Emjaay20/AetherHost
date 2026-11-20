@@ -97,7 +97,7 @@ ssh root@<YOUR_CONTABO_IP>
 ```
 
 ### Step 2: Run the Automated Bootstrap Script
-AetherHost includes a turnkey setup script ([deploy/setup-contabo.sh](file:///Users/yusufabubakar/Documents/AetherHost/deploy/setup-contabo.sh)) that configures:
+AetherHost includes a turnkey setup script ([deploy/setup-contabo.sh](../deploy/setup-contabo.sh)) that configures:
 - Essential system packages (`ca-certificates`, `curl`, `git`, `ufw`, `fail2ban`).
 - **4GB NVMe Swap space** (prevents kernel Out-Of-Memory kills during container builds).
 - Official **Docker CE & Docker Compose plugin**.
@@ -211,13 +211,13 @@ Both should return `HTTP/2 200` with valid Let's Encrypt SSL certificates!
 
 ---
 
-## 8. Zero-Downtime Blue/Green Deployments & Probing
+## 8. Health-Checked Deployments & Probing
 
 In AetherHost:
 1. When a user prompts the AI Architect or pushes to GitHub, the Go Agent launches the new container image.
 2. The agent probes container HTTP readiness on port 3000 before updating Traefik routing.
 3. If an application takes time to install dependencies (e.g. `pip install` or `npm install`), Traefik does not route traffic until the container responds with `200 OK`.
-4. This completely eliminates 502 Bad Gateway race conditions.
+4. This avoids 502 Bad Gateway responses while dependencies install. The previous container is stopped before the new one starts, so a short gap remains.
 
 ---
 
