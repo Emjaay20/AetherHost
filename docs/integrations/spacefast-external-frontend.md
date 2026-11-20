@@ -71,6 +71,44 @@ syntax. See <https://spacefast.com/docs/api/>.
 5. API traffic continues to route to the AetherHost origin. Spacefast failure
    cannot alter the origin workload, its data, or its DNS.
 
+## Publish states and recovery
+
+Each application has one publish record per provider. Its `status` moves
+through these states:
+
+| State | Meaning | Leaves the state when |
+|---|---|---|
+| `publishing`, with an operation | Spacefast accepted the upload and is finalizing it | The reconciler sees `succeeded` (→ `published`), `failed` or `canceled` (→ `failed`), or a 404 for the operation (→ `failed`, `operation_not_found`) |
+| `publishing`, no operation | AetherHost holds the publish slot and is talking to Spacefast | The request finishes, or the 10-minute lease expires (→ `failed`, `interrupted`) |
+| `published` | The version is finalized | A new publish is requested |
+| `failed` | `lastErrorCode` says why | A new publish is requested |
+
+Recovery rules:
+
+- **One publisher at a time.** A publish claims the record with a conditional
+  write (create, or update only if the row is unchanged since it was read). A
+  concurrent request that loses the claim gets the current record back and
+  sends nothing to Spacefast.
+- **Interrupted attempts are retryable.** An API restart mid-publish leaves
+  `publishing` with no operation. After the lease, the reconciler marks it
+  `failed` (`interrupted`) and audits it; a tenant can also publish again
+  straight away once the lease has expired.
+- **Resuming does not duplicate work.** A resumed attempt reuses its original
+  idempotency key. Spacefast replays stored results for 24 hours, so a Space or
+  upload that succeeded before the interruption is returned rather than created
+  again. The upload key includes a digest of the exported files, because
+  Spacefast rejects a reused key with a different body
+  (`idempotency_key_reused`); changed files are therefore a new request.
+- **No silent waiting.** A receipt that is neither finished nor pollable is
+  recorded as `failed` (`operation_missing`); AetherHost does not drive the
+  multi-step upload/finalize flow.
+- **Fair polling.** Each non-final poll touches the record, so the oldest-first
+  reconciler batch of 100 rotates through every pending publish.
+
+Not covered yet: removing a Space when its application is deleted, and
+checking an operation with the credential that started it after a tenant
+connects or disconnects their own Spacefast account.
+
 ## Practical WordPress workflow
 
 This is a hybrid pattern, not a migration of WordPress to a static host.

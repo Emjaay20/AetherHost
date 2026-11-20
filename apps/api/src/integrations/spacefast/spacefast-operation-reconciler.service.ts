@@ -23,6 +23,19 @@ export class SpacefastOperationReconcilerService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async reconcilePendingOperations() {
+    // A publish interrupted before Spacefast returned an operation has nothing
+    // to poll. Fail it after its lease so the tenant can see it and retry.
+    try {
+      const expired = await this.tenantService.expireAbandonedPublishes();
+      if (expired > 0) {
+        this.logger.warn(`Marked ${expired} interrupted Spacefast publish(es) as failed`);
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Spacefast abandoned-publish sweep deferred (${safeErrorCode(error)})`,
+      );
+    }
+
     const deployments = await this.prisma.externalFrontendDeployment.findMany({
       where: {
         provider: PROVIDER,
