@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import tempfile
+import time
+import sys
 import unittest
 
 spec = importlib.util.spec_from_file_location('runtime_evidence', Path(__file__).with_name('collect-runtime-evidence.py'))
@@ -11,6 +13,23 @@ spec.loader.exec_module(module)
 IMAGE = 'ghcr.io/emjaay20/aetherhost-api@sha256:' + 'a' * 64
 
 class RuntimeEvidenceTests(unittest.TestCase):
+    def test_command_timeout_terminates_children_that_inherit_stdout(self):
+        program = "import subprocess,sys,time; subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)']); time.sleep(30)"
+        started = time.monotonic()
+        code, output = module.command([sys.executable, '-c', program], timeout=0.5)
+        self.assertEqual(code, -1)
+        self.assertEqual(output, '')
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_restore_journal_exports_only_valid_drill_result(self):
+        output = 'private SQL error\n' + json.dumps({'drill': 'postgresql-restore', 'status': 'passed',
+            'elapsed_seconds': 12, 'verified_at': '2026-11-20T01:00:00Z', 'secret': 'never-export'})
+        result = module.restore_summary(output)
+        self.assertEqual(result['elapsed_seconds'], 12)
+        self.assertNotIn('never-export', json.dumps(result))
+        self.assertNotIn('private SQL', json.dumps(result))
+        self.assertEqual(module.restore_summary('no result')['status'], 'unavailable')
+
     def test_observes_digest_and_hardening_without_copying_environment(self):
         data = dict(image=IMAGE, user='node', readonly=True, cap_drop=['ALL'], security_opt=['no-new-privileges:true'], env=['TOKEN=never-export'])
         result = module.validate_container(data, IMAGE)

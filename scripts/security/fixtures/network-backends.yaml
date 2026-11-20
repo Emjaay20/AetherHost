@@ -1,0 +1,102 @@
+# CI-only backend; no persistent volumes, host mounts, or application data.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: allowed-policy-backend
+  labels:
+    app.kubernetes.io/name: aetherhost-api
+    security-test: allowed-policy-backend
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: backend
+      image: python:3.12-alpine
+      command: ["python", "-B", "-c"]
+      args:
+        - |
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b"network-policy-proof")
+              def log_message(self, *args):
+                  pass
+          HTTPServer(("0.0.0.0", 3000), Handler).serve_forever()
+      ports:
+        - {name: http, containerPort: 3000}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    security-test: allowed-policy-backend
+  ports:
+    - {name: http, port: 3000, targetPort: http}
+
+---
+# CI-only backend; no persistent volumes, host mounts, or application data.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: blocked-policy-backend
+  labels:
+    app.kubernetes.io/name: aetherhost-untrusted
+    security-test: blocked-policy-backend
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: backend
+      image: python:3.12-alpine
+      command: ["python", "-B", "-c"]
+      args:
+        - |
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b"network-policy-proof")
+              def log_message(self, *args):
+                  pass
+          HTTPServer(("0.0.0.0", 3000), Handler).serve_forever()
+      ports:
+        - {name: http, containerPort: 3000}
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: [ALL]
+      resources:
+        requests: {cpu: 10m, memory: 32Mi}
+        limits: {cpu: 100m, memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-blocked
+spec:
+  selector:
+    security-test: blocked-policy-backend
+  ports:
+    - {name: http, port: 3000, targetPort: http}
