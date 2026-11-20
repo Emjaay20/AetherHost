@@ -9,7 +9,7 @@ Welcome to the AetherHost technical documentation repository. This directory hou
 | Domain | Key Documents | Summary |
 |---|---|---|
 | **Security & DevSecOps** | [docs/security/threat-model.md](../docs/security/threat-model.md)<br>[docs/security/controls.md](../docs/security/controls.md)<br>[docs/security/disaster-recovery-drill.md](../docs/security/disaster-recovery-drill.md) | STRIDE threat model, internal control mapping, application-bound AES-GCM encryption, and isolated database recovery tooling. |
-| **Rust Platform Engineering** | [docs/architecture/PLATFORM_ENGINEERING.md](../docs/architecture/PLATFORM_ENGINEERING.md)<br>[docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md](../docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md) | In-memory RBAC/ABAC authorization, server-owned service identity, W3C distributed tracing, Actix-web middleware, and Criterion benchmark tooling. |
+| **Rust Platform Engineering** | [docs/architecture/PLATFORM_ENGINEERING.md](../docs/architecture/PLATFORM_ENGINEERING.md)<br>[docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md](../docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md) | In-memory RBAC/ABAC authorization, server-owned service identity, W3C distributed tracing, Axum and Actix-web library middleware, and Criterion benchmark tooling. |
 | **AI Agents & MCP** | [AGENTS.md](../AGENTS.md) | Developer & AI Agent Guide for Claude Code, Cursor, and Antigravity via embedded `aether mcp` stdio JSON-RPC server. |
 | **Operations & CI/CD** | [docs/OPERATIONS.md](../docs/OPERATIONS.md)<br>[docs/CONTABO_DEPLOYMENT.md](../docs/CONTABO_DEPLOYMENT.md)<br>[deploy/KUBERNETES.md](../deploy/KUBERNETES.md) | Fast CI loops (`nextest`, path filtering, `cargo-deny`), KinD Kubernetes validation, and production Contabo VPS hosting. |
 | **Staff Case Studies** | [docs/portfolio/staff-security-case-study.md](../docs/portfolio/staff-security-case-study.md)<br>[docs/CASE_STUDY.md](../docs/CASE_STUDY.md) | End-to-end platform overhaul, deduplicated Restic backup pipeline, and incident post-mortems. |
@@ -20,15 +20,15 @@ Welcome to the AetherHost technical documentation repository. This directory hou
 
 ### Architecture Decision Records (ADRs)
 Found in [`docs/architecture/adr/`](../docs/architecture/adr/):
-- **[ADR 021](../docs/architecture/adr/021-unified-in-memory-authz-and-telemetry-in-rust-monolith.md)**: Unified In-Memory Authorization (RBAC/ABAC) and RED Telemetry in Rust Monolith.
+- **[ADR 021](../docs/architecture/adr/021-unified-in-memory-authz-and-telemetry-in-rust-monolith.md)**: Unified In-Memory Authorization (RBAC/ABAC) and RED Telemetry for Platform Services.
 - **[ADR 020](../docs/architecture/adr/020-spacefast-customer-oauth.md)**: Spacefast Customer OAuth Foundation.
 - **[ADR 019](../docs/architecture/adr/019-operator-managed-external-frontend-publishing.md)**: Operator-Managed External Frontend Publishing.
 - **[ADR 006](../docs/architecture/adr/006-atomic-entitlement-consume.md)**: Atomic Entitlement Consume via Single SQL Updates.
-- **[ADR 001](../docs/architecture/adr/001-modular-monolith-first.md)**: Modular Monolith First.
+- **[ADR 001](../docs/architecture/adr/001-modular-monolith-first.md)**: Modular Monolith First (NestJS Control Plane).
 
 ### Requests for Comments (RFCs)
 Found in [`docs/architecture/rfc/`](../docs/architecture/rfc/):
-- **[RFC 001](../docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md)**: Zero-Downtime Rollout of In-Memory Authorization and Distributed Telemetry across the Rust Monolith (Dark launch, shadow evaluation, canary routing, and Redis Pub/Sub invalidation mesh).
+- **[RFC 001](../docs/architecture/rfc/RFC-001-monolith-authz-telemetry-rollout.md)**: Proposed Rollout of In-Memory Authorization and Distributed Telemetry for an Actix-Web Service (Library middleware proved in `examples/actix_monolith.rs`, with planned shadow evaluation, canary routing, and Redis Pub/Sub invalidation).
 
 ---
 
