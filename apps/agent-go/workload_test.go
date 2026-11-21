@@ -181,6 +181,9 @@ func TestWordPressUsesContractProfileAndLegacyVolumes(t *testing.T) {
 	if !strings.Contains(nginx, "user: \"82:82\"") {
 		t.Fatal("nginx must run as the unprivileged WordPress file owner")
 	}
+	if !strings.Contains(nginx, "tmpfs:\n      - /var/cache/nginx:uid=82,gid=82,mode=0755\n      - /var/run:uid=82,gid=82,mode=0755") {
+		t.Fatal("unprivileged nginx must receive writable transient cache and PID paths")
+	}
 	if !strings.Contains(nginx, "cap_drop:\n      - ALL") || !strings.Contains(nginx, "cap_add:\n      - NET_BIND_SERVICE\n") {
 		t.Fatal("nginx must retain only the capability needed for port binding")
 	}
