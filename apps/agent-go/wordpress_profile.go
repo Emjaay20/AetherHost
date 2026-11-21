@@ -155,6 +155,10 @@ func writeWordPressNginx(b *strings.Builder, nginxName, phpName, identity, publi
 	// image preserves restrictive file modes.
 	b.WriteString("    user: \"82:82\"\n")
 	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html:ro\n      - ./wordpress-nginx.conf:/etc/nginx/conf.d/default.conf:ro\n      - ./wordpress-ready.php:/var/www/html/aetherhost-ready.php:ro\n")
+	// The stock nginx image normally creates these paths as root during entrypoint
+	// startup. This workload deliberately never starts as root, so provide its
+	// transient cache and PID locations with the worker's ownership instead.
+	b.WriteString("    tmpfs:\n      - /var/cache/nginx:uid=82,gid=82,mode=0755\n      - /var/run:uid=82,gid=82,mode=0755\n")
 	writeServiceLifecycle(b, resources.NginxMB, 96, true)
 	// nginx binds the routed HTTP port but never starts as root, so it needs
 	// only the bind capability after the default capability drop.
