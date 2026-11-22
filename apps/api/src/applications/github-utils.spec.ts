@@ -1,4 +1,10 @@
-import { isFloatingContainerImage, parseGithubOwnerRepo, normalizeRepoFullName } from './github-utils';
+import {
+  extractCommitRevisionPrefix,
+  isFloatingContainerImage,
+  isSameGitRevision,
+  parseGithubOwnerRepo,
+  normalizeRepoFullName,
+} from './github-utils';
 
 describe('github-utils', () => {
   describe('parseGithubOwnerRepo', () => {
@@ -67,6 +73,30 @@ describe('github-utils', () => {
       expect(isFloatingContainerImage('ghcr.io/acme/service:3e94e35')).toBe(false);
       expect(isFloatingContainerImage('ghcr.io/acme/service:v1.2.0')).toBe(false);
       expect(isFloatingContainerImage('ghcr.io/acme/service@sha256:abcdef')).toBe(false);
+    });
+  });
+
+  describe('extractCommitRevisionPrefix & isSameGitRevision', () => {
+    it('extracts hex commit SHA prefix from full SHAs and formatted commit messages', () => {
+      expect(extractCommitRevisionPrefix('e6675a91234567890abcdef1234567890abcdef')).toBe(
+        'e6675a91234567890abcdef1234567890abcdef',
+      );
+      expect(extractCommitRevisionPrefix('e6675a9: feat(nexus): worker readiness')).toBe(
+        'e6675a9',
+      );
+      expect(extractCommitRevisionPrefix('aetherhost-ai-pending: Initial AetherHost source')).toBeNull();
+    });
+
+    it('matches equivalent short and full commit SHAs across webhook and auto-sync paths', () => {
+      expect(
+        isSameGitRevision(
+          'e6675a9: feat(nexus): worker readiness',
+          'e6675a91234567890abcdef1234567890abcdef',
+        ),
+      ).toBe(true);
+      expect(
+        isSameGitRevision('e6675a9', '9525539b9857dc8eec055cd287a54a50858e9642'),
+      ).toBe(false);
     });
   });
 });

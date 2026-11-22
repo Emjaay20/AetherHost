@@ -18,6 +18,11 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import AdminShell from '../AdminShell'
+import {
+  getCustomerSuccessPortfolio,
+  syncCustomerSuccessSalesforce,
+  flagCustomerSuccessExpansion,
+} from '../actions'
 
 interface CustomerAccountCS {
   id: string
@@ -62,31 +67,26 @@ interface PortfolioSummary {
 export default function CustomerSuccessPage() {
   const [data, setData] = useState<PortfolioSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'HEALTHY' | 'EXPANSION' | 'AT_RISK' | 'CRITICAL'>('ALL')
   const [selectedAccount, setSelectedAccount] = useState<CustomerAccountCS | null>(null)
   const [actionFeedback, setActionFeedback] = useState<{ message: string; type: 'success' | 'warn' } | null>(null)
   const [isActing, setIsActing] = useState(false)
 
-  // Fetch real portfolio from API
+  // Fetch live portfolio from authenticated server action
   const fetchPortfolio = async () => {
     try {
       setLoading(true)
-      const res = await fetch('/api/proxy/v1/customer-success/portfolio', { cache: 'no-store' })
-      if (!res.ok) {
-        // Fallback directly to backend port if proxy route differs
-        const directRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/v1/customer-success/portfolio`)
-        if (directRes.ok) {
-          const directData = await directRes.json()
-          setData(directData)
-          return
-        }
+      setFetchError(null)
+      const result = await getCustomerSuccessPortfolio<PortfolioSummary>()
+      if (!result.ok) {
+        setFetchError(result.error)
       } else {
-        const json = await res.json()
-        setData(json)
+        setData(result.data)
       }
     } catch {
-      // In SSR or unauthenticated state, handle gracefully
+      setFetchError('Failed to connect to Customer Success API')
     } finally {
       setLoading(false)
     }
@@ -112,14 +112,13 @@ export default function CustomerSuccessPage() {
   const handleSyncSFDC = async (account: CustomerAccountCS) => {
     setIsActing(true)
     try {
-      const res = await fetch(`/api/proxy/v1/customer-success/accounts/${account.id}/sync-sfdc`, {
-        method: 'POST',
-      })
-      const result = await res.json()
-      if (result.success) {
+      const res = await syncCustomerSuccessSalesforce(account.id)
+      if (res.ok && res.data.success) {
         setActionFeedback({ message: `Synced ${account.name} to Salesforce successfully.`, type: 'success' })
+        await fetchPortfolio()
       } else {
-        setActionFeedback({ message: result.message || 'Salesforce not configured. Add credentials to .env.', type: 'warn' })
+        const msg = res.ok ? res.data.message : res.error
+        setActionFeedback({ message: msg || 'Salesforce not configured. Add credentials to .env.', type: 'warn' })
       }
     } catch {
       setActionFeedback({ message: 'Salesforce API unconfigured in environment.', type: 'warn' })
@@ -132,16 +131,12 @@ export default function CustomerSuccessPage() {
   const handleFlagUpsell = async (account: CustomerAccountCS) => {
     setIsActing(true)
     try {
-      const res = await fetch(`/api/proxy/v1/customer-success/accounts/${account.id}/flag-expansion`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ potentialARR: 18000 }),
-      })
-      const result = await res.json()
-      if (result.success) {
+      const res = await flagCustomerSuccessExpansion(account.id, 18000)
+      if (res.ok && res.data.success) {
         setActionFeedback({ message: `Expansion Opportunity created in Salesforce for ${account.name}.`, type: 'success' })
       } else {
-        setActionFeedback({ message: result.message || 'Salesforce unconfigured: Set credentials to push opportunities.', type: 'warn' })
+        const msg = res.ok ? res.data.message : res.error
+        setActionFeedback({ message: msg || 'Salesforce unconfigured: Set credentials to push opportunities.', type: 'warn' })
       }
     } catch {
       setActionFeedback({ message: 'Salesforce opportunity sync requires live API credentials.', type: 'warn' })
@@ -181,6 +176,23 @@ export default function CustomerSuccessPage() {
           </div>
         </div>
 
+        {/* Explicit API Failure & Retry State */}
+        {fetchError && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+              <span>Customer Success API Error: {fetchError}</span>
+            </div>
+            <button
+              onClick={fetchPortfolio}
+              disabled={loading}
+              className="rounded-lg border border-rose-500/40 bg-rose-500/20 px-3 py-1 font-medium text-rose-100 hover:bg-rose-500/30"
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
+
         {/* Global Action Feedback Alert */}
         {actionFeedback && (
           <div
@@ -209,7 +221,7 @@ export default function CustomerSuccessPage() {
             <div className="text-2xl font-bold text-foreground">
               {data ? data.averageHealthScore : '--'}<span className="text-sm font-normal text-muted-foreground">/100</span>
             </div>
-            <div className="text-[11px] text-muted-foreground mt-1">Real compute & uptime telemetry</div>
+            <div className="text-[11px] text-muted-foreground mt-1">Heuristic workload & build score</div>
           </div>
 
           <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-sm backdrop-blur-sm">

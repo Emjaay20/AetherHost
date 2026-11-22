@@ -155,6 +155,15 @@ export class AdminController {
     this.checkAdmin(actorId);
     return this.adminService.unsuspendTenant(actorId, id);
   }
+
+  @Post('tenants/:id/reconcile-quota')
+  async reconcileQuota(
+    @ActorTenantId() actorId: string,
+    @Param('id') id: string,
+  ) {
+    this.checkAdmin(actorId);
+    return this.adminService.reconcileQuotaUsage(actorId, id);
+  }
 }
 
 function clamp(value: number, min: number, max: number) {

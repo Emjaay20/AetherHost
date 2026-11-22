@@ -4,9 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ApplicationsService } from './applications.service';
 import {
   ensureGithubWebhook,
+  extractCommitRevisionPrefix,
   fetchLatestCommitSha,
   getGithubToken,
   isFloatingContainerImage,
+  isSameGitRevision,
 } from './github-utils';
 
 @Injectable()
@@ -20,6 +22,17 @@ export class GitSyncService {
     private readonly prisma: PrismaService,
     private readonly appsService: ApplicationsService,
   ) {}
+
+  /**
+   * Records a revision processed by the webhook or manual deploy path so the
+   * background polling interval never triggers a duplicate deployment for it.
+   */
+  recordDeployedRevision(appId: string, commitSha: string): void {
+    const normalized = extractCommitRevisionPrefix(commitSha);
+    if (normalized) {
+      this.deployedCommitShas.set(appId, normalized);
+    }
+  }
 
   @Interval(30000) // Poll every 30 seconds
   async checkAndSyncRepositories() {
@@ -51,42 +64,61 @@ export class GitSyncService {
         const latest = await fetchLatestCommitSha(app.githubRepo, token);
         if (!latest) continue;
 
-        const knownSha = this.deployedCommitShas.get(app.id);
+        const persistedRevision =
+          (app as { lastDeployedRevision?: string | null }).lastDeployedRevision ||
+          extractCommitRevisionPrefix(app.commitMessage);
+        const knownSha = this.deployedCommitShas.get(app.id) || persistedRevision;
 
-        if (!knownSha) {
-          // Initialize tracking with the current remote commit
+        // If the persisted database revision already matches the remote SHA (e.g.
+        // deployed via GitHub push webhook moments ago), synchronize in-memory
+        // state and skip duplicate redeployment.
+        if (
+          isSameGitRevision(persistedRevision, latest.sha) ||
+          isSameGitRevision(knownSha, latest.sha)
+        ) {
           this.deployedCommitShas.set(app.id, latest.sha);
           continue;
         }
 
-        if (knownSha !== latest.sha) {
-          this.logger.log(
-            `Auto-sync detected new commit on ${app.githubRepo}: ${latest.sha.slice(0, 7)} - ${latest.message}`,
-          );
+        if (!knownSha) {
+          // Initialize tracking with the current remote commit
           this.deployedCommitShas.set(app.id, latest.sha);
+          await this.prisma.application
+            .update({
+              where: { id: app.id },
+              data: { lastDeployedRevision: latest.sha },
+            })
+            .catch(() => {});
+          continue;
+        }
 
-          const timeStr = new Date().toTimeString().split(' ')[0];
-          if (app.dockerImage && !isFloatingContainerImage(app.dockerImage)) {
-            await this.appsService.addLog(
-              app.id,
-              `[${timeStr}] GitHub commit ${latest.sha.slice(0, 7)} detected, but this deployment is pinned to immutable image "${app.dockerImage}". It was not redeployed with stale code. Update the container image in AetherHost to the new published tag or digest to release this commit.`,
-            );
-            continue;
-          }
+        this.logger.log(
+          `Auto-sync detected new commit on ${app.githubRepo}: ${latest.sha.slice(0, 7)} - ${latest.message}`,
+        );
+        this.deployedCommitShas.set(app.id, latest.sha);
+
+        const timeStr = new Date().toTimeString().split(' ')[0];
+        if (app.dockerImage && !isFloatingContainerImage(app.dockerImage)) {
           await this.appsService.addLog(
             app.id,
-            `[${timeStr}] Auto-sync detected new GitHub commit (${latest.sha.slice(0, 7)}: ${latest.message} by ${latest.author}). Redeploying...`,
+            `[${timeStr}] GitHub commit ${latest.sha.slice(0, 7)} detected, but this deployment is pinned to immutable image "${app.dockerImage}". It was not redeployed with stale code. Update the container image in AetherHost to the new published tag or digest to release this commit.`,
           );
-
-          await this.prisma.application.update({
-            where: { id: app.id },
-            data: {
-              commitMessage: `${latest.sha.slice(0, 7)}: ${latest.message}`,
-            },
-          });
-
-          await this.appsService.redeploy(app.id, app.tenantId);
+          continue;
         }
+        await this.appsService.addLog(
+          app.id,
+          `[${timeStr}] Auto-sync detected new GitHub commit (${latest.sha.slice(0, 7)}: ${latest.message} by ${latest.author}). Redeploying...`,
+        );
+
+        await this.prisma.application.update({
+          where: { id: app.id },
+          data: {
+            commitMessage: `${latest.sha.slice(0, 7)}: ${latest.message}`,
+            lastDeployedRevision: latest.sha,
+          },
+        });
+
+        await this.appsService.redeploy(app.id, app.tenantId);
       }
     } catch (err) {
       this.logger.debug(

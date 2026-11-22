@@ -182,6 +182,14 @@ func provisionSingleApp(app Application, controlPlaneURL, controlPlaneRoot, proj
 		}
 	}
 
+	if scanErr := scanSourceTreeForThreats(appDir); scanErr != nil {
+		errMsg := fmt.Sprintf("[%s] %v", time.Now().Format("15:04:05"), scanErr)
+		sendAppLog(controlPlaneURL, app.ID, errMsg)
+		appLog.Error("source tree security check failed", slog.String("error", scanErr.Error()))
+		updateAppStatus(controlPlaneURL, app.ID, "failed")
+		return
+	}
+
 	// Ensure Cargo.lock exists and is not excluded by .dockerignore if Cargo.toml is present
 	if _, err := os.Stat(filepath.Join(appDir, "Cargo.toml")); err == nil {
 		if _, err := os.Stat(filepath.Join(appDir, "Cargo.lock")); os.IsNotExist(err) {

@@ -32,6 +32,31 @@ export function normalizeRepoFullName(urlOrName?: string | null): string | null 
 }
 
 /**
+ * Extracts a Git commit SHA prefix (7-40 hex characters) from either a full SHA,
+ * a short SHA, or a formatted commit message ("e6675a9: feat: ...").
+ */
+export function extractCommitRevisionPrefix(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (trimmed.startsWith('aetherhost-ai-pending:')) return null;
+  const match = trimmed.match(/^([0-9a-f]{7,40})(?:\b|:|$)/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+/**
+ * Compares two Git revision strings (short or full 40-char SHAs) for equivalence.
+ */
+export function isSameGitRevision(
+  revA?: string | null,
+  revB?: string | null,
+): boolean {
+  const shaA = extractCommitRevisionPrefix(revA);
+  const shaB = extractCommitRevisionPrefix(revB);
+  if (!shaA || !shaB) return false;
+  return shaA.startsWith(shaB) || shaB.startsWith(shaA);
+}
+
+/**
  * An immutable digest or release/commit tag cannot change when Docker pulls it
  * again. Only well-known floating tags are safe to redeploy on a source push.
  */
@@ -199,16 +224,18 @@ function sourcePriority(path: string) {
  */
 export async function fetchGithubRepositoryFiles(
   githubRepoUrl: string,
-  token: string,
+  token?: string | null,
 ): Promise<{ path: string; content: string }[]> {
   const parsed = parseGithubOwnerRepo(githubRepoUrl);
   if (!parsed) return [];
 
-  const headers = {
-    Authorization: `Bearer ${token}`,
+  const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'User-Agent': 'AetherHost-API',
   };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   try {
     const repoResponse = await fetch(

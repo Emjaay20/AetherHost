@@ -24,6 +24,9 @@ describe('ApplicationsService', () => {
     auditLog: {
       create: jest.Mock;
     };
+    deploymentLog: {
+      findMany: jest.Mock;
+    };
     $transaction: jest.Mock;
   };
 
@@ -39,6 +42,9 @@ describe('ApplicationsService', () => {
       },
       auditLog: {
         create: jest.fn().mockResolvedValue({}),
+      },
+      deploymentLog: {
+        findMany: jest.fn(),
       },
       $transaction: jest.fn((cb: (tx: typeof prisma) => unknown) => cb(prisma)),
     };
@@ -238,6 +244,22 @@ describe('ApplicationsService', () => {
     await expect(
       service.remove('app_missing', 'tenant-a'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('does not invent a healthy log entry when the agent has not sent evidence', async () => {
+    prisma.application.findUnique.mockResolvedValue({
+      id: 'app_1',
+      tenantId: 'tenant-a',
+      status: 'running',
+    });
+    prisma.deploymentLog.findMany.mockResolvedValue([]);
+
+    await expect(service.getLogs('app_1', 'tenant-a')).resolves.toEqual([]);
+    expect(prisma.deploymentLog.findMany).toHaveBeenCalledWith({
+      where: { applicationId: 'app_1' },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
   });
 
   it('keeps the approved static manifest after the initial GitHub write completes', async () => {

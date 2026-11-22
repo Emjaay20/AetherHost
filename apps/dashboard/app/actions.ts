@@ -85,6 +85,60 @@ export async function getApplications() {
   }
 }
 
+export type ApplicationsLoadResult = {
+  apps: Awaited<ReturnType<typeof getApplications>>
+  error: string | null
+}
+
+export async function getApplicationsWithStatus(): Promise<ApplicationsLoadResult> {
+  const headers = await getAuthHeaders()
+  if (!headers) return { apps: [], error: 'Sign in to view your applications.' }
+  try {
+    const res = await fetch(`${API_URL}/v1/applications`, { headers, cache: 'no-store' })
+    if (!res.ok) {
+      console.error(`[getApplicationsWithStatus] API error ${res.status}: ${res.statusText}`)
+      return { apps: [], error: 'Applications could not be loaded. Your deployments have not been changed.' }
+    }
+    const apps = await res.json()
+    if (!Array.isArray(apps)) {
+      return { apps: [], error: 'Applications returned an unexpected response. Your deployments have not been changed.' }
+    }
+    return { apps, error: null }
+  } catch (error) {
+    console.error('[getApplicationsWithStatus] Network error:', error)
+    return { apps: [], error: 'AetherHost could not reach the applications service. Your deployments have not been changed.' }
+  }
+}
+
+export type RepositoryInspection = {
+  framework: string
+  runtime: 'nodejs' | 'python' | 'go' | 'rust' | 'php' | 'docker' | 'static'
+  packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun' | null
+  dockerfile: boolean
+  monorepo: boolean
+  suggestedPort: number | null
+  detectedFiles: string[]
+  notes: string[]
+}
+
+export async function inspectGithubRepository(githubRepo: string): Promise<{ data?: RepositoryInspection; error?: string }> {
+  const headers = await getAuthHeaders({ 'Content-Type': 'application/json' })
+  if (!headers) return { error: 'Sign in to inspect a repository.' }
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/inspect-repository`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ githubRepo }),
+      cache: 'no-store',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.message || 'Could not inspect this repository.' }
+    return { data: data as RepositoryInspection }
+  } catch {
+    return { error: 'Network error communicating with AetherHost.' }
+  }
+}
+
 export type ExternalFrontend = {
   applicationId: string
   artifactPath: string
@@ -426,6 +480,32 @@ export async function updateApplicationCustomDomain(
     return { success: true, data };
   } catch (error) {
     return { error: 'Network error communicating with API' };
+  }
+}
+
+export type DomainVerificationStatus = {
+  configured: boolean
+  domain?: string
+  expectedIp?: string
+  addresses?: string[]
+  dns: 'not_configured' | 'pending' | 'verified' | 'misconfigured'
+  ssl: 'not_configured' | 'pending' | 'active'
+  reprovisioning?: boolean
+}
+
+export async function getApplicationDomainStatus(id: string): Promise<{ data?: DomainVerificationStatus; error?: string }> {
+  const headers = await getAuthHeaders()
+  if (!headers) return { error: 'Sign in to check domain status.' }
+  try {
+    const res = await fetch(`${API_URL}/v1/applications/${encodeURIComponent(id)}/domain-status`, {
+      headers,
+      cache: 'no-store',
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return { error: data.message || 'Could not check domain status.' }
+    return { data: data as DomainVerificationStatus }
+  } catch {
+    return { error: 'Network error checking domain status.' }
   }
 }
 

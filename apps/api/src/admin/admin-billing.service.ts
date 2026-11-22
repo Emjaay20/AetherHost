@@ -245,4 +245,63 @@ export class AdminBillingService {
       message: `Successfully issued refund of $${refundedAmountDollars.toFixed(2)} for ${tenant.name}`,
     };
   }
+
+  /**
+   * Reconciles TenantEntitlement.usageApplications against authoritative
+   * retained application rows in PostgreSQL and writes an audit trail entry.
+   */
+  async reconcileQuotaUsage(actorId: string, tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: {
+        entitlements: true,
+        applications: {
+          where: { status: { notIn: ['terminated'] } },
+          select: { id: true },
+        },
+      },
+    });
+    if (!tenant) throw new NotFoundException('Tenant not found');
+
+    const authoritativeCount = tenant.applications?.length ?? 0;
+    const previousUsage = tenant.entitlements?.usageApplications ?? 0;
+
+    if (previousUsage === authoritativeCount) {
+      return {
+        reconciled: false,
+        tenantId,
+        previousUsage,
+        authoritativeCount,
+        message: 'Application quota counter already matches authoritative workload records',
+      };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await (tx as any).tenantEntitlement?.update?.({
+        where: { tenantId },
+        data: { usageApplications: authoritativeCount },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          action: 'QUOTA_COUNTER_RECONCILED',
+          resourceId: tenant.planId,
+          metadata: {
+            actorId,
+            source: 'operator',
+            previousUsage,
+            authoritativeCount,
+          },
+        },
+      });
+    });
+
+    return {
+      reconciled: true,
+      tenantId,
+      previousUsage,
+      authoritativeCount,
+      message: `Reconciled application usage counter from ${previousUsage} to ${authoritativeCount}`,
+    };
+  }
 }

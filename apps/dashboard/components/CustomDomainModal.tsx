@@ -13,7 +13,7 @@ import {
   Save,
   AlertCircle,
 } from 'lucide-react'
-import { updateApplicationCustomDomain } from '../app/actions'
+import { getApplicationDomainStatus, updateApplicationCustomDomain, type DomainVerificationStatus } from '../app/actions'
 
 interface CustomDomainModalProps {
   appId: string
@@ -41,6 +41,8 @@ export default function CustomDomainModal({
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [copiedIp, setCopiedIp] = useState(false)
   const [copiedCname, setCopiedCname] = useState(false)
+  const [verification, setVerification] = useState<DomainVerificationStatus | null>(null)
+  const [checkingVerification, setCheckingVerification] = useState(false)
 
   const safeName = appName
     .toLowerCase()
@@ -63,6 +65,28 @@ export default function CustomDomainModal({
     isInitializedRef.current = true
     setDomainInput(initialCustomDomain || '')
   }, [isOpen, initialCustomDomain])
+
+  const refreshVerification = async () => {
+    if (!initialCustomDomain) return
+    setCheckingVerification(true)
+    const result = await getApplicationDomainStatus(appId)
+    setCheckingVerification(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setVerification(result.data || null)
+  }
+
+  useEffect(() => {
+    if (!isOpen || !initialCustomDomain) {
+      setVerification(null)
+      return
+    }
+    void refreshVerification()
+  // The application id and configured domain define this status request.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialCustomDomain, appId])
 
   if (!isOpen) return null
 
@@ -99,13 +123,8 @@ export default function CustomDomainModal({
       if (res.error) {
         setError(res.error)
       } else {
-        setSuccessMsg(
-          `Domain "${cleaned}" successfully connected! SSL certificate is provisioning automatically via Let's Encrypt.`,
-        )
+        setSuccessMsg(`Domain configuration for "${cleaned}" was saved. Add the DNS record below, then use Verify status to confirm DNS and HTTPS.`)
         onDomainUpdated?.(cleaned)
-        setTimeout(() => {
-          onClose()
-        }, 1800)
       }
     } catch {
       setError('An error occurred while saving the custom domain')
@@ -272,6 +291,27 @@ export default function CustomDomainModal({
               Traefik edge router automatically provisions and auto-renews free Let&apos;s Encrypt SSL/TLS certificates once DNS propagates.
             </p>
           </div>
+
+          {initialCustomDomain && (
+            <div className="rounded-md border border-border bg-muted/20 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-foreground">Verification status</p>
+                  <p className="mt-1 text-muted-foreground">DNS and HTTPS are checked independently; a saved domain is not automatically ready.</p>
+                </div>
+                <button type="button" onClick={refreshVerification} disabled={checkingVerification} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-60">
+                  {checkingVerification ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+                  Verify status
+                </button>
+              </div>
+              {verification && (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded border border-border bg-card px-2.5 py-2"><span className="block text-muted-foreground">DNS</span><span className={verification.dns === 'verified' ? 'mt-0.5 block font-medium text-emerald-500' : verification.dns === 'misconfigured' ? 'mt-0.5 block font-medium text-red-400' : 'mt-0.5 block font-medium text-amber-500'}>{verification.dns === 'verified' ? 'Verified' : verification.dns === 'misconfigured' ? 'Needs correction' : 'Waiting for DNS'}</span></div>
+                  <div className="rounded border border-border bg-card px-2.5 py-2"><span className="block text-muted-foreground">HTTPS</span><span className={verification.ssl === 'active' ? 'mt-0.5 block font-medium text-emerald-500' : 'mt-0.5 block font-medium text-amber-500'}>{verification.ssl === 'active' ? 'Active' : 'Provisioning'}</span></div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-2">

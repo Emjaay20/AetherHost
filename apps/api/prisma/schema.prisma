@@ -48,6 +48,8 @@ model Application {
   healthPath            String   @default("/health")
   workloadMemoryMb      Int      @default(1024)
   commitMessage         String?
+  lastDeployedRevision  String?
+  lastDeployedAt        DateTime?
   createdAt             DateTime @default(now())
   tenant                Tenant   @relation(fields: [tenantId], references: [id])
   logs                  DeploymentLog[]
@@ -230,13 +232,19 @@ model SecurityBlocklist {
 }
 
 model SecurityThreatRule {
-  id          String   @id @default(uuid())
-  name        String
-  category    String   // rat, c2, miner, backdoor, reverse_shell
+  id          String    @id @default(uuid())
+  name        String    @unique
+  category    String    // rat, c2, miner, backdoor, reverse_shell
   pattern     String
-  severity    String   @default("CRITICAL")
+  severity    String    @default("CRITICAL")
   description String
-  createdAt   DateTime @default(now())
+  enabled     Boolean   @default(true)
+  status      String    @default("APPROVED") // PENDING_REVIEW, APPROVED, REJECTED
+  source      String    @default("BUILTIN")  // BUILTIN, AI_SENTINEL, OPERATOR
+  approvedBy  String?
+  approvedAt  DateTime?
+  createdAt   DateTime  @default(now())
 
   @@index([category])
+  @@index([enabled, status])
 }

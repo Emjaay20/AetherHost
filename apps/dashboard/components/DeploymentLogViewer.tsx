@@ -286,7 +286,7 @@ export default function DeploymentLogViewer({ appId, status, onRedeployTriggered
                   </div>
                 ) : (
                   <div className="text-muted-foreground italic py-2">
-                    No deployment logs recorded yet. Application is healthy.
+                    No deployment logs have been received yet. Runtime health cannot be confirmed from logs alone.
                   </div>
                 )}
               </div>
