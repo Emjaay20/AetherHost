@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SalesforceModule } from './integrations/salesforce/salesforce.module';
 import { SpacefastModule } from './integrations/spacefast/spacefast.module';
 import { CustomerSuccessModule } from './customer-success/customer-success.module';
+import { ThreatDetectionModule } from './security/threat-detection/threat-detection.module';
 
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -88,6 +89,7 @@ const redisConfig = getRedisConfig();
     SalesforceModule,
     SpacefastModule,
     CustomerSuccessModule,
+    ThreatDetectionModule,
   ],
   controllers: [AppController, TelemetryController],
   providers: [

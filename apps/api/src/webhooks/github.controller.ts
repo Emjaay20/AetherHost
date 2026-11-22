@@ -3,6 +3,7 @@ import {
   Controller,
   Headers,
   Logger,
+  Optional,
   Post,
   Req,
   UnauthorizedException,
@@ -14,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { verifyGithubSignature } from './github-signature';
 import { isFloatingContainerImage, normalizeRepoFullName } from '../applications/github-utils';
 import { Public } from '../auth/public.decorator';
+import { PreflightSecurityService } from '../security/threat-detection/preflight-security.service';
 
 @Public()
 @Controller('v1/webhooks/github')
@@ -23,6 +25,7 @@ export class GithubWebhookController {
   constructor(
     private readonly appsService: ApplicationsService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly securityService?: PreflightSecurityService,
   ) {}
 
   @Post()
@@ -82,6 +85,24 @@ export class GithubWebhookController {
       const commitSha = payload.head_commit?.id?.slice(0, 7) || 'latest';
       const commitMsg = payload.head_commit?.message?.split('\n')[0] || `Push to ${branch}`;
       const author = payload.head_commit?.author?.name || payload.pusher?.name || 'GitHub';
+      const authorEmail = payload.head_commit?.author?.email || payload.pusher?.email;
+      const pusherLogin = payload.pusher?.name || payload.sender?.login;
+      const senderId = payload.sender?.id ? String(payload.sender.id) : undefined;
+
+      if (this.securityService) {
+        const check = await this.securityService.isIdentityBlocked({
+          email: authorEmail,
+          githubLogin: pusherLogin,
+          githubId: senderId,
+          repo: repoFullName,
+        });
+        if (check.blocked) {
+          this.logger.warn(
+            `Rejected GitHub push from blocked actor/repo: ${pusherLogin} (${authorEmail}) on ${repoFullName}: ${check.reason}`,
+          );
+          return { status: 'rejected', reason: 'actor_blocked' };
+        }
+      }
 
       // The agent pushes AI-generated files itself while it is already building them;
       // reacting to that push would start a second, racing deployment.

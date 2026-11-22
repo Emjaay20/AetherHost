@@ -13,13 +13,17 @@ import { Webhook } from 'svix';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from './public.decorator';
 import { STARTER_ENTITLEMENTS } from '@aetherhost/domain';
+import { PreflightSecurityService } from '../security/threat-detection/preflight-security.service';
 
 @Public()
 @Controller('v1/webhooks/clerk')
 export class ClerkWebhookController {
   private readonly logger = new Logger(ClerkWebhookController.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly securityService: PreflightSecurityService,
+  ) {}
 
   @Post()
   async handleWebhook(
@@ -70,12 +74,31 @@ export class ClerkWebhookController {
 
     if (evt.type === 'user.created') {
       const { id, first_name, email_addresses } = evt.data;
+      const primaryEmail = (email_addresses && email_addresses[0]?.email_address) || undefined;
+      const username = evt.data.username || undefined;
+      const externalAccounts = evt.data.external_accounts || [];
+      const githubAccount = externalAccounts.find((acc: any) => acc.provider === 'oauth_github');
+      const githubLogin = githubAccount?.username || username;
+      const githubId = githubAccount?.provider_user_id;
+
+      const blockCheck = await this.securityService.isIdentityBlocked({
+        email: primaryEmail,
+        githubLogin,
+        githubId,
+        tenantId: id,
+      });
+
+      const subscriptionStatus = blockCheck.blocked ? 'suspended' : 'active';
       const name =
         first_name ||
-        (email_addresses && email_addresses[0]?.email_address) ||
+        primaryEmail ||
         'Unknown User';
 
-      this.logger.log(`Provisioning new tenant for Clerk User: ${id}`);
+      if (blockCheck.blocked) {
+        this.logger.warn(`Incoming user ${id} (${primaryEmail} / ${githubLogin}) matched blocklist: ${blockCheck.reason}. Provisioning as suspended.`);
+      }
+
+      this.logger.log(`Provisioning new tenant for Clerk User: ${id} (status: ${subscriptionStatus})`);
 
       await this.prisma.tenant.upsert({
         where: { id },
@@ -83,6 +106,7 @@ export class ClerkWebhookController {
           id,
           name,
           planId: 'starter',
+          subscriptionStatus,
           entitlements: {
             create: {
               limitApplications: STARTER_ENTITLEMENTS.limits.applications,
@@ -92,8 +116,27 @@ export class ClerkWebhookController {
             },
           },
         },
-        update: { name },
+        update: {
+          name,
+          ...(blockCheck.blocked ? { subscriptionStatus: 'suspended' } : {}),
+        },
       });
+
+      if (blockCheck.blocked) {
+        await this.prisma.auditLog
+          .create({
+            data: {
+              tenantId: id,
+              action: 'BLOCKED_IDENTITY_AUTO_SUSPENDED',
+              metadata: {
+                email: primaryEmail,
+                githubLogin,
+                reason: blockCheck.reason,
+              },
+            },
+          })
+          .catch(() => {});
+      }
     }
 
     return res.status(200).json({ success: true });
