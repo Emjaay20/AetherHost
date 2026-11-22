@@ -13,7 +13,12 @@ import { Prisma } from '@prisma/client';
 import { ApplicationsService } from '../applications/applications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { verifyGithubSignature } from './github-signature';
-import { isFloatingContainerImage, normalizeRepoFullName } from '../applications/github-utils';
+import {
+  extractCommitRevisionPrefix,
+  isFloatingContainerImage,
+  isSameGitRevision,
+  normalizeRepoFullName,
+} from '../applications/github-utils';
 import { Public } from '../auth/public.decorator';
 import { PreflightSecurityService } from '../security/threat-detection/preflight-security.service';
 
@@ -46,6 +51,13 @@ export class GithubWebhookController {
       ) {
         throw new UnauthorizedException('Invalid GitHub webhook signature');
       }
+    } else if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ALLOW_UNSIGNED_GITHUB_WEBHOOKS !== 'true'
+    ) {
+      throw new UnauthorizedException(
+        'Unsigned GitHub webhook rejected: GITHUB_WEBHOOK_SECRET is required in production',
+      );
     }
 
     if (event === 'ping') {
@@ -82,7 +94,13 @@ export class GithubWebhookController {
       }
 
       const branch = payload.ref ? payload.ref.replace('refs/heads/', '') : 'main';
-      const commitSha = payload.head_commit?.id?.slice(0, 7) || 'latest';
+      const fullCommitSha =
+        typeof payload.head_commit?.id === 'string'
+          ? payload.head_commit.id.trim()
+          : typeof payload.after === 'string'
+            ? payload.after.trim()
+            : '';
+      const commitSha = fullCommitSha ? fullCommitSha.slice(0, 7) : 'latest';
       const commitMsg = payload.head_commit?.message?.split('\n')[0] || `Push to ${branch}`;
       const author = payload.head_commit?.author?.name || payload.pusher?.name || 'GitHub';
       const authorEmail = payload.head_commit?.author?.email || payload.pusher?.email;
@@ -111,8 +129,11 @@ export class GithubWebhookController {
       }
 
       this.logger.log(
-        `GitHub push received for ${targetNormalized} on branch ${branch} (${commitSha}: ${commitMsg}). Triggering redeploy for ${matchedApps.length} app(s).`,
+        `GitHub push received for ${targetNormalized} on branch ${branch} (${commitSha}: ${commitMsg}). Evaluating ${matchedApps.length} app(s).`,
       );
+
+      let rebuiltCount = 0;
+      let skippedDuplicates = 0;
 
       for (const app of matchedApps) {
         const timeStr = new Date().toTimeString().split(' ')[0];
@@ -123,22 +144,50 @@ export class GithubWebhookController {
           );
           continue;
         }
+
+        const existingRevision =
+          (app as { lastDeployedRevision?: string | null }).lastDeployedRevision ||
+          extractCommitRevisionPrefix(app.commitMessage);
+        if (
+          fullCommitSha &&
+          isSameGitRevision(existingRevision, fullCommitSha) &&
+          ['running', 'pending', 'provisioning'].includes(app.status)
+        ) {
+          skippedDuplicates += 1;
+          await this.appsService.addLog(
+            app.id,
+            `[${timeStr}] GitHub push ${commitSha} skipped: revision ${commitSha} is already ${app.status}.`,
+          );
+          continue;
+        }
+
         await this.appsService.addLog(
           app.id,
           `[${timeStr}] GitHub push received on branch '${branch}' (${commitSha}: ${commitMsg} by ${author}). Initiating automatic redeployment...`,
         );
 
         // A human pushed: the repo is now the source of truth. Drop the stored AI
-        // snapshot so the agent doesn't overwrite the user's fix with stale files.
+        // snapshot so the agent doesn't overwrite the user's fix with stale files,
+        // and persist the target commit revision for deduplication with GitSyncService.
         await this.prisma.application.update({
           where: { id: app.id },
-          data: { aiFiles: Prisma.DbNull, commitMessage: null },
+          data: {
+            aiFiles: Prisma.DbNull,
+            commitMessage: `${commitSha}: ${commitMsg}`,
+            ...(fullCommitSha ? { lastDeployedRevision: fullCommitSha } : {}),
+          },
         });
 
         await this.appsService.redeploy(app.id, app.tenantId);
+        rebuiltCount += 1;
       }
 
-      return { status: 'rebuilding', count: matchedApps.length, commit: commitSha };
+      return {
+        status: rebuiltCount > 0 ? 'rebuilding' : 'deduplicated',
+        count: rebuiltCount,
+        skippedDuplicates,
+        commit: commitSha,
+      };
     }
 
     return { status: 'ignored', event };

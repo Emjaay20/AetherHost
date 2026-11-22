@@ -99,4 +99,8 @@ export class AdminService {
   syncDirectory(actorId: string) {
     return this.tenantService.syncDirectory(actorId);
   }
+
+  reconcileQuotaUsage(actorId: string, tenantId: string) {
+    return this.adminBillingService.reconcileQuotaUsage(actorId, tenantId);
+  }
 }

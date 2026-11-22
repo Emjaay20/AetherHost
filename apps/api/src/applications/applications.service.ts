@@ -19,7 +19,8 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SYSTEM_TENANT_ID } from '../auth/tenant.decorator';
-import { getGithubToken, ensureGithubWebhook } from './github-utils';
+import { getGithubToken, ensureGithubWebhook, fetchGithubRepositoryFiles } from './github-utils';
+import { inspectRepositoryFiles } from './repository-inspector';
 import { validateCustomDomain } from './domain-validator';
 import { resolve4 } from 'node:dns/promises';
 import { redactSensitiveLogContent } from './log-redaction';
@@ -251,6 +252,17 @@ export class ApplicationsService {
     return process.env.DEMO_MODE === 'true';
   }
 
+  async inspectRepository(tenantId: string, githubRepo: string) {
+    const token = await getGithubToken(tenantId);
+    const files = await fetchGithubRepositoryFiles(githubRepo, token);
+    if (files.length === 0) {
+      throw new BadRequestException(
+        'AetherHost could not read this repository. Check the URL and GitHub access, then try again.',
+      );
+    }
+    return inspectRepositoryFiles(files);
+  }
+
   async findAll(
     status?: string,
     runtime?: string,
@@ -475,7 +487,9 @@ if __name__ == '__main__':
     await this.prisma.$transaction(async (tx) => {
       await tx.deploymentLog.deleteMany({ where: { applicationId: id } });
       await tx.application.delete({ where: { id } });
-      await this.entitlementsService.releaseApplicationSlot(app.tenantId, tx);
+      if (app.status !== 'terminated') {
+        await this.entitlementsService.releaseApplicationSlot(app.tenantId, tx);
+      }
     });
   }
 
@@ -492,13 +506,20 @@ if __name__ == '__main__':
       status === 'running' &&
       !!app.githubRepo &&
       app.commitMessage?.startsWith('aetherhost-ai-pending:');
+    const recordFirstRunningAt =
+      status === 'running' &&
+      'lastDeployedAt' in app &&
+      !(app as { lastDeployedAt?: Date | null }).lastDeployedAt;
     const statusData = {
       status,
       ...(clearInitialWriteMarker ? { commitMessage: null } : {}),
+      ...(recordFirstRunningAt ? { lastDeployedAt: new Date() } : {}),
     };
 
-    if ((app.status !== 'failed' && app.status !== 'terminated') && 
-        (status === 'failed' || status === 'terminated')) {
+    // Every retained application record (including failed builds awaiting fix/redeploy)
+    // reserves its quota slot until deletion or permanent termination. This prevents
+    // double-release counter drift when a failed app is redeployed or deleted.
+    if (app.status !== 'terminated' && status === 'terminated') {
       await this.prisma.$transaction(async (tx) => {
         await tx.application.update({ where: { id }, data: statusData });
         await this.entitlementsService.releaseApplicationSlot(app.tenantId, tx);
@@ -599,9 +620,13 @@ if __name__ == '__main__':
   }
 
   async addLog(id: string, logContent: string): Promise<void> {
+    const redacted = redactSensitiveLogContent(logContent);
     await this.prisma.deploymentLog.create({
-      data: { applicationId: id, logContent: redactSensitiveLogContent(logContent) }
+      data: { applicationId: id, logContent: redacted }
     });
+    if (this.securityService) {
+      void this.securityService.inspectRuntimeOutput('SYSTEM', id, redacted);
+    }
   }
 
   async findOne(id: string, tenantId: string) {
@@ -906,33 +931,12 @@ if __name__ == '__main__':
   }
 
   async getLogs(id: string, tenantId: string) {
-    const app = await this.assertOwned(id, tenantId);
+    await this.assertOwned(id, tenantId);
     const logs = await this.prisma.deploymentLog.findMany({
       where: { applicationId: id },
       orderBy: { createdAt: 'desc' },
       take: 30,
     });
-
-    if (logs.length === 0 && this.prisma.deploymentLog?.create) {
-      const ts = new Date(app.createdAt || Date.now()).toTimeString().split(' ')[0];
-      const fallbackMessage =
-        app.status === 'failed'
-          ? `[${ts}] ERROR: Provisioning failed for '${app.name}' (Runtime: ${app.runtime}). Runtime container did not pass readiness check (/health) or provisioner encountered an unhandled runtime state.\n[${ts}] HINT: Click 'Redeploy' to rebuild and restart the container, or click 'Analyze Failure with AI' for a root-cause breakdown.`
-          : app.status === 'pending'
-            ? `[${ts}] Provisioning queued for '${app.name}' (Runtime: ${app.runtime}). Waiting for build worker or click 'Redeploy' / 'Run Provisioner' to start immediately.`
-            : `[${ts}] Provisioning completed for '${app.name}' (Runtime: ${app.runtime}).\n[${ts}] Health check 200 OK on /health — container is online and serving requests.`;
-      try {
-        const seeded = await this.prisma.deploymentLog.create({
-          data: {
-            applicationId: id,
-            logContent: fallbackMessage,
-          },
-        });
-        return [seeded];
-      } catch {
-        return [];
-      }
-    }
 
     return logs;
   }

@@ -15,6 +15,7 @@ import { ApplicationsService } from './applications.service';
 import { createAetherPressLaunchpadFiles } from './aetherpress-launchpad.template';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { CreateAetherPressLaunchpadDto } from './dto/create-aetherpress-launchpad.dto';
+import { InspectRepositoryDto } from './dto/inspect-repository.dto';
 import {
   AddApplicationLogDto,
   UpdateApplicationStatusDto,
@@ -101,6 +102,14 @@ export class ApplicationsController {
       false,
       false,
     );
+  }
+
+  @Post('inspect-repository')
+  inspectRepository(
+    @TenantId() tenantId: string,
+    @Body() body: InspectRepositoryDto,
+  ) {
+    return this.applicationsService.inspectRepository(tenantId, body.githubRepo);
   }
 
   @Get()

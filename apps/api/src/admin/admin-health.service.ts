@@ -67,19 +67,80 @@ export class AdminHealthService {
           tokens: asNumber(row.total_tokens),
         })),
       };
-    } catch (error) {
-      this.logger.warn(
-        `Analytics views unavailable: ${error instanceof Error ? error.message : 'unknown'}`,
-      );
-      return {
-        available: false as const,
-        error: 'analytics views unavailable',
-        recognizedMonth,
-        recognizedDollars: 0,
-        mrrByMonth: [],
-        cohorts: [],
-        aiUsage: [],
-      };
+    } catch (viewError) {
+      // Fallback to direct PostgreSQL table queries if analytics views are unavailable
+      try {
+        const [paidInvoices, tenants, entitlements] = await Promise.all([
+          this.prisma.invoice.findMany({
+            where: { status: 'paid' },
+            select: { createdAt: true, amountCent: true },
+          }),
+          this.prisma.tenant.findMany({
+            select: { createdAt: true },
+          }),
+          this.prisma.tenantEntitlement.findMany({
+            select: {
+              tenantId: true,
+              usageAiRequests: true,
+              totalAiTokens: true,
+            },
+            orderBy: { usageAiRequests: 'desc' },
+            take: 8,
+          }),
+        ]);
+
+        const mrrMap = new Map<string, number>();
+        for (const inv of paidInvoices) {
+          const m = monthKey(inv.createdAt);
+          if (m) mrrMap.set(m, (mrrMap.get(m) ?? 0) + asNumber(inv.amountCent));
+        }
+        const mrrByMonth = Array.from(mrrMap.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([month, cents]) => ({ month, dollars: cents / 100 }));
+
+        const cohortMap = new Map<string, number>();
+        for (const t of tenants) {
+          const m = monthKey(t.createdAt);
+          if (m) cohortMap.set(m, (cohortMap.get(m) ?? 0) + 1);
+        }
+        const cohorts = Array.from(cohortMap.entries())
+          .sort(([a], [b]) => b.localeCompare(a))
+          .map(([month, newTenants]) => ({ month, newTenants }));
+
+        const aiUsage = entitlements.map((e) => ({
+          tenantId: e.tenantId,
+          requests: asNumber(e.usageAiRequests),
+          tokens: asNumber(e.totalAiTokens),
+        }));
+
+        return {
+          available: true as const,
+          error: undefined as string | undefined,
+          recognizedMonth,
+          recognizedDollars:
+            mrrByMonth.find((row) => row.month === recognizedMonth)?.dollars ?? 0,
+          mrrByMonth,
+          cohorts,
+          aiUsage,
+        };
+      } catch (fallbackError) {
+        this.logger.warn(
+          `Analytics unavailable: ${
+            viewError instanceof Error ? viewError.message : 'unknown'
+          } / ${
+            fallbackError instanceof Error ? fallbackError.message : 'unknown'
+          }`,
+        );
+        return {
+          available: false as const,
+          error: 'analytics views unavailable',
+          recognizedMonth,
+          recognizedDollars: 0,
+          mrrByMonth: [],
+          cohorts: [],
+          aiUsage: [],
+        };
+      }
     }
   }
 

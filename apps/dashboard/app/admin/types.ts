@@ -88,6 +88,7 @@ export type Overview = {
     usedMemGb: number
     totalMemGb: number
     networkOutMbps: number
+    measurementScope?: string
   }
   analytics: {
     available: boolean

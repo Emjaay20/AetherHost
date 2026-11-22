@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Box,
   Sparkles,
@@ -142,7 +143,9 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <h4 className="truncate text-sm font-semibold">{app.name}</h4>
+                <Link href={`/console/applications/${encodeURIComponent(app.id)}`} className="truncate text-sm font-semibold hover:text-primary" title={`Open ${app.name} overview`}>
+                  {app.name}
+                </Link>
                 <span className="shrink-0 rounded-md border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                   {app.runtime}
                 </span>

@@ -14,6 +14,7 @@ Welcome to the AetherHost technical documentation repository. This directory hou
 | **Operations & CI/CD** | [docs/OPERATIONS.md](../docs/OPERATIONS.md)<br>[docs/CONTABO_DEPLOYMENT.md](../docs/CONTABO_DEPLOYMENT.md)<br>[deploy/KUBERNETES.md](../deploy/KUBERNETES.md) | Fast CI loops (`nextest`, path filtering, `cargo-deny`), KinD Kubernetes validation, and production Contabo VPS hosting. |
 | **Staff Case Studies** | [docs/portfolio/staff-security-case-study.md](../docs/portfolio/staff-security-case-study.md)<br>[docs/CASE_STUDY.md](../docs/CASE_STUDY.md) | End-to-end platform overhaul, deduplicated Restic backup pipeline, and incident post-mortems. |
 | **Editorial integrations** | [AetherPress Intelligence Hub](demos/aetherpress-intelligence-hub.md)<br>[Spacefast external frontend](integrations/spacefast-external-frontend.md) | A review-first WordPress + SmartCrawler workflow with an optional private Spacefast static frontend. |
+| **Customer experience** | [Customer Experience & Production Readiness](customer-success/AETHERHOST_CX_PRODUCTION_READINESS.md)<br>[Customer onboarding playbook](customer-success/ONBOARDING_PLAYBOOK.md) | Source-first deployment, truthful operational state, customer acceptance criteria, and the phased roadmap to self-service hosting. |
 
 ---
 

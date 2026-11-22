@@ -9,7 +9,7 @@ export interface HeuristicThreatRule {
   category: 'c2_rat' | 'crypto_miner' | 'reverse_shell' | 'masqueraded_process' | 'malicious_download';
   regex: RegExp;
   description: string;
-  severity: 'HIGH' | 'CRITICAL';
+  severity: 'HIGH' | 'CRITICAL' | 'MEDIUM';
 }
 
 export const KNOWN_BLOCKED_IDENTITIES: ThreatIndicator[] = [

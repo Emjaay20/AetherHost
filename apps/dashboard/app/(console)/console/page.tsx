@@ -1,4 +1,4 @@
-import { getApplications, getEntitlements, getEvents, runProvisioner, deleteApplication, getExternalFrontends, getSpacefastConnection } from '../../actions'
+import { getApplicationsWithStatus, getEntitlements, getEvents, runProvisioner, deleteApplication, getExternalFrontends, getSpacefastConnection } from '../../actions'
 import CreateAppForm from '../../../components/CreateAppForm'
 import EventsPanel from '../../../components/EventsPanel'
 import OpsInsightPanel from '../../../components/OpsInsightPanel'
@@ -8,6 +8,7 @@ import DeploymentList from '../../../components/DeploymentList'
 import AppShell from '../../../components/AppShell'
 import SpacefastFrontendPanel from '../../../components/SpacefastFrontendPanel'
 import AetherPressLaunchpad from '../../../components/AetherPressLaunchpad'
+import OnboardingChecklist from '../../../components/OnboardingChecklist'
 import { Server, Activity, Box, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 import { cookies } from 'next/headers';
@@ -45,14 +46,15 @@ export default async function Dashboard() {
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
   const impersonateTenantName = cookieStore.get('aether_impersonate_tenant_name')?.value;
 
-  const [apps, entitlements, events, isAdmin, externalFrontends, spacefastConnection] = await Promise.all([
-    getApplications(),
+  const [applicationsResult, entitlements, events, isAdmin, externalFrontends, spacefastConnection] = await Promise.all([
+    getApplicationsWithStatus(),
     getEntitlements(),
     getEvents(),
     isCurrentUserAdmin(),
     getExternalFrontends(),
     getSpacefastConnection(),
   ])
+  const apps = applicationsResult.apps
   
   const usage = Math.max(apps.length, entitlements?.usage?.applications || 0)
   const limit = entitlements?.limits?.applications || 3
@@ -131,6 +133,13 @@ export default async function Dashboard() {
     >
       <AutoRefresh interval={8000} />
       <div className="mx-auto max-w-6xl space-y-6">
+            {applicationsResult.error && (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+                <span>{applicationsResult.error}</span>
+                <a href="/console" className="rounded-md border border-amber-500/30 px-2.5 py-1 font-medium transition-colors hover:bg-amber-500/10">Try again</a>
+              </div>
+            )}
+            <OnboardingChecklist apps={apps} limitReached={limitReached} />
             
             {/* Stats Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 rounded-lg border border-border bg-card divide-y sm:divide-y-0 sm:divide-x divide-border">

@@ -4,6 +4,8 @@ import { getEntitlements } from '../actions'
 import { UserButton } from "@clerk/nextjs"
 import { isCurrentUserAdmin } from '../../lib/admin'
 
+export const dynamic = 'force-dynamic'
+
 export default async function SettingsPage() {
   const [entitlements, isAdmin] = await Promise.all([
     getEntitlements(),

@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { PreflightSecurityService } from './preflight-security.service';
 
 describe('PreflightSecurityService', () => {
@@ -8,7 +8,7 @@ describe('PreflightSecurityService', () => {
     service = new PreflightSecurityService();
   });
 
-  describe('isIdentityBlocked', () => {
+  describe('isIdentityBlocked & fail-closed DB handling', () => {
     it('blocks known abusive email zxy1715x@gmail.com', async () => {
       const result = await service.isIdentityBlocked({ email: 'zxy1715x@gmail.com' });
       expect(result.blocked).toBe(true);
@@ -39,6 +39,27 @@ describe('PreflightSecurityService', () => {
       });
       expect(result.blocked).toBe(false);
     });
+
+    it('records degraded state and fails closed when DB lookup fails under failClosed policy', async () => {
+      const brokenPrisma: any = {
+        securityBlocklist: {
+          findMany: jest.fn().mockRejectedValue(new Error('Connection refused')),
+        },
+      };
+      const dbService = new PreflightSecurityService(brokenPrisma);
+
+      await expect(
+        dbService.isIdentityBlocked({
+          email: 'unknown@example.com',
+          failClosed: true,
+        }),
+      ).rejects.toThrow(ServiceUnavailableException);
+
+      const health = dbService.getSecurityHealth();
+      expect(health.status).toBe('degraded');
+      expect(health.dbLookupDegraded).toBe(true);
+      expect(health.lastDbError).toContain('Connection refused');
+    });
   });
 
   describe('recordLearnedThreat', () => {
@@ -55,6 +76,49 @@ describe('PreflightSecurityService', () => {
       const subsequentCheck = await service.isIdentityBlocked({ email: 'badactor@botnet.xyz' });
       expect(subsequentCheck.blocked).toBe(true);
       expect(subsequentCheck.reason).toContain('Detected automated C2 distribution bot');
+    });
+  });
+
+  describe('validateLearnedRegexPattern', () => {
+    it('rejects overly broad wildcard patterns and short strings', () => {
+      expect(service.validateLearnedRegexPattern('.*').valid).toBe(false);
+      expect(service.validateLearnedRegexPattern('.+').valid).toBe(false);
+      expect(service.validateLearnedRegexPattern('abc').valid).toBe(false);
+    });
+
+    it('rejects catastrophic backtracking (ReDoS) nested quantifiers', () => {
+      const redos = service.validateLearnedRegexPattern('(evil_payload+)+');
+      expect(redos.valid).toBe(false);
+      expect(redos.reason).toContain('ReDoS');
+    });
+
+    it('rejects patterns that falsely match benign Express or NestJS boilerplate', () => {
+      const benignMatch = service.validateLearnedRegexPattern('app\\.listen');
+      expect(benignMatch.valid).toBe(false);
+      expect(benignMatch.reason).toContain('benign');
+    });
+
+    it('accepts specific, safe threat patterns', () => {
+      const valid = service.validateLearnedRegexPattern('evil_daemon_download_fn');
+      expect(valid.valid).toBe(true);
+    });
+  });
+
+  describe('redactAndMinimizeSourceForAi', () => {
+    it('redacts database URIs, API keys, private keys, and secrets before AI inspection', () => {
+      const syntheticToken = ['sk', '1111111111111111'].join('-');
+      const syntheticDbPass = ['db', 'test', 'value'].join('_');
+      const rawSource = [
+        `const DATABASE_URL = "postgresql://admin:${syntheticDbPass}@db.internal:5432/prod";`,
+        `const SAMPLE_HEADER = "${syntheticToken}";`,
+        'const { spawn } = require("child_process");',
+        'spawn("/tmp/stealth_agent", ["--c2"]);',
+      ].join('\n');
+
+      const redacted = service.redactAndMinimizeSourceForAi(rawSource);
+      expect(redacted).not.toContain(syntheticDbPass);
+      expect(redacted).not.toContain(syntheticToken);
+      expect(redacted).toContain('stealth_agent');
     });
   });
 
@@ -131,7 +195,7 @@ describe('PreflightSecurityService', () => {
     });
   });
 
-  describe('enforcePreflight', () => {
+  describe('enforcePreflight & evidence-based human review', () => {
     it('throws ForbiddenException when actor identity is blocked', async () => {
       await expect(
         service.enforcePreflight('tenant_123', {
@@ -182,17 +246,61 @@ describe('PreflightSecurityService', () => {
         }),
       ).resolves.not.toThrow();
     });
+
+    it('blocks AI-flagged workloads and queues human review without auto-suspending the tenant', async () => {
+      const mockPrisma: any = {
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
+        tenant: { update: jest.fn().mockResolvedValue({}) },
+      };
+      const mockModel = {
+        complete: jest.fn().mockResolvedValue({
+          output: JSON.stringify({
+            isMalicious: true,
+            threatCategory: 'c2_rat',
+            reason: 'Suspicious custom socket beacon',
+            learnedPatterns: ['custom_beacon_dialer_v2'],
+          }),
+        }),
+      };
+      const mockFactory: any = { get: jest.fn().mockReturnValue(mockModel) };
+      const guarded = new PreflightSecurityService(mockPrisma, mockFactory);
+
+      await expect(
+        guarded.enforcePreflight('tenant_legit', {
+          name: 'custom-worker',
+          runtime: 'nodejs',
+          files: [
+            {
+              path: 'worker.js',
+              content: 'const { spawn } = require("child_process"); custom_beacon_dialer_v2();',
+            },
+          ],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+
+      // Must NOT auto-suspend the tenant on AI judgment alone
+      expect(mockPrisma.tenant.update).not.toHaveBeenCalled();
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 'tenant_legit',
+          action: 'SECURITY_AI_SCAN_VIOLATION',
+          metadata: expect.objectContaining({
+            reviewStatus: 'PENDING_HUMAN_REVIEW',
+          }),
+        }),
+      });
+    });
   });
 
-  describe('AI deep pattern analysis & continuous learning', () => {
-    it('invokes modelFactory and learns threat rules when AI flags code as malicious', async () => {
+  describe('AI deep pattern analysis, rule staging & approval', () => {
+    it('stages validated AI rules for review and enforces them once approved', async () => {
       const mockModel = {
         complete: jest.fn().mockResolvedValue({
           output: JSON.stringify({
             isMalicious: true,
             threatCategory: 'c2_rat',
             reason: 'Custom obfuscated trojan downloader using child_process spawn',
-            learnedPatterns: ['evil_daemon_download_fn'],
+            learnedPatterns: ['evil_daemon_download_fn', '.*'],
           }),
         }),
       };
@@ -213,16 +321,52 @@ describe('PreflightSecurityService', () => {
       expect(aiResult.isMalicious).toBe(true);
       expect(aiResult.reason).toContain('Custom obfuscated trojan downloader');
 
-      // The learned pattern should now immediately be blocked by heuristics on any new submission
+      // Wildcard ".*" was rejected; "evil_daemon_download_fn" was staged as PENDING_REVIEW
+      const staged = aiService.getStagedRules();
+      expect(staged).toHaveLength(1);
+      expect(staged[0].pattern).toBe('evil_daemon_download_fn');
+      expect(staged[0].status).toBe('PENDING_REVIEW');
+
+      // Before operator approval, staged rule is not yet active
       const testFiles = [
         {
           path: 'innocent.js',
           content: 'console.log("running"); evil_daemon_download_fn();',
         },
       ];
+      expect(aiService.scanContentWithHeuristics(testFiles).safe).toBe(true);
+
+      // Operator approves the staged rule
+      const approval = await aiService.approveLearnedRule('evil_daemon_download_fn', 'admin_operator');
+      expect(approval.approved).toBe(true);
+
+      // Now heuristics enforce the approved learned rule immediately
       const heuristicResult = aiService.scanContentWithHeuristics(testFiles);
       expect(heuristicResult.safe).toBe(false);
       expect(heuristicResult.details).toContain('Learned threat pattern');
+    });
+  });
+
+  describe('inspectRuntimeOutput', () => {
+    it('detects runtime post-deployment C2/miner indicators and writes an audit event', async () => {
+      const mockPrisma: any = {
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
+      };
+      const runtimeService = new PreflightSecurityService(mockPrisma);
+
+      const res = await runtimeService.inspectRuntimeOutput(
+        'tenant_1',
+        'app_1',
+        '[12:00:01] Starting background process /tmp/.sysmon --donate-level 1',
+      );
+      expect(res.safe).toBe(false);
+      expect(mockPrisma.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          tenantId: 'tenant_1',
+          action: 'SECURITY_RUNTIME_THREAT_DETECTED',
+          resourceId: 'app_1',
+        }),
+      });
     });
   });
 });

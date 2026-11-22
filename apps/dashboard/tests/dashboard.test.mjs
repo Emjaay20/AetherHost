@@ -59,6 +59,52 @@ test('console app rows preserve actions and keep legacy domains inside the Visit
   assert.doesNotMatch(cardItem, /Legacy Domain Active/);
   assert.match(cardItem, /grid-cols-\[minmax\(0,1fr\)_6\.5rem_auto\]/);
   assert.match(logViewer, /if \(!expanded && status !== 'failed'\) return null/);
+  assert.match(logViewer, /Runtime health cannot be confirmed from logs alone/);
+  assert.doesNotMatch(logViewer, /No deployment logs recorded yet\. Application is healthy\./);
+});
+
+test('deployment form starts with a source choice and supports evidence-based GitHub inspection', () => {
+  const form = fs.readFileSync(path.join(dashboardRoot, 'components', 'CreateAppForm.tsx'), 'utf8');
+  const actions = fs.readFileSync(path.join(dashboardRoot, 'app', 'actions.ts'), 'utf8');
+  assert.match(form, /Start with your source/);
+  assert.match(form, /Import Git repository/);
+  assert.match(form, /Launch WordPress/);
+  assert.match(form, /Inspect before deploying/);
+  assert.match(form, /Inspect this repository before deploying/);
+  assert.match(form, /Values are stored encrypted/);
+  assert.match(actions, /inspectGithubRepository/);
+  assert.match(actions, /applications\/inspect-repository/);
+});
+
+test('console makes application loading failures explicit and guides first deployment', () => {
+  const page = fs.readFileSync(path.join(dashboardRoot, 'app', '(console)', 'console', 'page.tsx'), 'utf8');
+  const actions = fs.readFileSync(path.join(dashboardRoot, 'app', 'actions.ts'), 'utf8');
+  const checklist = fs.readFileSync(path.join(dashboardRoot, 'components', 'OnboardingChecklist.tsx'), 'utf8');
+  assert.match(page, /getApplicationsWithStatus/);
+  assert.match(page, /applicationsResult\.error/);
+  assert.match(page, /OnboardingChecklist/);
+  assert.match(actions, /Applications could not be loaded/);
+  assert.match(checklist, /Get your first application online/);
+  assert.match(checklist, /runtime health evidence reports healthy/);
+});
+
+test('domain setup does not claim HTTPS is ready before verification', () => {
+  const modal = fs.readFileSync(path.join(dashboardRoot, 'components', 'CustomDomainModal.tsx'), 'utf8');
+  const actions = fs.readFileSync(path.join(dashboardRoot, 'app', 'actions.ts'), 'utf8');
+  assert.match(modal, /Verify status/);
+  assert.match(modal, /DNS and HTTPS are checked independently/);
+  assert.match(modal, /Domain configuration for/);
+  assert.doesNotMatch(modal, /successfully connected! SSL certificate/);
+  assert.match(actions, /getApplicationDomainStatus/);
+});
+
+test('each application has an evidence-first management overview', () => {
+  const card = fs.readFileSync(path.join(dashboardRoot, 'components', 'ApplicationCardItem.tsx'), 'utf8');
+  const overview = fs.readFileSync(path.join(dashboardRoot, 'app', '(console)', 'console', 'applications', '[id]', 'page.tsx'), 'utf8');
+  assert.match(card, /console\/applications/);
+  assert.match(overview, /Latest deployment evidence/);
+  assert.match(overview, /No deployment evidence yet/);
+  assert.match(overview, /not presented as healthy without deployment or readiness evidence/);
 });
 
 test('console layout keeps navigation fixed and makes dense deployments searchable', () => {

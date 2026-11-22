@@ -26,8 +26,17 @@ export class CustomerSuccessService {
         },
         entitlements: true,
         auditLogs: {
-          where: { action: { in: ['ESCALATION_REPORTED', 'CHILIPIPER_MEETING_BOOKED', 'BUILD_FAILED'] } },
-          take: 10,
+          where: {
+            action: {
+              in: [
+                'ESCALATION_REPORTED',
+                'CHILIPIPER_MEETING_BOOKED',
+                'BUILD_FAILED',
+                'SFDC_ACCOUNT_SYNCED',
+              ],
+            },
+          },
+          take: 20,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -37,25 +46,34 @@ export class CustomerSuccessService {
       const apps = tenant.applications;
       const runningApps = apps.filter((a) => a.status === 'running' || a.status === 'healthy').length;
       const failedApps = apps.filter((a) => a.status === 'failed' || a.status === 'error').length;
+      const retainedApps = apps.filter((a) => a.status !== 'terminated').length;
       const totalApps = apps.length;
 
-      // Real build success rate based on actual app status
+      // Historical build failures + current failed workloads
+      const historicalFailures = tenant.auditLogs.filter((l) => l.action === 'BUILD_FAILED').length;
+      const totalAttempts = totalApps + historicalFailures;
       let buildSuccessRate = 100;
-      if (totalApps > 0) {
-        buildSuccessRate = Math.round(((totalApps - failedApps) / totalApps) * 100);
+      if (totalAttempts > 0) {
+        buildSuccessRate = Math.max(
+          0,
+          Math.round(((totalAttempts - failedApps - historicalFailures) / totalAttempts) * 100),
+        );
       }
 
-      // Real quota utilization from actual TenantEntitlement row
+      // Reconcile quota utilization against authoritative workload records
       const entitlements = tenant.entitlements;
       const appLimit = entitlements?.limitApplications ?? 3;
-      const appUsage = entitlements?.usageApplications ?? totalApps;
+      const appUsage = Math.max(entitlements?.usageApplications ?? 0, retainedApps);
       const quotaPercent = appLimit > 0 ? Math.min(100, Math.round((appUsage / appLimit) * 100)) : 0;
 
-      // Calculate real Time-To-Value (TTV): time from tenant registration to their first live app
+      // Calculate Time-To-Value (TTV) from tenant registration to first observed successful deployment
       let timeToValueMinutes: number | null = null;
       const firstLiveApp = [...apps].reverse().find((a) => a.status === 'running' || a.status === 'healthy');
       if (firstLiveApp) {
-        const diffMs = firstLiveApp.createdAt.getTime() - tenant.createdAt.getTime();
+        const firstSuccessfulAt =
+          (firstLiveApp as { lastDeployedAt?: Date | null }).lastDeployedAt ??
+          firstLiveApp.createdAt;
+        const diffMs = firstSuccessfulAt.getTime() - tenant.createdAt.getTime();
         timeToValueMinutes = +(Math.max(0.1, diffMs / (1000 * 60))).toFixed(1);
       }
 
@@ -104,13 +122,15 @@ export class CustomerSuccessService {
       }
 
       const isSfdcConfigured = this.salesforceService.isConfigured();
+      const confirmedSfdcSync = tenant.auditLogs.find((l) => l.action === 'SFDC_ACCOUNT_SYNCED');
+      const hasVerifiedEmail = tenant.name.includes('@');
 
       return {
         id: tenant.id,
         name: tenant.name,
-        companyDomain: tenant.name.includes('@') ? tenant.name.split('@')[1] : `${tenant.id.slice(0, 8)}.io`,
-        contactName: tenant.name.includes('@') ? tenant.name.split('@')[0] : tenant.name,
-        contactEmail: tenant.name.includes('@') ? tenant.name : `${tenant.id.slice(0, 8)}@aetherhost.app`,
+        companyDomain: hasVerifiedEmail ? tenant.name.split('@')[1] : 'unverified-domain',
+        contactName: hasVerifiedEmail ? tenant.name.split('@')[0] : tenant.name,
+        contactEmail: hasVerifiedEmail ? tenant.name : `tenant:${tenant.id}`,
         region: 'EMEA',
         country: 'Global',
         plan: tenant.planId.toUpperCase(),
@@ -122,10 +142,12 @@ export class CustomerSuccessService {
         totalWorkloads: totalApps,
         quotaUtilizationPercent: quotaPercent,
         recentBuildSuccessRate: buildSuccessRate,
-        lastDeploymentAt: apps[0]?.createdAt.toISOString() ?? null,
+        lastDeploymentAt:
+          ((apps[0] as { lastDeployedAt?: Date | null })?.lastDeployedAt ?? apps[0]?.createdAt)?.toISOString() ?? null,
         chiliPiperMeetingBooked: hasChiliPiperMeeting,
-        sfdcAccountId: null,
-        sfdcSyncStatus: isSfdcConfigured ? 'SYNCED' : 'NOT_CONFIGURED',
+        sfdcAccountId:
+          ((confirmedSfdcSync?.metadata as Record<string, unknown> | null)?.sfdcAccountId as string | null) ?? null,
+        sfdcSyncStatus: isSfdcConfigured && confirmedSfdcSync ? 'SYNCED' : 'NOT_CONFIGURED',
         escalationCount: escalations,
         assignedCsm: 'Senior CSM (EMEA)',
         createdAt: tenant.createdAt.toISOString(),
@@ -249,7 +271,7 @@ export class CustomerSuccessService {
     const appLimit = tenant.entitlements?.limitApplications ?? 3;
     const quota = Math.min(100, Math.round((runningApps / Math.max(1, appLimit)) * 100));
 
-    return await this.salesforceService.syncTenantToSalesforce({
+    const syncResult = await this.salesforceService.syncTenantToSalesforce({
       account: {
         Name: tenant.name,
         BillingCountry: 'United Kingdom',
@@ -276,5 +298,22 @@ export class CustomerSuccessService {
         Chili_Piper_Meeting_Booked__c: false,
       },
     });
+
+    if (syncResult.success) {
+      await this.prisma.auditLog
+        .create({
+          data: {
+            tenantId: tenant.id,
+            action: 'SFDC_ACCOUNT_SYNCED',
+            metadata: {
+              sfdcAccountId: (syncResult as { accountId?: string }).accountId ?? null,
+              syncedAt: new Date().toISOString(),
+            },
+          },
+        })
+        .catch(() => {});
+    }
+
+    return syncResult;
   }
 }
