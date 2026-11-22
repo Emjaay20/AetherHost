@@ -15,5 +15,6 @@ import { ApplicationsModule } from '../applications/applications.module';
   imports: [EntitlementsModule, DomainEventsModule, PrismaModule, ApplicationsModule],
   controllers: [AiProxyController],
   providers: [AiProxyService, OpsInsightService, AiProvisioningService, ModelFactory, StubModelAdapter, OpenAICompatibleAdapter],
+  exports: [AiProxyService, ModelFactory],
 })
 export class AiProxyModule {}

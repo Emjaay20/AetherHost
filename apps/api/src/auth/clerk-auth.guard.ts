@@ -12,6 +12,7 @@ import { timingSafeEqual, createHash } from 'crypto';
 import { IS_PUBLIC_KEY } from './public.decorator';
 import { SYSTEM_TENANT_ID } from './tenant.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { PreflightSecurityService } from '../security/threat-detection/preflight-security.service';
 
 function safeCompare(a: string, b: string): boolean {
   try {
@@ -28,6 +29,7 @@ export class ClerkAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     @Optional() private readonly prisma?: PrismaService,
+    @Optional() private readonly securityService?: PreflightSecurityService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -88,6 +90,13 @@ export class ClerkAuthGuard implements CanActivate {
       });
       request.actorTenantId = decoded.sub;
       request.tenantId = decoded.sub;
+
+      if (this.securityService) {
+        const block = await this.securityService.isIdentityBlocked({ tenantId: decoded.sub });
+        if (block.blocked) {
+          throw new UnauthorizedException(`Account suspended: ${block.reason}`);
+        }
+      }
 
       const impersonateHeader = request.headers['x-impersonate-tenant'] as string | undefined;
       if (impersonateHeader) {

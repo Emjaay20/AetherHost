@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { assertWorkloadSpec, validateDockerImage } from './workload-spec';
 import { randomUUID } from 'crypto';
@@ -23,6 +24,7 @@ import { validateCustomDomain } from './domain-validator';
 import { resolve4 } from 'node:dns/promises';
 import { redactSensitiveLogContent } from './log-redaction';
 import { SecretVaultService } from '../common/crypto/secret-vault.service';
+import { PreflightSecurityService } from '../security/threat-detection/preflight-security.service';
 
 export type ApplicationWithToken = Application & { githubToken: string | null };
 
@@ -34,6 +36,7 @@ export class ApplicationsService {
     private readonly eventsService: DomainEventsService,
     private readonly prisma: PrismaService,
     private readonly secretVault: SecretVaultService = new SecretVaultService(),
+    @Optional() private readonly securityService?: PreflightSecurityService,
   ) {}
 
   async create(
@@ -174,6 +177,18 @@ export class ApplicationsService {
             );
           }
         }
+      }
+
+      if (this.securityService) {
+        await this.securityService.enforcePreflight(tenantId, {
+          name,
+          runtime,
+          githubRepo: finalGithubRepo || githubRepo,
+          files: generatedAiFiles,
+          envVars,
+          dockerImage,
+          workerCommand,
+        });
       }
 
       const id = `app_${slugify(name)}_${randomUUID().slice(0, 8)}`;
@@ -762,12 +777,29 @@ if __name__ == '__main__':
     envVars?: Record<string, string>,
     dockerImage?: string,
   ) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (tenant?.subscriptionStatus === 'suspended') {
+      throw new ForbiddenException('Tenant account is suspended');
+    }
+
     const app = await this.assertOwned(id, tenantId);
 
     const targetImage =
       dockerImage !== undefined && dockerImage.trim() !== ''
         ? validateDockerImage(dockerImage)
         : app.dockerImage;
+
+    if (this.securityService) {
+      await this.securityService.enforcePreflight(tenantId, {
+        name: app.name,
+        runtime: app.runtime,
+        githubRepo: app.githubRepo || undefined,
+        files: Array.isArray(app.aiFiles) ? (app.aiFiles as any) : undefined,
+        dockerImage: targetImage || undefined,
+        workerCommand: app.workerCommand || undefined,
+        envVars: envVars !== undefined ? envVars : undefined,
+      });
+    }
 
     if (envVars !== undefined || dockerImage !== undefined) {
       assertWorkloadSpec({

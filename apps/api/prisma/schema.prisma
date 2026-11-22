@@ -217,3 +217,26 @@ model ExternalProviderOAuthState {
   @@index([tenantId, provider])
   @@index([expiresAt])
 }
+
+model SecurityBlocklist {
+  id        String   @id @default(uuid())
+  type      String   // email, github_user, github_id, repo, domain, ip
+  value     String   @unique
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([type])
+  @@index([value])
+}
+
+model SecurityThreatRule {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   // rat, c2, miner, backdoor, reverse_shell
+  pattern     String
+  severity    String   @default("CRITICAL")
+  description String
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+}
