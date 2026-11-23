@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import stat
 import subprocess
 import sys
@@ -52,10 +53,25 @@ const { SecretVaultService } = require('/app/apps/api/dist/common/crypto/secret-
 """
 
 def command(args, timeout=30):
+    # Kill the entire subprocess group on timeout: Restic can spawn rclone, and
+    # killing only the parent leaves inherited stdout pipes open indefinitely.
     try:
-        result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
-        return result.returncode, result.stdout
-    except (OSError, subprocess.TimeoutExpired):
+        process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   text=True, start_new_session=True)
+    except OSError:
+        return -1, ''
+    try:
+        output, _ = process.communicate(timeout=timeout)
+        return process.returncode, output
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
         return -1, ''
 
 def json_command(args, timeout=30):
@@ -122,6 +138,24 @@ def scan_summary(path, expected, now):
     except (OSError, ValueError, TypeError, AttributeError):
         return {'status': 'unavailable'}
 
+def restore_summary(output):
+    # Journal output may contain sensitive diagnostics. Only the fixed drill
+    # result schema is exported; raw journal lines and SQL errors never leave.
+    found = {'status': 'unavailable'}
+    for line in output.splitlines():
+        try:
+            result = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(result, dict) and result.get('drill') == 'postgresql-restore':
+            elapsed = result.get('elapsed_seconds')
+            verified = result.get('verified_at')
+            if result.get('status') == 'passed' and isinstance(elapsed, int) and elapsed >= 0 and isinstance(verified, str):
+                found = {'status': 'observed', 'drill': 'postgresql-restore',
+                         'elapsed_seconds': elapsed, 'verified_at': verified,
+                         'scope': 'database restore and relational checks; not full platform RTO'}
+    return found
+
 def collect():
     now = datetime.datetime.now(datetime.timezone.utc)
     try:
@@ -156,6 +190,8 @@ def collect():
         code, output = command(['systemctl', 'show', unit, '-p', 'Result', '-p', 'ExecMainStatus', '-p', 'ExecMainStartTimestamp'])
         fields = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
         report['services'][unit] = {key: fields.get(key, 'unknown') for key in ('Result', 'ExecMainStatus', 'ExecMainStartTimestamp')} if code == 0 else {'status': 'unavailable'}
+    journal_code, journal = command(['journalctl', '-u', 'aetherhost-restore-check.service', '--since', '24 hours ago', '--no-pager', '-o', 'cat', '-n', '200'])
+    report['last_database_restore'] = restore_summary(journal) if journal_code == 0 else {'status': 'unavailable'}
     report['secret_inventory'] = json_command(['docker', 'exec', 'aetherhost-api', 'node', '-e', POSTURE_JS], 120)
     report['secret_migration_preview'] = json_command(['docker', 'exec', '-w', '/app/apps/api', 'aetherhost-api', 'node', 'dist-security/scripts/migrate-secrets.js'], 120)
     report['retention_preview'] = json_command(['docker', 'exec', '-e', 'DEPLOYMENT_LOG_RETENTION_DAYS=90', '-w', '/app/apps/api', 'aetherhost-api', 'node', 'dist-security/scripts/enforce-retention.js'], 60)
