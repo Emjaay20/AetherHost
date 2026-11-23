@@ -77,6 +77,23 @@ export class GithubWebhookController {
         return { status: 'ignored', reason: 'invalid_repository_format' };
       }
 
+      if (
+        payload.deleted === true ||
+        payload.after === '0000000000000000000000000000000000000000'
+      ) {
+        this.logger.log(`Ignoring branch deletion event for ${targetNormalized}`);
+        return { status: 'ignored', reason: 'branch_deleted' };
+      }
+
+      const defaultBranch = payload.repository?.default_branch || 'main';
+      const branch = payload.ref ? payload.ref.replace('refs/heads/', '') : defaultBranch;
+      if (branch !== defaultBranch) {
+        this.logger.log(
+          `Ignoring push to non-default branch '${branch}' for ${targetNormalized} (default branch is '${defaultBranch}')`,
+        );
+        return { status: 'ignored', reason: 'non_default_branch' };
+      }
+
       // Find all apps with a githubRepo
       const apps = await this.prisma.application.findMany({
         where: { githubRepo: { not: null } },
@@ -93,7 +110,6 @@ export class GithubWebhookController {
         return { status: 'ignored', reason: 'no_matching_application' };
       }
 
-      const branch = payload.ref ? payload.ref.replace('refs/heads/', '') : 'main';
       const fullCommitSha =
         typeof payload.head_commit?.id === 'string'
           ? payload.head_commit.id.trim()
