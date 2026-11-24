@@ -1,6 +1,7 @@
 'use client'
 
-import { CheckCircle2, Circle, Globe2, HeartPulse, Rocket } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, Circle, Globe2, HeartPulse, Rocket, X } from 'lucide-react'
 import CreateAppForm from './CreateAppForm'
 
 type AppSummary = {
@@ -12,16 +13,42 @@ type AppSummary = {
 export default function OnboardingChecklist({
   apps,
   limitReached,
+  preferenceScope,
 }: {
   apps: AppSummary[]
   limitReached: boolean
+  preferenceScope: string
 }) {
+  const [ready, setReady] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
   const hasApplication = apps.length > 0
   const hasHealthyApplication = apps.some((app) => app.status === 'running')
   const hasDomainConfigured = apps.some((app) => Boolean(app.customDomain))
   const completeCount = [true, hasApplication, hasHealthyApplication, hasDomainConfigured].filter(Boolean).length
+  const dismissalKey = `aetherhost:onboarding-checklist:dismissed:v1:${preferenceScope}`
 
-  if (completeCount === 4) return null
+  useEffect(() => {
+    try {
+      setDismissed(window.localStorage.getItem(dismissalKey) === 'true')
+    } catch {
+      // A private browsing policy can deny storage. Keep onboarding available.
+    } finally {
+      setReady(true)
+    }
+  }, [dismissalKey])
+
+  function dismiss() {
+    try {
+      window.localStorage.setItem(dismissalKey, 'true')
+    } catch {
+      // Hiding the optional checklist still applies for the current session.
+    }
+    setDismissed(true)
+  }
+
+  // The checklist is for a brand-new workspace. Once a customer has deployed
+  // an application, the normal dashboard is a better place to continue work.
+  if (hasApplication || completeCount === 4 || !ready || dismissed) return null
 
   const steps = [
     { label: 'Workspace created', detail: 'Your AetherHost account is ready.', complete: true, icon: CheckCircle2 },
@@ -37,7 +64,12 @@ export default function OnboardingChecklist({
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Getting started</p>
           <h2 className="mt-1 text-base font-semibold text-foreground">Get your first application online</h2>
         </div>
-        <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{completeCount} of {steps.length} complete</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">{completeCount} of {steps.length} complete</span>
+          <button type="button" onClick={dismiss} className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Dismiss getting started checklist" title="Dismiss getting started">
+            <X className="size-4" />
+          </button>
+        </div>
       </div>
       <ol className="divide-y divide-border">
         {steps.map((step, index) => {
