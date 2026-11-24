@@ -134,7 +134,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
   const isLegacy = isLegacyApplication(app.createdAt)
 
   return (
-    <div className={`px-3 py-2 transition-colors ${localStatus === 'failed' ? 'bg-red-500/[0.03]' : ''}`}>
+    <div className={`relative px-3 py-2 transition-colors ${actionMenuOpen ? 'z-20' : ''} ${localStatus === 'failed' ? 'bg-red-500/[0.03]' : ''}`}>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_6.5rem_auto] lg:items-center">
         <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(11rem,1fr)_minmax(0,1.6fr)] lg:items-center">
           <div className="flex min-w-0 items-center gap-3">
@@ -295,7 +295,7 @@ export default function ApplicationCardItem({ app, deleteAction }: ApplicationCa
 
               {actionMenuOpen && (
                 <div
-                  className="absolute right-0 top-full mt-1.5 w-48 rounded-md bg-card border border-border shadow-xl py-1 z-50 text-left text-xs"
+                    className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-md border border-border bg-card py-1 text-left text-xs shadow-xl"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
