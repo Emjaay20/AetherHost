@@ -258,6 +258,8 @@ services:
       - AI_PROVIDER=${AI_PROVIDER:-openai}
       - CLERK_WEBHOOK_SECRET=${CLERK_WEBHOOK_SECRET}
       - ADMIN_TENANT_IDS=${ADMIN_TENANT_IDS}
+      # Founder-owned showcase: never exposed as a tenant-facing template.
+      - AETHERPRESS_DEMO_OWNER_TENANT_ID=${AETHERPRESS_DEMO_OWNER_TENANT_ID:-}
       - BACHS_SECRET_KEY=${BACHS_SECRET_KEY}
       - BACHS_WEBHOOK_SECRET=${BACHS_WEBHOOK_SECRET}
       - BACHS_PRO_PRODUCT_ID=${BACHS_PRO_PRODUCT_ID}
@@ -328,6 +330,7 @@ services:
       - NEXT_PUBLIC_BASE_DOMAIN=${BASE_DOMAIN}
       - NEXT_PUBLIC_USE_TRAEFIK=true
       - ADMIN_TENANT_IDS=${ADMIN_TENANT_IDS}
+      - AETHERPRESS_DEMO_OWNER_TENANT_ID=${AETHERPRESS_DEMO_OWNER_TENANT_ID:-}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
       interval: 15s
