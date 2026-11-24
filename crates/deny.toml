@@ -4,7 +4,6 @@
 [advisories]
 ignore = [
     "RUSTSEC-2025-0119",
-    "RUSTSEC-2026-0386",
 ]
 
 [licenses]
