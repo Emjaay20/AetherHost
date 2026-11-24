@@ -14,7 +14,7 @@ import { UserButton, Show, SignInButton } from "@clerk/nextjs";
 import { cookies } from 'next/headers';
 import { stopImpersonating } from '../../admin/actions';
 
-import { isCurrentUserAdmin } from '../../../lib/admin'
+import { isCurrentUserAdmin, isCurrentUserAetherPressDemoOwner } from '../../../lib/admin'
 
 const UNLIMITED_LIMIT = 999_999
 
@@ -46,11 +46,12 @@ export default async function Dashboard() {
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
   const impersonateTenantName = cookieStore.get('aether_impersonate_tenant_name')?.value;
 
-  const [applicationsResult, entitlements, events, isAdmin, externalFrontends, spacefastConnection] = await Promise.all([
+  const [applicationsResult, entitlements, events, isAdmin, isAetherPressDemoOwner, externalFrontends, spacefastConnection] = await Promise.all([
     getApplicationsWithStatus(),
     getEntitlements(),
     getEvents(),
     isCurrentUserAdmin(),
+    isCurrentUserAetherPressDemoOwner(),
     getExternalFrontends(),
     getSpacefastConnection(),
   ])
@@ -230,7 +231,7 @@ export default async function Dashboard() {
               ) : <DeploymentList apps={apps} deleteAction={deleteApplication} />}
             </div>
 
-            <AetherPressLaunchpad limitReached={limitReached} />
+            {isAetherPressDemoOwner && <AetherPressLaunchpad limitReached={limitReached} />}
 
             {/* Optional external static frontend target */}
             <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} />

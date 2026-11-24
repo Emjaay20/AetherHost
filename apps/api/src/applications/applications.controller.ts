@@ -74,6 +74,7 @@ export class ApplicationsController {
   @Post('templates/aetherpress-launchpad')
   createAetherPressLaunchpad(
     @TenantId() tenantId: string,
+    @ActorTenantId() actorTenantId: string,
     @Body() body: CreateAetherPressLaunchpadDto,
   ) {
     if (tenantId === SYSTEM_TENANT_ID) {
@@ -82,6 +83,17 @@ export class ApplicationsController {
         throw new ForbiddenException('System agent cannot create applications without DEFAULT_SYSTEM_TENANT_ID configured');
       }
       tenantId = configuredTenantId;
+    }
+
+    // This is a founder-owned showcase workload, not a customer template.
+    // Check both the authenticated actor and effective tenant so an unrelated
+    // administrator cannot create it by impersonating the owner workspace.
+    const demoOwnerTenantId = process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID?.trim();
+    if (!demoOwnerTenantId) {
+      throw new ForbiddenException('The AetherPress demo is not enabled for this workspace');
+    }
+    if (actorTenantId !== demoOwnerTenantId || tenantId !== demoOwnerTenantId) {
+      throw new ForbiddenException('The AetherPress demo is available only to its owner workspace');
     }
 
     const name = `aetherpress-launchpad-${Date.now().toString(36)}`;

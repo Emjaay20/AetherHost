@@ -67,3 +67,20 @@ export async function isCurrentUserAdmin(): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * The AetherPress launchpad is a founder demo, rather than a tenant-facing
+ * template. Keep the presentation boundary as strict as the API boundary.
+ */
+export async function isCurrentUserAetherPressDemoOwner(): Promise<boolean> {
+  const ownerTenantId = process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID?.trim()
+  if (!ownerTenantId) return false
+
+  try {
+    const { userId } = await auth()
+    return userId === ownerTenantId
+  } catch (err) {
+    console.error('Failed to check AetherPress demo owner:', err)
+    return false
+  }
+}

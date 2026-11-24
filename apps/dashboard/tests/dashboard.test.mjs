@@ -151,6 +151,19 @@ test('AetherPress demo can create a safe WordPress and Spacefast companion', () 
   assert.match(actions, /applications\/templates\/aetherpress-launchpad/);
 });
 
+test('AetherPress founder demo is hidden unless the signed-in workspace owns it', () => {
+  const page = fs.readFileSync(
+    path.join(dashboardRoot, 'app', '(console)', 'console', 'page.tsx'),
+    'utf8',
+  );
+  const admin = fs.readFileSync(path.join(dashboardRoot, 'lib', 'admin.ts'), 'utf8');
+
+  assert.match(page, /isCurrentUserAetherPressDemoOwner/);
+  assert.match(page, /isAetherPressDemoOwner && <AetherPressLaunchpad/);
+  assert.match(admin, /AETHERPRESS_DEMO_OWNER_TENANT_ID/);
+  assert.match(admin, /userId === ownerTenantId/);
+});
+
 test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin route protection on /admin(.*)', () => {
   const proxyContent = fs.readFileSync(
     path.join(dashboardRoot, 'proxy.ts'),
