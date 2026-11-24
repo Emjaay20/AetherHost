@@ -21,6 +21,6 @@ serde_json = "1.0"
 tower-http = { version = "0.5" }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-thiserror = "1.0"
+thiserror = "2.0"
 actix-web = { version = "4", default-features = false, features = ["macros"] }
 criterion = "0.5"
