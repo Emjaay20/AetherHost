@@ -88,6 +88,16 @@ test('console makes application loading failures explicit and guides first deplo
   assert.match(checklist, /runtime health evidence reports healthy/);
 });
 
+test('getting started is limited to new workspaces and can be dismissed', () => {
+  const checklist = fs.readFileSync(path.join(dashboardRoot, 'components', 'OnboardingChecklist.tsx'), 'utf8');
+  const consolePage = fs.readFileSync(path.join(dashboardRoot, 'app', '(console)', 'console', 'page.tsx'), 'utf8');
+
+  assert.match(checklist, /if \(hasApplication \|\| completeCount === 4 \|\| !ready \|\| dismissed\) return null/);
+  assert.match(checklist, /aetherhost:onboarding-checklist:dismissed:v1/);
+  assert.match(checklist, /Dismiss getting started checklist/);
+  assert.match(consolePage, /OnboardingChecklist apps=\{apps\} limitReached=\{limitReached\} preferenceScope=\{userId \|\| 'anonymous'\}/);
+});
+
 test('domain setup does not claim HTTPS is ready before verification', () => {
   const modal = fs.readFileSync(path.join(dashboardRoot, 'components', 'CustomDomainModal.tsx'), 'utf8');
   const actions = fs.readFileSync(path.join(dashboardRoot, 'app', 'actions.ts'), 'utf8');

@@ -142,7 +142,7 @@ export default async function Dashboard() {
                 <a href="/console" className="rounded-md border border-amber-500/30 px-2.5 py-1 font-medium transition-colors hover:bg-amber-500/10">Try again</a>
               </div>
             )}
-            <OnboardingChecklist apps={apps} limitReached={limitReached} />
+            <OnboardingChecklist apps={apps} limitReached={limitReached} preferenceScope={userId || 'anonymous'} />
             
             {/* Stats Section */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 rounded-lg border border-border bg-card divide-y sm:divide-y-0 sm:divide-x divide-border">
