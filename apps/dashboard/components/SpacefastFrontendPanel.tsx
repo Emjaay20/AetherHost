@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { ChevronRight, Globe2 } from 'lucide-react'
+import { useEffect, useState, useTransition } from 'react'
+import { ChevronRight, Globe2, X } from 'lucide-react'
 import type { ExternalFrontend, SpacefastConnection } from '../app/actions'
 import { disconnectSpacefast, getSpacefastTeams, publishSpacefastFrontend, refreshSpacefastFrontend, selectSpacefastTeam, startSpacefastConnection } from '../app/actions'
 
@@ -22,7 +22,9 @@ function deploymentStatusClass(deployment: ExternalFrontend | undefined) {
   return 'border-border bg-muted text-muted-foreground'
 }
 
-export default function SpacefastFrontendPanel({ apps, deployments, connection }: { apps: App[]; deployments: ExternalFrontend[]; connection: SpacefastConnection }) {
+const GUIDE_DISMISSAL_KEY = 'aetherhost:spacefast-guide:dismissed:v1'
+
+export default function SpacefastFrontendPanel({ apps, deployments, connection, preferenceScope }: { apps: App[]; deployments: ExternalFrontend[]; connection: SpacefastConnection; preferenceScope: string }) {
   const [consents, setConsents] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState<Record<string, string>>({})
   const [pending, startTransition] = useTransition()
@@ -33,11 +35,33 @@ export default function SpacefastFrontendPanel({ apps, deployments, connection }
   const failedCount = deployments.filter((deployment) => deployment.status === 'failed').length
   const needsAttention = publishingCount > 0 || failedCount > 0
   const [isPanelOpen, setIsPanelOpen] = useState(needsAttention)
+  const [guideReady, setGuideReady] = useState(false)
+  const [guideDismissed, setGuideDismissed] = useState(false)
   const [openApps, setOpenApps] = useState<Record<string, boolean>>(() => Object.fromEntries(
     deployments
       .filter((deployment) => deployment.status === 'publishing' || deployment.status === 'failed')
       .map((deployment) => [deployment.applicationId, true]),
   ))
+  const guideDismissalKey = `${GUIDE_DISMISSAL_KEY}:${preferenceScope}`
+
+  useEffect(() => {
+    try {
+      setGuideDismissed(window.localStorage.getItem(guideDismissalKey) === 'true')
+    } catch {
+      // A private browsing policy can deny storage. Keep the optional guide usable.
+    } finally {
+      setGuideReady(true)
+    }
+  }, [guideDismissalKey])
+
+  function dismissGuide() {
+    try {
+      window.localStorage.setItem(guideDismissalKey, 'true')
+    } catch {
+      // Hiding the guide still applies until this page is closed if storage is unavailable.
+    }
+    setGuideDismissed(true)
+  }
 
   function publish(applicationId: string) {
     startTransition(async () => {
@@ -126,6 +150,26 @@ export default function SpacefastFrontendPanel({ apps, deployments, connection }
             {message.connection && <span role="status" className="text-muted-foreground">{message.connection}</span>}
           </div>
         </div>
+
+        {guideReady && !guideDismissed && (
+          <aside className="border-b border-border bg-muted/20 p-4" aria-label="Spacefast publishing guide">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">First publish guide</p>
+                <h3 className="mt-1 text-sm font-semibold">From an AetherHost app to a private Spacefast site</h3>
+              </div>
+              <button type="button" onClick={dismissGuide} className="rounded-md p-1 text-muted-foreground hover:bg-background hover:text-foreground" aria-label="Dismiss Spacefast publishing guide" title="Dismiss guide">
+                <X className="size-4" />
+              </button>
+            </div>
+            <ol className="mt-3 grid gap-3 text-xs leading-relaxed text-muted-foreground sm:grid-cols-3">
+              <li><span className="mr-1.5 font-semibold text-foreground">1.</span>Open the application below and confirm it has the static frontend you want to share.</li>
+              <li><span className="mr-1.5 font-semibold text-foreground">2.</span>Approve that single static export, then publish it privately to your selected Spacefast team.</li>
+              <li><span className="mr-1.5 font-semibold text-foreground">3.</span>Check the published version. Your runtime, secrets, database, and domains remain on AetherHost.</li>
+            </ol>
+            <button type="button" onClick={dismissGuide} className="mt-3 text-xs font-medium text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">Got it, hide this guide</button>
+          </aside>
+        )}
 
         <div className="divide-y divide-border">
           {apps.map((app) => {

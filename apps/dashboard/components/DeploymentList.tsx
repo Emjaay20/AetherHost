@@ -84,7 +84,7 @@ export default function DeploymentList({
           No deployments match this filter.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-card divide-y divide-border">
+        <div className="overflow-visible rounded-lg border border-border bg-card divide-y divide-border">
           {visibleApps.map((app) => (
             <ApplicationCardItem key={app.id} app={app} deleteAction={deleteAction} />
           ))}

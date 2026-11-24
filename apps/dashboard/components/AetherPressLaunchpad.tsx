@@ -1,13 +1,38 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { BookOpen, Loader2, Sparkles, X } from 'lucide-react'
 import { createAetherPressLaunchpad } from '../app/actions'
 
-export default function AetherPressLaunchpad({ limitReached }: { limitReached: boolean }) {
+const DISMISSAL_KEY = 'aetherhost:aetherpress-launchpad:dismissed:v1'
+
+export default function AetherPressLaunchpad({ limitReached, preferenceScope }: { limitReached: boolean; preferenceScope: string }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [message, setMessage] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  const dismissalKey = `${DISMISSAL_KEY}:${preferenceScope}`
+
+  useEffect(() => {
+    try {
+      setDismissed(window.localStorage.getItem(dismissalKey) === 'true')
+    } catch {
+      // A private browsing policy can deny storage. Keep the optional card usable.
+    } finally {
+      setReady(true)
+    }
+  }, [dismissalKey])
+
+  function dismiss() {
+    try {
+      window.localStorage.setItem(dismissalKey, 'true')
+    } catch {
+      // Dismissing should still work for this session if storage is unavailable.
+    }
+    setDismissed(true)
+  }
 
   function submit(formData: FormData) {
     startTransition(async () => {
@@ -21,6 +46,8 @@ export default function AetherPressLaunchpad({ limitReached }: { limitReached: b
     })
   }
 
+  if (!ready || dismissed) return null
+
   return (
     <section className="rounded-lg border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -32,7 +59,10 @@ export default function AetherPressLaunchpad({ limitReached }: { limitReached: b
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">A small editorial companion: WordPress remains the source of published posts, AetherHost runs the app, and the selected static frontend can be published privately to Spacefast.</p>
           </div>
         </div>
-        <button type="button" onClick={() => { setMessage(null); setOpen(true) }} disabled={limitReached} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"><Sparkles className="size-3.5" />Create demo</button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" onClick={dismiss} className="rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Dismiss</button>
+          <button type="button" onClick={() => { setMessage(null); setOpen(true) }} disabled={limitReached} className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"><Sparkles className="size-3.5" />Create demo</button>
+        </div>
       </div>
       {message && <p role="status" className="mt-3 text-xs text-muted-foreground">{message}</p>}
 

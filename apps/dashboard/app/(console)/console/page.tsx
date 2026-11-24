@@ -11,6 +11,7 @@ import AetherPressLaunchpad from '../../../components/AetherPressLaunchpad'
 import OnboardingChecklist from '../../../components/OnboardingChecklist'
 import { Server, Activity, Box, HardDrive } from 'lucide-react'
 import { UserButton, Show, SignInButton } from "@clerk/nextjs";
+import { auth } from '@clerk/nextjs/server'
 import { cookies } from 'next/headers';
 import { stopImpersonating } from '../../admin/actions';
 
@@ -42,6 +43,7 @@ function formatPercent(value: number) {
 }
 
 export default async function Dashboard() {
+  const { userId } = await auth()
   const cookieStore = await cookies();
   const impersonateTenantId = cookieStore.get('aether_impersonate_tenant')?.value;
   const impersonateTenantName = cookieStore.get('aether_impersonate_tenant_name')?.value;
@@ -231,10 +233,10 @@ export default async function Dashboard() {
               ) : <DeploymentList apps={apps} deleteAction={deleteApplication} />}
             </div>
 
-            {isAetherPressDemoOwner && <AetherPressLaunchpad limitReached={limitReached} />}
+            {isAetherPressDemoOwner && <AetherPressLaunchpad limitReached={limitReached} preferenceScope={userId || 'anonymous'} />}
 
             {/* Optional external static frontend target */}
-            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} />
+            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} preferenceScope={userId || 'anonymous'} />
 
             {/* Domain Events Log */}
             <EventsPanel events={events} />

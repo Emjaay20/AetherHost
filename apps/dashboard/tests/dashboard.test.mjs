@@ -135,6 +135,9 @@ test('Spacefast publishing stays compact until a specific app is expanded', () =
   assert.match(panel, /appNeedsAttention/);
   assert.match(panel, /Only the saved static export is sent/);
   assert.match(panel, /A customer-owned connection can be added when available/);
+  assert.match(panel, /First publish guide/);
+  assert.match(panel, /Got it, hide this guide/);
+  assert.match(panel, /aetherhost:spacefast-guide:dismissed:v1/);
 });
 
 test('AetherPress demo can create a safe WordPress and Spacefast companion', () => {
@@ -147,6 +150,8 @@ test('AetherPress demo can create a safe WordPress and Spacefast companion', () 
   assert.match(launchpad, /AetherPress Launchpad/);
   assert.match(launchpad, /public WordPress REST API/);
   assert.match(launchpad, /never asks for an admin account, token, database, or plugin access/);
+  assert.match(launchpad, /Dismiss/);
+  assert.match(launchpad, /aetherhost:aetherpress-launchpad:dismissed:v1/);
   assert.match(actions, /createAetherPressLaunchpad/);
   assert.match(actions, /applications\/templates\/aetherpress-launchpad/);
 });
@@ -162,6 +167,15 @@ test('AetherPress founder demo is hidden unless the signed-in workspace owns it'
   assert.match(page, /isAetherPressDemoOwner && <AetherPressLaunchpad/);
   assert.match(admin, /AETHERPRESS_DEMO_OWNER_TENANT_ID/);
   assert.match(admin, /userId === ownerTenantId/);
+});
+
+test('deployment action menus can layer above the application list', () => {
+  const deploymentList = fs.readFileSync(path.join(dashboardRoot, 'components', 'DeploymentList.tsx'), 'utf8');
+  const card = fs.readFileSync(path.join(dashboardRoot, 'components', 'ApplicationCardItem.tsx'), 'utf8');
+
+  assert.match(deploymentList, /overflow-visible rounded-lg border border-border bg-card/);
+  assert.match(card, /actionMenuOpen \? 'z-20' : ''/);
+  assert.match(card, /top-full z-50/);
 });
 
 test('proxy.ts enforces canonical domain redirect to aetherhost.app and admin route protection on /admin(.*)', () => {
