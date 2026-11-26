@@ -10,6 +10,9 @@ import { createZip, selectStaticArtifact, SpacefastTenantService } from './space
 import { createAetherPressLaunchpadFiles } from '../../applications/aetherpress-launchpad.template';
 
 describe('SpacefastTenantService', () => {
+  const originalOwner = process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID;
+  beforeEach(() => { process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID = 'tenant_123'; });
+  afterEach(() => { if (originalOwner === undefined) delete process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID; else process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID = originalOwner; });
   const baseApp = {
     id: 'app_123456', tenantId: 'tenant_123', name: 'Marketing Site',
     aiFiles: [
@@ -39,13 +42,26 @@ describe('SpacefastTenantService', () => {
 
   it('requires explicit consent before it contacts Spacefast', async () => {
     const { service, spacefast } = makeService();
-    await expect(service.publish('tenant_123', 'app_123456', false)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.publish('tenant_123', 'app_123456', false, 'tenant_123')).rejects.toBeInstanceOf(BadRequestException);
+    expect(spacefast.publisher).not.toHaveBeenCalled();
+  });
+
+  it('does not publish another tenant to the operator account', async () => {
+    const { service, spacefast, prisma } = makeService();
+    await expect(service.publish('other_tenant', 'app_123456', true, 'other_tenant')).rejects.toThrow('awaiting provider access');
+    expect(spacefast.publisher).not.toHaveBeenCalled();
+    expect(prisma.externalFrontendDeployment.upsert).not.toHaveBeenCalled();
+  });
+
+  it('does not permit an impersonating actor to use the managed publisher', async () => {
+    const { service, spacefast } = makeService();
+    await expect(service.publish('tenant_123', 'app_123456', true, 'other_tenant')).rejects.toThrow('awaiting provider access');
     expect(spacefast.publisher).not.toHaveBeenCalled();
   });
 
   it('publishes a bounded static export and never includes .env content', async () => {
     const { service, client, prisma } = makeService();
-    await expect(service.publish('tenant_123', 'app_123456', true)).resolves.toMatchObject({ status: 'published', versionId: 'ver_1' });
+    await expect(service.publish('tenant_123', 'app_123456', true, 'tenant_123')).resolves.toMatchObject({ status: 'published', versionId: 'ver_1' });
     expect(client.createPrivateSpace).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'team_1' }));
     const archive = client.publishArchive.mock.calls[0][0].archive as Blob;
     const text = new TextDecoder().decode(await archive.arrayBuffer());
@@ -67,7 +83,7 @@ describe('SpacefastTenantService', () => {
       ],
     });
 
-    await expect(service.publish('tenant_123', 'app_123456', true)).rejects.toThrow(
+    await expect(service.publish('tenant_123', 'app_123456', true, 'tenant_123')).rejects.toThrow(
       'Spacefast exports must be stored in public/ or dist/',
     );
   });

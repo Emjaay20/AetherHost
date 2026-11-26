@@ -37,7 +37,7 @@ export class SpacefastTenantService {
     });
   }
 
-  async publish(tenantId: string, applicationId: string, consent: boolean) {
+  async publish(tenantId: string, applicationId: string, consent: boolean, actorTenantId: string) {
     if (consent !== true) {
       throw new BadRequestException('Explicit consent is required before sending an artifact to Spacefast');
     }
@@ -46,6 +46,14 @@ export class SpacefastTenantService {
       select: { id: true, tenantId: true, name: true, aiFiles: true },
     });
     if (!app) throw new NotFoundException('Application not found');
+
+    // The managed publisher belongs to the operator. Other tenants must have
+    // their own connected provider account before a publish is attempted.
+    const customerPublisher = await this.oauth.publisherForTenant(tenantId);
+    const ownerTenantId = process.env.AETHERPRESS_DEMO_OWNER_TENANT_ID?.trim();
+    if (!customerPublisher && (!ownerTenantId || tenantId !== ownerTenantId || actorTenantId !== ownerTenantId)) {
+      throw new ServiceUnavailableException('Connecting your own Spacefast account is not available yet. We are awaiting provider access.');
+    }
 
     const artifact = selectStaticArtifact(app.aiFiles);
     if (!artifact) {
@@ -78,7 +86,7 @@ export class SpacefastTenantService {
     });
 
     try {
-      const { client, teamId } = (await this.oauth.publisherForTenant(tenantId)) ?? this.spacefast.publisher();
+      const { client, teamId } = customerPublisher ?? this.spacefast.publisher();
       let spaceId = deployment.spaceId;
       let spaceSlug = deployment.spaceSlug;
       let liveUrl = deployment.liveUrl;

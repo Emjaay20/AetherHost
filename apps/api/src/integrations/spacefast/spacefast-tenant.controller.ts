@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { IsBoolean } from 'class-validator';
-import { TenantId } from '../../auth/tenant.decorator';
+import { ActorTenantId, TenantId } from '../../auth/tenant.decorator';
 import { SpacefastTenantService } from './spacefast-tenant.service';
 
 class PublishSpacefastDto {
@@ -20,10 +20,11 @@ export class SpacefastTenantController {
   @Post(':applicationId/spacefast/publish')
   publish(
     @TenantId() tenantId: string,
+    @ActorTenantId() actorTenantId: string,
     @Param('applicationId') applicationId: string,
     @Body() body: PublishSpacefastDto,
   ) {
-    return this.service.publish(tenantId, applicationId, body.consent);
+    return this.service.publish(tenantId, applicationId, body.consent, actorTenantId);
   }
 
   @Post(':applicationId/spacefast/refresh')

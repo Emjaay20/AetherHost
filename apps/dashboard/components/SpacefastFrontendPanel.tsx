@@ -24,7 +24,7 @@ function deploymentStatusClass(deployment: ExternalFrontend | undefined) {
 
 const GUIDE_DISMISSAL_KEY = 'aetherhost:spacefast-guide:dismissed:v1'
 
-export default function SpacefastFrontendPanel({ apps, deployments, connection, preferenceScope }: { apps: App[]; deployments: ExternalFrontend[]; connection: SpacefastConnection; preferenceScope: string }) {
+export default function SpacefastFrontendPanel({ apps, deployments, connection, preferenceScope, isManagedPublisherOwner }: { apps: App[]; deployments: ExternalFrontend[]; connection: SpacefastConnection; preferenceScope: string; isManagedPublisherOwner: boolean }) {
   const [consents, setConsents] = useState<Record<string, boolean>>({})
   const [message, setMessage] = useState<Record<string, string>>({})
   const [pending, startTransition] = useTransition()
@@ -140,8 +140,10 @@ export default function SpacefastFrontendPanel({ apps, deployments, connection, 
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
             {connection.connected ? (
               <span className="text-muted-foreground">Your connected Spacefast team will receive future approved publishes.</span>
-            ) : (
+            ) : isManagedPublisherOwner ? (
               <span className="text-muted-foreground">Approved publishes use AetherHost&apos;s managed private publisher. A customer-owned connection can be added when available.</span>
+            ) : (
+              <span className="text-muted-foreground">Connecting your own Spacefast account is pending provider access. Publishing will become available after you connect your account.</span>
             )}
             {connection.configured && !connection.connected && !connection.needsTeam && <button onClick={connect} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Connect your Spacefast account</button>}
             {connection.needsTeam && teams.length === 0 && <button onClick={loadTeams} disabled={pending} className="rounded-md border border-border px-2.5 py-1 font-medium hover:bg-muted disabled:opacity-50">Choose a Spacefast team</button>}
@@ -205,7 +207,7 @@ export default function SpacefastFrontendPanel({ apps, deployments, connection, 
                           <input type="checkbox" checked={consented} onChange={(event) => setConsents((current) => ({ ...current, [app.id]: event.target.checked }))} className="mt-0.5" />
                           <span>I approve sending this app&apos;s selected static export to a private Spacefast Space{deployment ? ' as a new version' : ''}.</span>
                         </label>
-                        <button onClick={() => publish(app.id)} disabled={pending || !consented} className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40">
+                        <button onClick={() => publish(app.id)} disabled={pending || !consented || (!connection.connected && !isManagedPublisherOwner)} className="rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40">
                           {deployment ? 'Publish new version' : 'Publish privately'}
                         </button>
                       </>

@@ -236,7 +236,7 @@ export default async function Dashboard() {
             {isAetherPressDemoOwner && <AetherPressLaunchpad limitReached={limitReached} preferenceScope={userId || 'anonymous'} />}
 
             {/* Optional external static frontend target */}
-            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} preferenceScope={userId || 'anonymous'} />
+            <SpacefastFrontendPanel apps={apps} deployments={externalFrontends} connection={spacefastConnection} preferenceScope={userId || 'anonymous'} isManagedPublisherOwner={isAetherPressDemoOwner && !impersonateTenantId} />
 
             {/* Domain Events Log */}
             <EventsPanel events={events} />
