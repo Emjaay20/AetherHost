@@ -16,6 +16,9 @@ import (
 //go:embed assets/aetherpress-intelligence.php
 var aetherPressIntelligencePlugin string
 
+//go:embed assets/aetherpress-migration.php
+var aetherPressIntelligenceMigration string
+
 // buildWordPressWorkload is a platform-owned profile. It uses the same plan,
 // credentials, private network and health-gated lifecycle as an image
 // workload; the only difference is the fixed process graph.
@@ -81,6 +84,7 @@ func buildWordPressWorkload(app Application, identity, mariaDBPassword, redisPas
 	}
 	if pluginEnabled {
 		configFiles["aetherpress-intelligence.php"] = aetherPressIntelligencePlugin
+		configFiles["aetherpress-migration.php"] = aetherPressIntelligenceMigration
 	}
 
 	return WorkloadPlan{
@@ -216,12 +220,12 @@ func writeAetherPressPluginBootstrap(b *strings.Builder, name string) {
 	fmt.Fprintf(b, "  %s:\n", name)
 	b.WriteString("    image: alpine:3.20\n")
 	fmt.Fprintf(b, "    container_name: %s\n", name)
-	b.WriteString("    command: [\"/bin/sh\", \"-ec\", \"mkdir -p /var/www/html/wp-content/mu-plugins && install -m 0644 /opt/aetherhost/aetherpress-intelligence.php /var/www/html/wp-content/mu-plugins/aetherpress-intelligence.php\"]\n")
+	b.WriteString("    command: [\"/bin/sh\", \"-ec\", \"mkdir -p /var/www/html/wp-content/mu-plugins /var/www/html/wp-content/plugins/aetherpress-intelligence && install -m 0644 /opt/aetherhost/aetherpress-intelligence.php /var/www/html/wp-content/plugins/aetherpress-intelligence/aetherpress-intelligence.php && install -m 0644 /opt/aetherhost/aetherpress-migration.php /var/www/html/wp-content/mu-plugins/aetherpress-intelligence.php\"]\n")
 	// Existing WordPress volumes may be owned by the unprivileged PHP worker.
 	// The bootstrap needs only DAC_OVERRIDE to replace this one managed file;
 	// it does not join ingress or receive any tenant credential.
 	b.WriteString("    restart: \"no\"\n    security_opt:\n      - no-new-privileges:true\n    cap_drop:\n      - ALL\n    cap_add:\n      - DAC_OVERRIDE\n")
-	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./aetherpress-intelligence.php:/opt/aetherhost/aetherpress-intelligence.php:ro\n")
+	b.WriteString("    volumes:\n      - wordpress_data:/var/www/html\n      - ./aetherpress-intelligence.php:/opt/aetherhost/aetherpress-intelligence.php:ro\n      - ./aetherpress-migration.php:/opt/aetherhost/aetherpress-migration.php:ro\n")
 	b.WriteString("    networks:\n      private: {}\n")
 }
 
