@@ -289,6 +289,10 @@ func TestWordPressAetherPressIntelligenceInstallsOnlyWhenExplicitlyConfigured(t 
 	if !strings.Contains(plan.ConfigFiles["aetherpress-intelligence.php"], "Imports explicitly approved SmartCrawler research") {
 		t.Fatal("expected audited AetherPress Intelligence plugin asset")
 	}
+	if !strings.Contains(plan.Compose, "/wp-content/plugins/aetherpress-intelligence/aetherpress-intelligence.php") ||
+		!strings.Contains(plan.ConfigFiles["aetherpress-migration.php"], "aetherpress_intelligence_standard_migrated") {
+		t.Fatal("expected normal plugin installation and one-time migration loader")
+	}
 	if !strings.Contains(plan.WordPressEnv, "AETHERPRESS_INTELLIGENCE_CRAWLER_TOKEN=sc_live_example_scoped_key") {
 		t.Fatal("expected scoped crawler credential in protected WordPress env file")
 	}

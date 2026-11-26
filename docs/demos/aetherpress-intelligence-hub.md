@@ -8,7 +8,7 @@ SmartCrawler, and Spacefast integration:
 | System | Responsibility |
 | --- | --- |
 | WordPress on AetherHost | The editor's source of truth, dashboard, drafts, and published insights. |
-| AetherPress Intelligence MU plugin | Lets an editor request research from only approved HTTPS source domains, then imports completed material as a draft. |
+| AetherPress Intelligence plugin | Lets an editor request research from only approved HTTPS source domains, then imports completed material as a draft. |
 | SmartCrawler | Performs the robots-aware, authenticated scrape under a dedicated API key and returns a durable job result. |
 | AetherPress Launchpad | Reads public WordPress insights in the browser; it has no WordPress or SmartCrawler credential. |
 | Spacefast | Privately serves only the reviewed static AetherPress export. It receives no WordPress files, database, source content, or crawler credential. |
@@ -38,8 +38,10 @@ draft.
    HTTPS origins. The plugin refuses all other hosts, URLs with embedded
    credentials, and non-HTTPS URLs. Start with sites that you own or have
    permission to research.
-4. Redeployment installs the plugin as a WordPress **Must-Use** plugin before
-   PHP-FPM starts. It appears in **Plugins → Must-Use**. The crawler token is
+4. Redeployment installs the plugin in WordPress's standard plugins directory.
+   A one-time Must-Use migration loader keeps it available and activates it on
+   the next administrator visit. After migration it appears in **Plugins → Active**
+   and normal deactivation is respected. The crawler token is
    stored in the protected WordPress environment file, not in the plugin,
    frontend, or Spacefast archive.
 5. In WordPress, open **Tools → AetherPress Intelligence**, enter a permitted

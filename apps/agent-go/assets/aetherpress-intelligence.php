@@ -47,6 +47,15 @@ add_action('init', function () {
     ));
 });
 
+// Register custom post routes once after the managed plugin is installed or
+// its rewrite structure changes. Avoid a costly rewrite flush on every page.
+add_action('wp_loaded', function () {
+    if (get_option('aetherpress_intelligence_rewrite_version') !== '1') {
+        flush_rewrite_rules(false);
+        update_option('aetherpress_intelligence_rewrite_version', '1', false);
+    }
+});
+
 add_action('rest_api_init', function () {
     register_rest_route('aetherpress/v1', '/insights', array(
         'methods' => WP_REST_Server::READABLE,
@@ -58,6 +67,7 @@ add_action('rest_api_init', function () {
                     'id' => $post->ID,
                     'title' => get_the_title($post),
                     'excerpt' => get_the_excerpt($post),
+                    'content' => wp_strip_all_tags((string) $post->post_content, true),
                     'link' => get_permalink($post),
                     'date' => get_post_time('c', true, $post),
                     'sourceUrl' => esc_url_raw((string) get_post_meta($post->ID, '_aetherpress_source_url', true)),
