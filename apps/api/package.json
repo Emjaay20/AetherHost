@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "security:migrate-secrets": "node dist-security/scripts/migrate-secrets.js",
     "security:retention": "node dist-security/scripts/enforce-retention.js",
-    "security:build": "tsc -p tsconfig.security.json --noEmit false --outDir dist-security --declaration false --incremental false"
+    "security:build": "tsc -p tsconfig.security.json --noEmit false --outDir dist-security --declaration false --incremental false",
+    "security:classification": "ts-node --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"Node\"}' scripts/check-data-classification.ts"
   },
   "dependencies": {
     "@aetherhost/common": "workspace:*",

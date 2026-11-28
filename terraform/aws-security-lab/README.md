@@ -1,5 +1,18 @@
 # Isolated AWS security environment
 
+Status: tested design, offline (mocked provider + Checkov); not deployed.
+These checks assess configuration, not actual AWS behavior or effectiveness.
+Tests use an in-memory mocked apply before plan assertions because Terraform 1.9
+does not supply mocked computed attributes during the first plan. No AWS account
+or credentials are used.
+
+```sh
+terraform -chdir=terraform/aws-security-lab init -backend=false
+terraform -chdir=terraform/aws-security-lab validate
+terraform -chdir=terraform/aws-security-lab test
+checkov -d terraform/aws-security-lab --framework terraform
+```
+
 This optional root module creates encrypted private evidence storage, a versioned
 CloudTrail bucket, multi-region management and evidence-object audit events, and
 a GitHub OIDC role that can only write the evidence prefix. Its KMS use is restricted to the

@@ -102,3 +102,29 @@ flux bootstrap github \
   --path=deploy/gitops \
   --personal
 ```
+# Kyverno admission test (isolated KinD)
+
+`policies/kyverno/security.yaml` contains draft enforcement policies for the
+platform signing identity and restricted workload Pods. The signer expression
+is checked against `verify-image.sh`; system namespaces are excluded. Kyverno
+3.9.2 / CLI 1.19.2 are pinned in CI. ClusterPolicy is deprecated by Kyverno and
+must be migrated before a future incompatible Kyverno upgrade.
+
+The CI smoke test installs the chart with its locally built `:latest` image
+**before** Kyverno is installed. It then checks a digest-pinned synthetic chart
+using server-side dry run, and checks that a non-verifiable platform digest and
+insecure Pod fixtures are rejected. The synthetic image does not match the
+platform signature policy. A separate post-publication job now tests the exact
+published signed digest and denies the same release by tag, using read-only GHCR
+access; production deployment waits on it. That job has not yet been observed
+passing against a signed platform release. Do not describe this as live
+production admission enforcement. Review namespace exclusions, registry and
+transparency-log availability, failure behavior and Kubernetes upgrades before
+installing on a real cluster.
+
+```sh
+kyverno test deploy/policies/kyverno/tests
+python3 scripts/security/check-image-policy-identity.py
+# In an isolated cluster with Kyverno installed and policies applied:
+bash scripts/security/test-kyverno-admission.sh
+```

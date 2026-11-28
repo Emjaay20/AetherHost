@@ -40,6 +40,8 @@ jobs:
               - 'packages/**'
               - 'pnpm-lock.yaml'
               - 'package.json'
+              - 'docs/security/data-classification.generated.md'
+              - '.github/workflows/ci.yml'
             go:
               - 'apps/agent-go/**'
             rust:
@@ -48,9 +50,13 @@ jobs:
               - 'Cargo.toml'
             terraform:
               - 'terraform/**'
+              - '.github/workflows/ci.yml'
             kubernetes:
               - 'deploy/helm/**'
               - 'deploy/gitops/**'
+              - 'deploy/policies/**'
+              - 'scripts/security/**'
+              - '.github/workflows/ci.yml'
               - 'crates/**'
 
   typescript:
@@ -93,6 +99,7 @@ jobs:
         if: github.event_name == 'push' || needs.changes.outputs.typescript == 'true'
         run: |
           pnpm --filter @aetherhost/api exec prisma generate
+          pnpm --filter @aetherhost/api security:classification
           pnpm --filter @aetherhost/api exec tsc -p tsconfig.build.json --noEmit
           pnpm --filter @aetherhost/api exec tsc -p tsconfig.security.json --noEmit
 
@@ -244,6 +251,7 @@ jobs:
           terraform -chdir=terraform validate
           terraform -chdir=terraform/aws-security-lab init -backend=false
           terraform -chdir=terraform/aws-security-lab validate
+          terraform -chdir=terraform/aws-security-lab test
 
       - name: Run Checkov on Terraform Code
         if: github.event_name == 'push' || needs.changes.outputs.terraform == 'true'
@@ -251,10 +259,6 @@ jobs:
         with:
           framework: terraform
           directory: terraform
-          # The AWS security lab is intentionally not connected to this VPS or
-          # any AWS account. It is syntax-validated above; account-level
-          # controls become a hard policy gate after a reviewed AWS rollout.
-          skip_path: terraform/aws-security-lab
           output_format: cli
           soft_fail: false
 
@@ -364,6 +368,19 @@ jobs:
 
           kill $PF_PID || true
 
+      - name: Install Kyverno and test workload admission
+        if: github.event_name == 'push' || needs.changes.outputs.kubernetes == 'true'
+        run: |
+          curl -fsSL -o /tmp/kyverno-cli.tgz https://github.com/kyverno/kyverno/releases/download/v1.19.2/kyverno-cli_v1.19.2_linux_x86_64.tar.gz
+          echo '357eaf1df8bc24ddd5a73979fadeaae6a032e8710f11af264229756e4956bf4a  /tmp/kyverno-cli.tgz' | sha256sum -c -
+          sudo tar -xzf /tmp/kyverno-cli.tgz -C /usr/local/bin kyverno
+          python3 scripts/security/check-image-policy-identity.py
+          kyverno test deploy/policies/kyverno/tests
+          helm install kyverno kyverno --repo https://kyverno.github.io/kyverno/ --version 3.9.2 --namespace kyverno --create-namespace --wait --timeout 5m
+          kubectl apply -f deploy/policies/kyverno/security.yaml
+          kubectl wait --for=condition=Ready cpol/verify-image-signature cpol/aether-workload-security --timeout=120s
+          bash scripts/security/test-kyverno-admission.sh
+
   publish:
     name: Publish approved release
     needs: [typescript, go-agent, rust-crates, security, terraform-checkov, kubernetes-ci]
@@ -374,9 +391,52 @@ jobs:
       id-token: write
     uses: ./.github/workflows/publish-images.yml
 
+  signed-platform-admission:
+    name: Verify signed platform admission
+    needs: [publish]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout the published revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814
+        with:
+          version: 'v3.16.4'
+      - name: Create isolated KinD cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3
+        with:
+          cluster_name: aether-signed-admission
+          version: v0.25.0
+          node_image: kindest/node:v1.31.2
+      - name: Authenticate to GHCR with read-only credentials
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Configure Kyverno and the registry pull secret
+        run: |
+          helm install kyverno kyverno --repo https://kyverno.github.io/kyverno/ --version 3.9.2 --namespace kyverno --create-namespace --wait --timeout 5m
+          kubectl create namespace signed-image-test
+          kubectl create secret generic ghcr-read -n signed-image-test \
+            --from-file=.dockerconfigjson="$HOME/.docker/config.json" \
+            --type=kubernetes.io/dockerconfigjson
+          kubectl apply -f deploy/policies/kyverno/security.yaml
+          kubectl wait --for=condition=Ready cpol/verify-image-signature cpol/aether-workload-security --timeout=120s
+      - name: Admit the signed digest and reject the tag
+        env:
+          PLATFORM_DIGEST: ${{ needs.publish.outputs.platform_digest }}
+        run: bash scripts/security/test-signed-platform-admission.sh
+
   deploy:
     name: Deploy verified release
-    needs: [publish]
+    needs: [publish, signed-platform-admission]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     runs-on: ubuntu-latest

@@ -9,50 +9,92 @@ datasource db {
 }
 
 model Tenant {
+  /// @data(internal)
   id                 String             @id
+  /// @data(personal)
   name               String
+  /// @data(internal)
   planId             String
+  /// @data(internal)
   subscriptionStatus String             @default("active") // active, past_due, cancelled, trialing
+  /// @data(confidential)
   subscriptionId     String? // External provider subscription ID
+  /// @data(internal)
   createdAt          DateTime           @default(now())
+  /// @data(internal)
   applications       Application[]
+  /// @data(internal)
   entitlements       TenantEntitlement?
+  /// @data(internal)
   invoices           Invoice[]
+  /// @data(internal)
   auditLogs          AuditLog[]
+  /// @data(internal)
   apiKeys            ApiKey[]
+  /// @data(internal)
   pushDevices        PushDevice[]
+  /// @data(internal)
   externalFrontends  ExternalFrontendDeployment[]
+  /// @data(internal)
   externalProviderConnections ExternalProviderConnection[]
+  /// @data(internal)
   externalProviderOAuthStates ExternalProviderOAuthState[]
 }
 
 model Application {
+  /// @data(internal)
   id                    String   @id
+  /// @data(internal)
   tenantId              String
+  /// @data(internal)
   name                  String
+  /// @data(internal)
   runtime               String
+  /// @data(internal)
   status                String
+  /// @data(internal)
   githubRepo            String?
+  /// @data(internal)
   githubRepoName        String?
+  /// @data(internal)
   githubRepoDescription String?
+  /// @data(internal)
   customDomain          String?  @unique
+  /// @data(confidential)
   dockerCompose         String?
+  /// @data(confidential)
   aiFiles               Json?
+  /// @data(internal)
   dockerImage           String?
+  /// @data(secret)
   envVars               Json?
+  /// @data(internal)
   workerCommand         String?
+  /// @data(internal)
   withPostgres          Boolean  @default(false)
+  /// @data(internal)
   withMariaDb           Boolean  @default(false)
+  /// @data(internal)
   withRedis             Boolean  @default(false)
+  /// @data(internal)
   port                  Int      @default(3000)
+  /// @data(internal)
   healthPath            String   @default("/health")
+  /// @data(internal)
   workloadMemoryMb      Int      @default(1024)
+  /// @data(internal)
   commitMessage         String?
+  /// @data(internal)
   lastDeployedRevision  String?
+  /// @data(internal)
   lastDeployedAt        DateTime?
+  /// @data(internal)
   createdAt             DateTime @default(now())
+  /// @data(internal)
   tenant                Tenant   @relation(fields: [tenantId], references: [id])
+  /// @data(internal)
   logs                  DeploymentLog[]
+  /// @data(internal)
   externalFrontends     ExternalFrontendDeployment[]
 
   @@index([tenantId])
@@ -61,77 +103,128 @@ model Application {
 }
 
 model TenantEntitlement {
+  /// @data(internal)
   tenantId          String @id
+  /// @data(internal)
   limitApplications Int    @default(3)
+  /// @data(internal)
   usageApplications Int    @default(0)
+  /// @data(internal)
   limitAiRequests   Int    @default(2)
+  /// @data(internal)
   usageAiRequests   Int    @default(0)
+  /// @data(internal)
   totalAiTokens     Int    @default(0)
+  /// @data(internal)
   currentMemoryMb   Float  @default(0.0)
+  /// @data(internal)
   limitStorageMb    Int    @default(512)
+  /// @data(internal)
   usageStorageMb    Float  @default(0.0)
+  /// @data(internal)
   usageBandwidthMb  Float  @default(0.0)
+  /// @data(internal)
   limitBandwidthGb  Int    @default(10)
+  /// @data(internal)
   usageBandwidthGb  Float  @default(0.0)
+  /// @data(internal)
   tenant            Tenant @relation(fields: [tenantId], references: [id])
 }
 
 model Invoice {
+  /// @data(internal)
   id          String    @id @default(uuid())
+  /// @data(internal)
   tenantId    String
+  /// @data(internal)
   provider    String // e.g. "stripe", "bachs"
+  /// @data(confidential)
   invoiceId   String    @unique // External ID
+  /// @data(confidential)
   amountCent  Int // Amount in cents
+  /// @data(internal)
   currency    String    @default("USD")
+  /// @data(internal)
   status      String // paid, open, uncollectible, void
+  /// @data(internal)
   periodStart DateTime?
+  /// @data(internal)
   periodEnd   DateTime?
+  /// @data(internal)
   createdAt   DateTime  @default(now())
+  /// @data(internal)
   paidAt      DateTime?
+  /// @data(internal)
   tenant      Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
 }
 
 model AuditLog {
+  /// @data(internal)
   id         String   @id @default(uuid())
+  /// @data(internal)
   tenantId   String
+  /// @data(internal)
   action     String // e.g. "PLAN_UPGRADED", "APP_CREATED", "QUOTA_EXCEEDED"
+  /// @data(internal)
   resourceId String? // The ID of the thing being acted upon
+  /// @data(confidential)
   metadata   Json? // Detailed changes
+  /// @data(internal)
   createdAt  DateTime @default(now())
+  /// @data(internal)
   tenant     Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
 }
 
 model DomainEventRecord {
+  /// @data(internal)
   id            Int      @id @default(autoincrement())
+  /// @data(internal)
   tenantId      String
+  /// @data(internal)
   applicationId String?
+  /// @data(internal)
   eventName     String
+  /// @data(confidential)
   payload       Json?
+  /// @data(internal)
   version       Int      @default(1) // Event schema versioning
+  /// @data(internal)
   createdAt     DateTime @default(now())
 
   @@index([tenantId])
 }
 
 model WebhookEvent {
+  /// @data(internal)
   id              Int      @id @default(autoincrement())
+  /// @data(internal)
   provider        String
+  /// @data(confidential)
   providerEventId String   @unique
+  /// @data(internal)
   tenantId        String
+  /// @data(internal)
   planId          String
+  /// @data(internal)
   status          String
+  /// @data(internal)
   createdAt       DateTime @default(now())
 }
 
 model DeploymentLog {
+  /// @data(internal)
   id            String      @id @default(uuid())
+  /// @data(internal)
   applicationId String
+  /// @data(confidential)
   logContent    String      @db.Text
+  /// @data(internal)
   createdAt     DateTime    @default(now())
+  /// @data(internal)
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId])
@@ -139,50 +232,85 @@ model DeploymentLog {
 }
 
 model ApiKey {
+  /// @data(internal)
   id         String    @id @default(uuid())
+  /// @data(internal)
   tenantId   String
+  /// @data(internal)
   name       String    @default("CLI Key")
+  /// @data(secret)
   keyHash    String    @unique
+  /// @data(internal)
   keyPrefix  String
+  /// @data(internal)
   createdAt  DateTime  @default(now())
+  /// @data(internal)
   lastUsedAt DateTime?
+  /// @data(internal)
   tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
 
 model PushDevice {
+  /// @data(internal)
   id        String   @id @default(uuid())
+  /// @data(internal)
   tenantId  String
+  /// @data(personal)
   token     String   @unique
+  /// @data(internal)
   platform  String
+  /// @data(internal)
   enabled   Boolean  @default(true)
+  /// @data(internal)
   createdAt DateTime @default(now())
+  /// @data(internal)
   updatedAt DateTime @updatedAt
+  /// @data(internal)
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
 
 model ExternalFrontendDeployment {
+  /// @data(internal)
   id             String   @id @default(uuid())
+  /// @data(internal)
   tenantId       String
+  /// @data(internal)
   applicationId  String
+  /// @data(internal)
   provider       String
+  /// @data(internal)
   artifactPath   String
+  /// @data(internal)
   status         String   @default("pending")
+  /// @data(internal)
   consentedAt    DateTime
+  /// @data(internal)
   spaceId        String?
+  /// @data(internal)
   spaceSlug      String?
+  /// @data(confidential)
   liveUrl        String?
+  /// @data(confidential)
   immutableUrl   String?
+  /// @data(internal)
   versionId      String?
+  /// @data(internal)
   operationId    String?
+  /// @data(secret)
   idempotencyKey String   @unique
+  /// @data(internal)
   lastErrorCode  String?
+  /// @data(internal)
   createdAt      DateTime @default(now())
+  /// @data(internal)
   updatedAt      DateTime @updatedAt
+  /// @data(internal)
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// @data(internal)
   application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@unique([applicationId, provider])
@@ -190,16 +318,27 @@ model ExternalFrontendDeployment {
 }
 
 model ExternalProviderConnection {
+  /// @data(internal)
   id               String   @id @default(uuid())
+  /// @data(internal)
   tenantId         String
+  /// @data(internal)
   provider         String
+  /// @data(internal)
   teamId           String?
+  /// @data(internal)
   status           String   @default("connected")
+  /// @data(secret)
   tokenPayload     Json
+  /// @data(internal)
   expiresAt        DateTime?
+  /// @data(internal)
   grantedScopes    String[] @default([])
+  /// @data(internal)
   connectedAt      DateTime @default(now())
+  /// @data(internal)
   updatedAt        DateTime @updatedAt
+  /// @data(internal)
   tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, provider])
@@ -207,13 +346,21 @@ model ExternalProviderConnection {
 }
 
 model ExternalProviderOAuthState {
+  /// @data(internal)
   id                  String   @id @default(uuid())
+  /// @data(internal)
   tenantId            String
+  /// @data(internal)
   provider            String
+  /// @data(secret)
   stateHash           String   @unique
+  /// @data(secret)
   codeVerifierPayload Json
+  /// @data(internal)
   expiresAt           DateTime
+  /// @data(internal)
   createdAt           DateTime @default(now())
+  /// @data(internal)
   tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, provider])
@@ -221,10 +368,15 @@ model ExternalProviderOAuthState {
 }
 
 model SecurityBlocklist {
+  /// @data(internal)
   id        String   @id @default(uuid())
+  /// @data(internal)
   type      String   // email, github_user, github_id, repo, domain, ip
+  /// @data(personal)
   value     String   @unique
+  /// @data(internal)
   reason    String
+  /// @data(internal)
   createdAt DateTime @default(now())
 
   @@index([type])
@@ -232,17 +384,29 @@ model SecurityBlocklist {
 }
 
 model SecurityThreatRule {
+  /// @data(internal)
   id          String    @id @default(uuid())
+  /// @data(internal)
   name        String    @unique
+  /// @data(internal)
   category    String    // rat, c2, miner, backdoor, reverse_shell
+  /// @data(internal)
   pattern     String
+  /// @data(internal)
   severity    String    @default("CRITICAL")
+  /// @data(internal)
   description String
+  /// @data(internal)
   enabled     Boolean   @default(true)
+  /// @data(internal)
   status      String    @default("APPROVED") // PENDING_REVIEW, APPROVED, REJECTED
+  /// @data(internal)
   source      String    @default("BUILTIN")  // BUILTIN, AI_SENTINEL, OPERATOR
+  /// @data(personal)
   approvedBy  String?
+  /// @data(internal)
   approvedAt  DateTime?
+  /// @data(internal)
   createdAt   DateTime  @default(now())
 
   @@index([category])

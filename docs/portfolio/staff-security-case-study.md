@@ -49,3 +49,9 @@ No audited compliance claim, full platform RTO, AWS production deployment,
 immutable audit storage, or globally completed operating control coverage is
 established by this repository alone. See `docs/security/controls.md` and the
 validation report for exact local results and external activation requirements.
+
+## Framework mapping
+
+See the [self-assessed control mapping](../security/compliance-mapping.md) and
+[AWS translation](../security/aws-translation.md). Neither asserts certification
+or that the AWS design was deployed.
