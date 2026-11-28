@@ -116,8 +116,9 @@ using server-side dry run, and checks that a non-verifiable platform digest and
 insecure Pod fixtures are rejected. The synthetic image does not match the
 platform signature policy. A separate post-publication job now tests the exact
 published signed digest and denies the same release by tag, using read-only GHCR
-access; production deployment waits on it. That job has not yet been observed
-passing against a signed platform release. Do not describe this as live
+access; production deployment waits on it. The [main-branch CI test](https://github.com/Emjaay20/AetherHost/actions/runs/46122103762)
+accepted a freshly signed platform digest and rejected its tag-only reference.
+Do not describe this as live
 production admission enforcement. Review namespace exclusions, registry and
 transparency-log availability, failure behavior and Kubernetes upgrades before
 installing on a real cluster.

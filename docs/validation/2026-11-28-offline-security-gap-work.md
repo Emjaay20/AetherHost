@@ -16,17 +16,17 @@ checks use a mocked provider and do not prove AWS operating behavior.
 | Kyverno 1.19.2 in KinD (chart 3.9.2) | Safe fixture and synthetic Helm chart server-side dry runs admitted. Latest tag, root, root override, privileged, no-limits and default-namespace fixtures rejected by the policy. A non-verifiable platform digest was rejected by the image signature policy. |
 | Helm lint | Passed. |
 | Kubeconform | Helm: 6 valid. GitOps: 1 valid and 3 skipped for unavailable schemas; none invalid. |
-| Signed-image job wiring | Workflow checked with actionlint; positive/negative script flow checked against a local kubectl stub. This does not test registry access or a real signature. |
+| Signed-image admission | [Main-branch CI run 46122103762](https://github.com/Emjaay20/AetherHost/actions/runs/46122103762) accepted the freshly published signed platform digest and denied the same release by tag in an isolated KinD cluster. |
 
 Important limits: the synthetic chart uses a non-platform image and does not
 prove signature acceptance. The release workflow now passes the freshly signed
 platform digest to a separate KinD/Kyverno admission job, which requires that
 digest to be accepted and the same release's tag-only reference to be denied.
-The job has not yet run against a published image; its success must be recorded
-from an actual main-branch run before claiming positive signature enforcement.
-Production deployment is gated on this job. The locally built `:latest` CI
+The first main-branch job passed, establishing positive signature admission in
+that isolated test cluster, not production Kubernetes. Production deployment is
+gated on this job. The locally built `:latest` CI
 smoke workload is installed before Kyverno and does not prove signed-image
-admission. No CI run or production rollout is claimed by these local results.
+admission. The observed CI result above does not prove production rollout.
 Kyverno's legacy ClusterPolicy type is deprecated; see [Kubernetes notes](../../deploy/KUBERNETES.md).
 
 The audit metadata sanitizer currently uses Prisma 5 middleware for direct
