@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.7.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -34,11 +34,19 @@ resource "aws_kms_alias" "evidence" {
 }
 
 resource "aws_s3_bucket" "evidence" {
+  #checkov:skip=CKV_AWS_18: Offline lab has no dedicated access-log bucket; review before apply.
+  #checkov:skip=CKV_AWS_144: Cross-region replication is deferred due to cost and policy choices.
+  #checkov:skip=CKV2_AWS_61: Retention and deletion policy must be chosen before live use.
+  #checkov:skip=CKV2_AWS_62: Event notifications are not configured in this offline lab.
   bucket        = "${local.prefix}-evidence"
   force_destroy = false
 }
 
 resource "aws_s3_bucket" "audit" {
+  #checkov:skip=CKV_AWS_18: Offline lab has no dedicated access-log bucket; review before apply.
+  #checkov:skip=CKV_AWS_144: Cross-region replication is deferred due to cost and policy choices.
+  #checkov:skip=CKV2_AWS_61: Retention and deletion policy must be chosen before live use.
+  #checkov:skip=CKV2_AWS_62: Event notifications are not configured in this offline lab.
   bucket        = "${local.prefix}-audit"
   force_destroy = false
 }
@@ -77,23 +85,23 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "all" {
 resource "aws_s3_bucket_policy" "evidence" {
   bucket = aws_s3_bucket.evidence.id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
-    { Sid = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
+    { Sid      = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
       Resource = [aws_s3_bucket.evidence.arn, "${aws_s3_bucket.evidence.arn}/*"],
-      Condition = { Bool = { "aws:SecureTransport" = "false" } } }
+    Condition = { Bool = { "aws:SecureTransport" = "false" } } }
   ] })
 }
 
 resource "aws_s3_bucket_policy" "audit" {
   bucket = aws_s3_bucket.audit.id
   policy = jsonencode({ Version = "2012-10-17", Statement = [
-    { Sid = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
+    { Sid      = "DenyInsecureTransport", Effect = "Deny", Principal = "*", Action = "s3:*",
       Resource = [aws_s3_bucket.audit.arn, "${aws_s3_bucket.audit.arn}/*"],
-      Condition = { Bool = { "aws:SecureTransport" = "false" } } },
+    Condition = { Bool = { "aws:SecureTransport" = "false" } } },
     { Sid = "CloudTrailAcl", Effect = "Allow", Principal = { Service = "cloudtrail.amazonaws.com" }, Action = "s3:GetBucketAcl",
-      Resource = aws_s3_bucket.audit.arn, Condition = { StringEquals = { "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/${var.name}" } } },
-    { Sid = "CloudTrailWrite", Effect = "Allow", Principal = { Service = "cloudtrail.amazonaws.com" }, Action = "s3:PutObject",
+    Resource = aws_s3_bucket.audit.arn, Condition = { StringEquals = { "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/${var.name}" } } },
+    { Sid      = "CloudTrailWrite", Effect = "Allow", Principal = { Service = "cloudtrail.amazonaws.com" }, Action = "s3:PutObject",
       Resource = "${aws_s3_bucket.audit.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
-      Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control", "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/${var.name}" } } }
+    Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control", "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/${var.name}" } } }
   ] })
 }
 
@@ -102,11 +110,13 @@ resource "aws_kms_key_policy" "evidence" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Sid = "AccountAdministration", Effect = "Allow", Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" }, Action = "kms:*", Resource = "*" },
     { Sid = "TrailEncryption", Effect = "Allow", Principal = { Service = "cloudtrail.amazonaws.com" }, Action = "kms:GenerateDataKey*", Resource = "*",
-      Condition = { StringEquals = { "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/${var.name}" } } }
+    Condition = { StringEquals = { "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${var.region}:${data.aws_caller_identity.current.account_id}:trail/${var.name}" } } }
   ] })
 }
 
 resource "aws_cloudtrail" "security" {
+  #checkov:skip=CKV_AWS_252: SNS delivery and ownership must be configured before live use.
+  #checkov:skip=CKV2_AWS_10: CloudWatch integration is deferred pending retention and cost review.
   name                          = var.name
   s3_bucket_name                = aws_s3_bucket.audit.id
   kms_key_id                    = aws_kms_key.evidence.arn
@@ -141,11 +151,12 @@ resource "aws_iam_role_policy" "ci_evidence" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.evidence.arn}/evidence/*" },
     { Effect = "Allow", Action = ["kms:GenerateDataKey", "kms:Encrypt", "kms:Decrypt"], Resource = aws_kms_key.evidence.arn,
-      Condition = { StringEquals = { "kms:ViaService" = "s3.${var.region}.amazonaws.com" } } }
+    Condition = { StringEquals = { "kms:ViaService" = "s3.${var.region}.amazonaws.com" } } }
   ] })
 }
 
 resource "aws_guardduty_detector" "security" {
+  #checkov:skip=CKV2_AWS_3: Detector is opt-in; organization-wide activation needs account review.
   count  = var.enable_guardduty ? 1 : 0
   enable = true
 }

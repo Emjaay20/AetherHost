@@ -1,5 +1,10 @@
 # AetherHost data inventory
 
+The [generated field classification](data-classification.generated.md) is checked
+against the Prisma schema by `security:classification` in CI. Field names tagged
+personal or secret must also be included in the API redaction field list; tags are
+not a substitute for access control or encryption.
+
 This inventory identifies data that needs stronger handling than ordinary
 application metadata. It is intentionally value-free.
 

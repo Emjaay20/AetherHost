@@ -1,0 +1,112 @@
+# Policies are intended for tenant workload namespaces. System namespaces are
+# excluded so admission cannot prevent Kubernetes or Kyverno from recovering.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signature
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: signed-platform-image
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kube-public, kube-node-lease, kyverno]
+      verifyImages:
+        - imageReferences:
+            - ghcr.io/emjaay20/aether-platform*
+          mutateDigest: false
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subjectRegExp: '^https://github\.com/Emjaay20/AetherHost/\.github/workflows/(ci|publish-images)\.yml@refs/heads/main$'
+                    rekor:
+                      url: https://rekor.sigstore.dev
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: aether-workload-security
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: disallow-default-namespace
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [default]
+      validate:
+        message: Workloads must use a dedicated namespace.
+        deny: {}
+    - name: require-secure-containers
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kube-public, kube-node-lease, kyverno]
+      validate:
+        message: Containers require digest-pinned images, limits and a restricted security context.
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              =(runAsUser): '!0'
+              seccompProfile:
+                type: RuntimeDefault
+            containers:
+              - image: '*@sha256:*'
+                securityContext:
+                  =(runAsNonRoot): true
+                  =(runAsUser): '!0'
+                  =(privileged): false
+                  =(seccompProfile):
+                    type: RuntimeDefault
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: [ALL]
+                resources:
+                  limits:
+                    cpu: '?*'
+                    memory: '?*'
+            =(initContainers):
+              - image: '*@sha256:*'
+                securityContext:
+                  =(runAsNonRoot): true
+                  =(runAsUser): '!0'
+                  =(privileged): false
+                  =(seccompProfile):
+                    type: RuntimeDefault
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: [ALL]
+                resources:
+                  limits:
+                    cpu: '?*'
+                    memory: '?*'
+            =(ephemeralContainers):
+              - image: '*@sha256:*'
+                securityContext:
+                  =(runAsNonRoot): true
+                  =(runAsUser): '!0'
+                  =(privileged): false
+                  =(seccompProfile):
+                    type: RuntimeDefault
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: [ALL]

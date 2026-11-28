@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: good
+  namespace: test-workload
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      resources: { limits: { cpu: 100m, memory: 128Mi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: latest, namespace: test-workload }
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo:latest
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      resources: { limits: { cpu: 100m, memory: 128Mi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: root, namespace: test-workload }
+spec:
+  securityContext: { runAsNonRoot: false, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      resources: { limits: { cpu: 100m, memory: 128Mi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: root-override, namespace: test-workload }
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      securityContext: { runAsUser: 0, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      resources: { limits: { cpu: 100m, memory: 128Mi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: privileged, namespace: test-workload }
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      securityContext: { privileged: true, allowPrivilegeEscalation: true, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      resources: { limits: { cpu: 100m, memory: 128Mi } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: no-limits, namespace: test-workload }
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Pod
+metadata: { name: default-ns, namespace: default }
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: example.org/demo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      resources: { limits: { cpu: 100m, memory: 128Mi } }

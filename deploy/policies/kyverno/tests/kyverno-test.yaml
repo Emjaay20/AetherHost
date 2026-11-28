@@ -1,0 +1,24 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: workload-security
+policies:
+  - ../security.yaml
+resources:
+  - resources.yaml
+results:
+  - policy: aether-workload-security
+    rule: require-secure-containers
+    resources: [good]
+    kind: Pod
+    result: pass
+  - policy: aether-workload-security
+    rule: require-secure-containers
+    resources: [latest, root, root-override, privileged, no-limits]
+    kind: Pod
+    result: fail
+  - policy: aether-workload-security
+    rule: disallow-default-namespace
+    resources: [default-ns]
+    kind: Pod
+    result: fail

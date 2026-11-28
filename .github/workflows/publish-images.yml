@@ -2,6 +2,10 @@ name: Publish & Sign Container Images
 
 on:
   workflow_call:
+    outputs:
+      platform_digest:
+        description: Immutable digest of the signed aether-platform image.
+        value: ${{ jobs.platform-digest.outputs.digest }}
 
 permissions:
   contents: read
@@ -108,3 +112,39 @@ jobs:
         with:
           image: ghcr.io/${{ steps.repo_owner.outputs.owner }}/${{ matrix.name }}@${{ steps.build-and-push.outputs.digest }}
           format: spdx-json
+
+      - name: Record platform digest after successful signing
+        if: matrix.name == 'aether-platform'
+        env:
+          PLATFORM_DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: |
+          [[ "$PLATFORM_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf '%s\n' "$PLATFORM_DIGEST" > "$RUNNER_TEMP/platform-digest.txt"
+
+      - name: Upload platform digest
+        if: matrix.name == 'aether-platform'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: signed-platform-digest
+          path: ${{ runner.temp }}/platform-digest.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  platform-digest:
+    name: Export signed platform digest
+    needs: publish
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.validate.outputs.digest }}
+    steps:
+      - name: Download platform digest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: signed-platform-digest
+          path: ${{ runner.temp }}/signed-platform-digest
+      - name: Validate digest
+        id: validate
+        run: |
+          digest="$(cat "$RUNNER_TEMP/signed-platform-digest/platform-digest.txt")"
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          printf 'digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
