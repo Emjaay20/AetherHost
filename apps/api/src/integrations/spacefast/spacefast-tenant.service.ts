@@ -1,11 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { SpacefastApiError } from './spacefast.client';
+import { SpacefastApiError, type SpacefastPublishReceipt } from './spacefast.client';
 import { SpacefastOAuthService } from './spacefast-oauth.service';
 import { SpacefastService } from './spacefast.service';
 
 const PROVIDER = 'spacefast';
+/**
+ * A publish that has no provider operation after this long was interrupted
+ * (API restart, hung upload). It is longer than any bounded 10 MiB upload and
+ * well inside Spacefast's 24-hour idempotency replay window, so a resumed
+ * attempt can replay the original provider response instead of duplicating it.
+ */
+export const PUBLISH_LEASE_MS = 10 * 60 * 1000;
+const TERMINAL_OPERATION_STATUSES = ['succeeded', 'failed', 'canceled'];
 const EXPORT_DIRECTORIES = ['public', 'dist'] as const;
 const STATIC_EXTENSIONS = new Set([
   '.html', '.css', '.js', '.mjs', '.json', '.svg', '.png', '.jpg', '.jpeg',
@@ -62,27 +70,13 @@ export class SpacefastTenantService {
       );
     }
 
-    let deployment = await this.prisma.externalFrontendDeployment.findUnique({
-      where: { applicationId_provider: { applicationId, provider: PROVIDER } },
-    });
-    if (deployment?.status === 'publishing') {
-      return publicDeployment(deployment);
-    }
-
-    const idempotencyKey = randomUUID();
-    deployment = await this.prisma.externalFrontendDeployment.upsert({
-      where: { applicationId_provider: { applicationId, provider: PROVIDER } },
-      create: {
-        tenantId, applicationId, provider: PROVIDER, artifactPath: artifact.indexPath,
-        consentedAt: new Date(), status: 'publishing', idempotencyKey,
-      },
-      update: {
-        artifactPath: artifact.indexPath, consentedAt: new Date(), status: 'publishing',
-        idempotencyKey, lastErrorCode: null, immutableUrl: null, versionId: null, operationId: null,
-      },
-    });
+    const claim = await this.claimPublish(tenantId, applicationId, artifact.indexPath);
+    if (!claim.claimed) return publicDeployment(claim.deployment);
+    let deployment = claim.deployment;
+    const idempotencyKey = deployment.idempotencyKey;
     await this.audit(tenantId, applicationId, 'EXTERNAL_FRONTEND_CONSENTED', {
       provider: PROVIDER, artifactPath: artifact.indexPath, fileCount: artifact.files.length,
+      resumed: claim.resumed,
     });
 
     try {
@@ -107,24 +101,34 @@ export class SpacefastTenantService {
           data: { spaceId, spaceSlug, liveUrl },
         });
       }
+      // Spacefast rejects a reused key with a different body (409
+      // idempotency_key_reused). Binding the key to the content means a
+      // resumed attempt with unchanged files replays the original upload,
+      // while changed files are sent as a genuinely new request.
       const receipt = await client.publishArchive({
         spaceId,
         archive: createZip(artifact.files),
         fileName: 'aetherhost-static-export.zip',
-        idempotencyKey: `${idempotencyKey}:publish`,
+        idempotencyKey: `${idempotencyKey}:publish:${artifactDigest(artifact.files)}`,
       });
+      const outcome = publishOutcome(receipt);
       const updated = await this.prisma.externalFrontendDeployment.update({
         where: { id: deployment.id },
         data: {
           spaceId, spaceSlug, liveUrl, versionId: receipt.version.id,
           immutableUrl: receipt.version.immutableUrl ?? null,
           operationId: receipt.operation?.id ?? null,
-          status: receipt.operation?.status === 'succeeded' || receipt.next?.action === 'done' ? 'published' : 'publishing',
+          status: outcome.status, lastErrorCode: outcome.errorCode,
         },
       });
       await this.audit(tenantId, applicationId, 'EXTERNAL_FRONTEND_PUBLISH_REQUESTED', {
         provider: PROVIDER, artifactPath: artifact.indexPath, fileCount: artifact.files.length, deploymentId: updated.id,
       });
+      if (outcome.errorCode) {
+        await this.audit(tenantId, applicationId, 'EXTERNAL_FRONTEND_PUBLISH_FAILED', {
+          provider: PROVIDER, errorCode: outcome.errorCode,
+        });
+      }
       return publicDeployment(updated);
     } catch (error) {
       const provider = error instanceof SpacefastApiError ? error : undefined;
@@ -150,21 +154,119 @@ export class SpacefastTenantService {
     try {
       const publisher = (await this.oauth.publisherForTenant(tenantId)) ?? this.spacefast.publisher();
       const operation = await publisher.client.getOperation(deployment.operationId);
-      const terminal = ['succeeded', 'failed', 'canceled'].includes(operation.status);
+      const terminal = TERMINAL_OPERATION_STATUSES.includes(operation.status);
       const updated = await this.prisma.externalFrontendDeployment.update({
         where: { id: deployment.id },
         data: terminal
           ? { status: operation.status === 'succeeded' ? 'published' : 'failed', lastErrorCode: operation.status === 'succeeded' ? null : operation.status }
-          : {},
+          // Touch the row so the reconciler's oldest-first batch rotates
+          // through every pending publish instead of rechecking the same ones.
+          : { updatedAt: new Date() },
       });
       if (terminal) await this.audit(tenantId, applicationId, 'EXTERNAL_FRONTEND_OPERATION_REFRESHED', {
         provider: PROVIDER, status: operation.status,
       });
       return publicDeployment(updated);
     } catch (error) {
+      // Operation expiry is not documented by Spacefast. A 404 is permanent,
+      // so stop polling it rather than retrying every minute forever.
+      if (error instanceof SpacefastApiError && error.status === 404) {
+        const updated = await this.prisma.externalFrontendDeployment.update({
+          where: { id: deployment.id },
+          data: { status: 'failed', lastErrorCode: 'operation_not_found' },
+        });
+        await this.audit(tenantId, applicationId, 'EXTERNAL_FRONTEND_OPERATION_REFRESHED', {
+          provider: PROVIDER, status: 'operation_not_found',
+        });
+        return publicDeployment(updated);
+      }
       const provider = error as { code?: string };
       throw new ServiceUnavailableException(`Spacefast operation refresh failed: ${provider.code ?? 'unavailable'}`);
     }
+  }
+
+  /**
+   * Marks publishes that were interrupted before Spacefast returned an
+   * operation as failed, so they are visible and retryable instead of stuck.
+   */
+  async expireAbandonedPublishes(now = new Date()): Promise<number> {
+    const abandoned = await this.prisma.externalFrontendDeployment.findMany({
+      where: abandonedWhere(now),
+      select: { id: true, tenantId: true, applicationId: true },
+      take: 100,
+    });
+    let expired = 0;
+    for (const deployment of abandoned) {
+      // Re-check the condition in the write so a publish that resumed or
+      // finished in the meantime is not overwritten.
+      const result = await this.prisma.externalFrontendDeployment.updateMany({
+        where: { id: deployment.id, ...abandonedWhere(now) },
+        data: { status: 'failed', lastErrorCode: 'interrupted' },
+      });
+      if (result.count === 1) {
+        expired += 1;
+        await this.audit(deployment.tenantId, deployment.applicationId, 'EXTERNAL_FRONTEND_PUBLISH_FAILED', {
+          provider: PROVIDER, errorCode: 'interrupted',
+        });
+      }
+    }
+    return expired;
+  }
+
+  /**
+   * Atomically takes ownership of the single publish slot for an application.
+   * Two concurrent requests cannot both upload: the losing request gets the
+   * current record back. An interrupted attempt is resumed with its original
+   * idempotency key so Spacefast replays, rather than repeats, provider work.
+   */
+  private async claimPublish(tenantId: string, applicationId: string, artifactPath: string): Promise<
+    | { claimed: true; resumed: boolean; deployment: DeploymentRow }
+    | { claimed: false; deployment: DeploymentRow }
+  > {
+    const where = { applicationId_provider: { applicationId, provider: PROVIDER } };
+    const existing = await this.prisma.externalFrontendDeployment.findUnique({ where });
+    const now = new Date();
+    if (existing?.status === 'publishing' && !isAbandoned(existing, now)) {
+      return { claimed: false, deployment: existing };
+    }
+
+    const resumed = existing?.status === 'publishing';
+    const attempt = {
+      artifactPath, consentedAt: now, status: 'publishing',
+      idempotencyKey: resumed ? existing.idempotencyKey : randomUUID(),
+      lastErrorCode: null, immutableUrl: null, versionId: null, operationId: null,
+    };
+
+    if (!existing) {
+      try {
+        const created = await this.prisma.externalFrontendDeployment.create({
+          data: { tenantId, applicationId, provider: PROVIDER, ...attempt },
+        });
+        return { claimed: true, resumed: false, deployment: created };
+      } catch (error) {
+        if ((error as { code?: string })?.code !== 'P2002') throw error;
+        return { claimed: false, deployment: await this.currentOrConflict(where) };
+      }
+    }
+
+    // Optimistic concurrency: the write only applies if nobody else has
+    // changed the row since it was read.
+    const result = await this.prisma.externalFrontendDeployment.updateMany({
+      where: { id: existing.id, updatedAt: existing.updatedAt },
+      data: attempt,
+    });
+    if (result.count !== 1) {
+      return { claimed: false, deployment: await this.currentOrConflict(where) };
+    }
+    const claimed = await this.prisma.externalFrontendDeployment.findUnique({ where });
+    if (!claimed) throw new ConflictException('The Spacefast publish record changed. Try again.');
+    return { claimed: true, resumed, deployment: claimed };
+  }
+
+  private async currentOrConflict(where: { applicationId_provider: { applicationId: string; provider: string } }) {
+    const current = await this.prisma.externalFrontendDeployment.findUnique({ where });
+    if (!current) throw new ConflictException('Another Spacefast publish changed this record. Try again.');
+    return current;
   }
 
   private async audit(tenantId: string, resourceId: string, action: string, metadata: Record<string, unknown>) {
@@ -172,6 +274,45 @@ export class SpacefastTenantService {
       data: { tenantId, action, resourceId, metadata: JSON.parse(JSON.stringify(metadata)) },
     });
   }
+}
+
+type DeploymentRow = NonNullable<Awaited<ReturnType<PrismaService['externalFrontendDeployment']['findUnique']>>>;
+
+function isAbandoned(deployment: { status: string; operationId: string | null; updatedAt: Date }, now: Date) {
+  return deployment.status === 'publishing'
+    && !deployment.operationId
+    && now.getTime() - deployment.updatedAt.getTime() > PUBLISH_LEASE_MS;
+}
+
+function abandonedWhere(now: Date) {
+  return {
+    provider: PROVIDER,
+    status: 'publishing',
+    operationId: null,
+    updatedAt: { lt: new Date(now.getTime() - PUBLISH_LEASE_MS) },
+  };
+}
+
+/**
+ * Maps a publish receipt to a durable status. AetherHost does not drive the
+ * multi-step upload/finalize flow, so a receipt that is neither finished nor
+ * pollable is a failure, not an indefinite "publishing".
+ */
+export function publishOutcome(receipt: SpacefastPublishReceipt): { status: 'published' | 'publishing' | 'failed'; errorCode: string | null } {
+  const operationStatus = receipt.operation?.status;
+  if (operationStatus === 'succeeded' || receipt.next?.action === 'done') return { status: 'published', errorCode: null };
+  if (operationStatus === 'failed' || operationStatus === 'canceled') return { status: 'failed', errorCode: operationStatus };
+  if (receipt.operation?.id) return { status: 'publishing', errorCode: null };
+  return { status: 'failed', errorCode: 'operation_missing' };
+}
+
+/** A stable content digest; the same files always produce the same key. */
+export function artifactDigest(files: Array<{ path: string; content: string }>) {
+  const hash = createHash('sha256');
+  for (const file of files) {
+    hash.update(file.path).update('\0').update(file.content).update('\0');
+  }
+  return hash.digest('hex').slice(0, 32);
 }
 
 export function selectStaticArtifact(value: unknown): { indexPath: string; files: Array<{ path: string; content: string }> } | null {

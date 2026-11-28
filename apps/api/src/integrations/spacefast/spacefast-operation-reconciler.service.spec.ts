@@ -19,6 +19,7 @@ describe('SpacefastOperationReconcilerService', () => {
       },
     };
     const tenantService = {
+      expireAbandonedPublishes: jest.fn().mockResolvedValue(0),
       refresh: jest
         .fn()
         .mockResolvedValueOnce({ status: 'published' })
@@ -42,5 +43,22 @@ describe('SpacefastOperationReconcilerService', () => {
     );
     expect(tenantService.refresh).toHaveBeenCalledWith('tenant_a', 'app_a');
     expect(tenantService.refresh).toHaveBeenCalledWith('tenant_b', 'app_b');
+  });
+
+  it('sweeps interrupted publishes first and keeps polling if the sweep fails', async () => {
+    const prisma = {
+      externalFrontendDeployment: {
+        findMany: jest.fn().mockResolvedValue([{ tenantId: 'tenant_a', applicationId: 'app_a' }]),
+      },
+    };
+    const tenantService = {
+      expireAbandonedPublishes: jest.fn().mockRejectedValue(new Error('database busy')),
+      refresh: jest.fn().mockResolvedValue({ status: 'published' }),
+    };
+    const service = new SpacefastOperationReconcilerService(prisma as any, tenantService as any);
+
+    await expect(service.reconcilePendingOperations()).resolves.toBeUndefined();
+    expect(tenantService.expireAbandonedPublishes).toHaveBeenCalledTimes(1);
+    expect(tenantService.refresh).toHaveBeenCalledWith('tenant_a', 'app_a');
   });
 });
