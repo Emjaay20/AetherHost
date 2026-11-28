@@ -1,5 +1,10 @@
 # Infrastructure security gap briefs
 
+> Historical planning brief: the descriptions below capture the proposed work,
+> not its current completion status. For implemented controls, test results and
+> remaining gaps, see the [validation report](../validation/2026-11-28-offline-security-gap-work.md)
+> and [control mapping](../security/controls.md).
+
 Five self-contained tasks that close the gaps between AetherHost and a senior
 infrastructure security role (AWS operations, CSPM, compliance mapping, data
 tagging, Kubernetes admission control). Each brief can go to a separate agent
