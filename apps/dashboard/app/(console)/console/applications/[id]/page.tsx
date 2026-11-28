@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
 import { Activity, ArrowUpRight, Box, FileText, Globe2, GitBranch, HeartPulse, Server } from 'lucide-react'
 import AppShell from '../../../../../components/AppShell'
+import WordPressFrontendConcept from '../../../../../components/WordPressFrontendConcept'
 import { getApplicationLogs, getApplications, getEntitlements } from '../../../../../app/actions'
 import { isCurrentUserAdmin } from '../../../../../lib/admin'
 import { getAppUrl } from '../../../../../lib/domain'
@@ -72,6 +73,8 @@ export default async function ApplicationOverviewPage({ params }: { params: Prom
             This page shows the latest evidence AetherHost has received for this application. A running container is not presented as healthy without deployment or readiness evidence.
           </p>
         </section>
+
+        {app.runtime.toLowerCase() === 'wordpress' && isAdmin && <WordPressFrontendConcept appName={app.name} />}
 
         <div className="grid gap-4 lg:grid-cols-3">
           <section className="rounded-lg border border-border bg-card p-4">

@@ -81,6 +81,7 @@ server.listen(process.env.PORT || 3000, '0.0.0.0');
         <p id="message" class="message" role="status"></p>
         <div id="stories" class="story-grid" aria-live="polite"></div>
       </section>
+      <section id="article-view" class="stories" hidden aria-live="polite"><button id="back-to-stories" type="button">← All stories</button><article><h2 id="article-title"></h2><p id="article-content" style="white-space:pre-wrap;line-height:1.7"></p><a id="article-source" target="_blank" rel="noopener noreferrer">View research source ↗</a></article></section>
     </main>
     <footer>Built as an explicit AetherHost external-frontend artifact. No WordPress credentials are embedded here.</footer>
     <script src="config.js"></script><script src="app.js"></script>
@@ -98,6 +99,9 @@ server.listen(process.env.PORT || 3000, '0.0.0.0');
 const stories = document.querySelector('#stories');
 const message = document.querySelector('#message');
 const sourceStatus = document.querySelector('#source-status');
+const storySection = document.querySelector('.stories');
+const articleView = document.querySelector('#article-view');
+let renderedPosts = [];
 const fallback = [
   { title: 'A deliberate boundary between editorial content and infrastructure', excerpt: 'This demo starts with the source of truth: WordPress owns the published story.', date: '2026-11-18', link: '#' },
   { title: 'A static companion that does not inherit runtime access', excerpt: 'The selected export remains small, reviewable and independent from deployment credentials.', date: '2026-11-17', link: '#' },
@@ -106,16 +110,34 @@ const fallback = [
 
 function plainText(value) { const node = document.createElement('div'); node.innerHTML = String(value || ''); return node.textContent || ''; }
 function render(posts) {
+  renderedPosts = posts;
   stories.replaceChildren();
   posts.forEach((post) => {
     const article = document.createElement('article'); article.className = 'story';
     const time = document.createElement('time'); time.dateTime = post.date || ''; time.textContent = post.sourceTitle || (post.date ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(post.date)) : 'Editorial brief');
     const heading = document.createElement('h3'); heading.textContent = plainText(post.title?.rendered || post.title);
     const excerpt = document.createElement('p'); excerpt.textContent = plainText(post.excerpt?.rendered || post.excerpt);
-    const link = document.createElement('a'); link.href = post.link || post.sourceUrl || '#'; link.textContent = post.sourceUrl ? 'Read the reviewed insight →' : post.link ? 'Read the original post →' : 'Demo content'; if (post.link || post.sourceUrl) { link.target = '_blank'; link.rel = 'noreferrer'; }
+    const link = document.createElement('a'); link.href = post.id ? '#article-' + encodeURIComponent(String(post.id)) : '#'; link.textContent = 'Read story →'; link.addEventListener('click', (event) => { if (!post.id) { event.preventDefault(); openArticle(post); } });
     article.append(time, heading, excerpt, link); stories.append(article);
   });
+  syncArticle();
 }
+function openArticle(post) {
+  document.querySelector('#article-title').textContent = plainText(post.title?.rendered || post.title);
+  document.querySelector('#article-content').textContent = plainText(post.content?.rendered || post.content || post.excerpt?.rendered || post.excerpt);
+  const source = document.querySelector('#article-source');
+  try { const url = new URL(post.sourceUrl); source.hidden = url.protocol !== 'https:'; if (!source.hidden) source.href = url.href; } catch { source.hidden = true; }
+  storySection.hidden = true; articleView.hidden = false; articleView.scrollIntoView();
+}
+function syncArticle() {
+  const prefix = '#article-';
+  const id = location.hash.startsWith(prefix) ? location.hash.slice(prefix.length) : '';
+  const post = id && renderedPosts.find((item) => encodeURIComponent(String(item.id)) === id);
+  if (post) openArticle(post);
+  else { articleView.hidden = true; storySection.hidden = false; }
+}
+window.addEventListener('hashchange', syncArticle);
+document.querySelector('#back-to-stories').addEventListener('click', () => { if (location.hash) location.hash = ''; else syncArticle(); storySection.scrollIntoView(); });
 async function load() {
   message.textContent = 'Loading published editorial content…';
   if (!config.wordpressPostsUrl) { render(fallback); message.textContent = 'Showing bundled demo content. Add a public WordPress site URL when creating this project to load live posts.'; sourceStatus.textContent = 'Demo content'; return; }
@@ -154,7 +176,7 @@ function normalizeWordPressPostsUrl(value?: string) {
     throw new BadRequestException('The WordPress site URL must be a public HTTPS origin without credentials, a query, or a fragment');
   }
   site.pathname = site.pathname.replace(/\/+$/, '');
-  return `${site.toString().replace(/\/$/, '')}/wp-json/wp/v2/posts?per_page=3&_embed=1&_fields=id,date,link,title,excerpt`;
+  return `${site.toString().replace(/\/$/, '')}/wp-json/wp/v2/posts?per_page=3&_fields=id,date,link,title,excerpt,content`;
 }
 
 function normalizeWordPressInsightsUrl(value?: string) {
