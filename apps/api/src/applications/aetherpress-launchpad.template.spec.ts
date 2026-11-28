@@ -23,6 +23,7 @@ describe('AetherPress Launchpad template', () => {
     expect(byPath.get('public/app.js')).toContain('Live reviewed research insights');
     expect(byPath.get('public/app.js')).toContain("window.addEventListener('hashchange', syncArticle)");
     expect(byPath.get('public/app.js')).toContain('post.content?.rendered || post.content');
+    expect(byPath.get('public/app.js')).not.toContain('node.innerHTML');
     expect(byPath.get('server.mjs')).toContain("file.startsWith(root + sep)");
     expect(byPath.get('server.mjs')).toContain("resolve(process.cwd(), 'public')");
   });

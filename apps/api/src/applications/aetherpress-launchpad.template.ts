@@ -108,7 +108,7 @@ const fallback = [
   { title: 'Private publishing is an explicit product action', excerpt: 'A release is auditable and reversible instead of being an implicit side effect of deployment.', date: '2026-11-16', link: '#' },
 ];
 
-function plainText(value) { const node = document.createElement('div'); node.innerHTML = String(value || ''); return node.textContent || ''; }
+function plainText(value) { const parsed = new DOMParser().parseFromString(String(value || ''), 'text/html'); return parsed.body.textContent || ''; }
 function render(posts) {
   renderedPosts = posts;
   stories.replaceChildren();
